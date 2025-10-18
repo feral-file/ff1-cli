@@ -1,0 +1,189 @@
+---
+alwaysApply: true
+---
+
+# FF1-CLI Project Rules
+
+Node.js CLI tool using Grok AI for NFT data and DP1 playlists.
+
+## Critical Rules
+
+**ALWAYS run linting after code changes:**
+```bash
+npm run lint:fix
+```
+No warnings or errors should remain before completing tasks.
+
+**Documentation structure - ONLY 3 files in `/docs`:**
+- `/docs/README.md` - Installation, usage
+- `/docs/FUNCTION_CALLING.md` - Function calling architecture
+- `/docs/EXAMPLES.md` - Usage examples
+- `/docs/CONFIGURATION.md` - Configuration
+
+Never create additional docs (no CHANGELOG.md, SETUP.md, etc.). Root README is minimal with links to `/docs`.
+
+**Documentation updates:**
+- Only update docs if changes affect user-facing flows
+- Do NOT create docs for: migrations, legacy code changes, internal refactoring
+- Keep docs focused on current implementation only
+
+## Code Philosophy
+
+**NO backward compatibility:**
+- Always remove legacy code when refactoring
+- Do not maintain deprecated functions or patterns
+- Remove unused/obsolete code immediately
+- Break changes when necessary for better architecture
+
+**Function design principles:**
+- Single Responsibility: Each function does ONE thing well
+- Small functions: Prefer 10-20 lines over 50+ line functions
+- No long flows: Break complex processes into composed smaller functions
+- Pure functions when possible (no side effects)
+- Clear, descriptive function names
+
+## Code Style
+
+ESLint + Prettier enforced (see `eslint.config.js`, `.prettierrc`):
+- Single quotes, 2-space indent, semicolons, 100 char width
+- Prefix unused vars with `_` (e.g., `_error`)
+- `const` by default, `let` only when reassigning
+- Strict equality (`===`, `!==`)
+- Always use curly braces in control flow
+- Prefer `async`/`await` over Promise chains
+- Always wrap async code in try/catch blocks
+
+## JSDoc Requirements
+
+**All functions MUST have JSDoc:**
+
+```javascript
+/**
+ * Brief one-line description of what the function does
+ * 
+ * Longer description if needed, explaining the purpose,
+ * behavior, and any important context.
+ * 
+ * @param {Type} paramName - Description of the parameter
+ * @param {Object} options - Configuration options
+ * @param {string} options.field - Description of the field
+ * @returns {Promise<Object>} Description of return value
+ * @returns {boolean} returns.success - Whether operation succeeded
+ * @returns {string} [returns.error] - Error message if failed
+ * @throws {Error} When invalid input is provided
+ * @example
+ * const result = await myFunction('value', { field: 'data' });
+ * if (result.success) { ... }
+ */
+```
+
+**JSDoc rules:**
+- NEW functions: Must have complete JSDoc before committing
+- UPDATED functions: Must update JSDoc to reflect changes
+- Include `@param` for all parameters with types
+- Include `@returns` with type and description
+- Include `@throws` for exceptions
+- Include `@example` for non-trivial functions
+- Document object properties using dot notation
+
+## Function Calling
+
+**Adding new functions:**
+1. Implement in `src/function-calling/[module].js`
+2. Add schema to `src/function-calling/index.js`
+3. Register in function registry
+4. Update `/docs/FUNCTION_CALLING.md`
+5. Run `npm run lint:fix`
+
+**Function requirements:**
+- Return consistent structure with `success` field
+- Validate inputs early (fail fast)
+- Provide detailed error messages
+- Complete JSDoc comments (see JSDoc Requirements above)
+- Single responsibility - do ONE thing
+- Keep functions small (10-20 lines ideal)
+
+## Configuration & Security
+
+- Config priority: `config.json` > `.env` > defaults
+- Never commit: `config.json`, `.env`, `node_modules`
+- Always validate config before use
+
+## Error Handling
+
+- Use descriptive error messages
+- Log with context
+- Use chalk for user-friendly CLI output
+- Support DEBUG mode
+- Fail fast with clear validation
+
+## Refactoring Guidelines
+
+**When refactoring:**
+1. Remove ALL legacy code - no deprecation period
+2. Break large functions into smaller ones (single responsibility)
+3. Extract reusable logic into separate functions
+4. Update or add JSDoc for all affected functions
+5. Remove unused imports, variables, and functions
+6. Prefer composition over long procedural flows
+
+**Signs a function needs breaking down:**
+- More than 30 lines
+- Multiple levels of nesting (>3)
+- Does multiple unrelated things
+- Has comments like "Step 1:", "Step 2:"
+- Hard to name descriptively
+
+## Testing Workflow
+
+**Test scripts:**
+- Write test scripts to verify reproducible issues
+- Store all test scripts in `/.tmp` directory
+- Test scripts are temporary and should not be committed
+- Clean up test scripts after verification
+
+Before completing any task:
+1. Run `npm run lint:fix`
+2. Test: `node index.js validate examples/sample-playlist.json`
+3. Test: `node index.js config validate`
+4. Verify all functions work as expected
+
+## Git Practices
+
+- Meaningful commit messages
+- Atomic, focused commits
+- Run `npm run lint:fix` before committing
+- Remove legacy code in separate commit when possible
+- NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive.
+
+**Commit Message Format:**
+After completing a feature, provide a commit message in Conventional Commit format:
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `style`
+
+Examples:
+- `feat(browser): add headless website inspection`
+- `fix(config): validate API keys before initialization`
+- `refactor(orchestrator): break down into single-responsibility functions`
+- `docs(examples): update playlist validation examples`
+
+## Task Workflow Examples
+
+**New feature:**
+1. Implement in small functions with JSDoc → 2. Lint → 3. Update relevant doc → 4. Add example to EXAMPLES.md → 5. Test
+
+**Bug fix:**
+1. Fix → 2. Update JSDoc if needed → 3. Lint → 4. Test → 5. Update docs if behavior changed
+
+**Refactoring:**
+1. Remove legacy code → 2. Break down large functions → 3. Add/update JSDoc → 4. Lint → 5. Test → 6. Update docs
+
+**Doc update:**
+Choose one of the 3 existing docs - never create new files.

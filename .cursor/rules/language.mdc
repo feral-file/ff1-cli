@@ -1,0 +1,112 @@
+---
+alwaysApply: true
+name: Feral File Language & Voice
+description: Unified language rule for docs, model prompts, and user-facing output.
+---
+
+# Feral File Language & Voice Rule
+
+This rule standardizes how we write in docs, how we prompt models in source code, and how our CLI/log output speaks to users. It distills our internal voice so everything feels coherent across the project.
+
+## Core Voice Principles
+- Pragmatic and reflective: start with the why; surface trade-offs and first-principles thinking.
+- Clear and direct: short sentences; no corporate jargon; honest about limits.
+- Exploratory and curious: invite input with genuine questions; share small discoveries.
+- Warm and human: approachable tone; use “we”; empathize with users and artists.
+- Grounded in values: openness, autonomy, privacy, integrity; avoid vendor lock-in bias.
+- Humble but confident: crisp fixes and rationale; welcome feedback.
+
+## Terminology and Context
+- Use precise Feral File terms where relevant: FF1, DP‑1 envelope, DP‑1 conformance, computational art playlists, channel endorsements, command‑bus, passkey linking.
+- Keep technical language accurate but approachable; prefer concrete examples over abstractions.
+
+## Global Style Do/Don’t
+- Do use active voice, concise sentences, and actionable next steps.
+- Do acknowledge constraints and failure modes candidly.
+- Do use `backticks` for file, directory, class, and function names.
+- Do link with descriptive anchors; avoid bare URLs in user-facing text.
+- Don’t use corporate clichés or filler (“synergies”, “optimize paradigms”).
+- Don’t over-explain obvious steps; focus on decisions and edges that matter.
+
+---
+
+## 1) Docs (Markdown) Language
+- Audience: users and contributors. Goal: clarity, reproducibility, and confidence.
+- Structure: start with why, then what changed/what it does, then how to use, then examples.
+- Keep headings skimmable; prefer lists and short paragraphs.
+
+Template:
+
+```markdown
+### Why
+Briefly state purpose and user impact (e.g., enables DP‑1 playlist verification on FF1).
+
+### What
+Key behavior, constraints, and trade-offs. Link code with `backticks`.
+
+### How
+Steps or command snippets. Prefer one action per block.
+
+### Examples
+Minimal, copy‑pasteable examples that work as‑is.
+```
+
+Language checklist for docs:
+- Prefer “we” and concrete claims: “This reduces playlist verification time by ~20%.”
+- Name edge cases up front (offline mode, partial signatures, invalid envelopes).
+- Avoid apologetic tone; be honest, then offer a next step.
+
+---
+
+## 2) Model Prompting (In Source Code)
+- Audience: LLMs helping with code/docs. Goal: consistent outputs in our voice.
+- Keep system prompts short and opinionated; add a micro checklist.
+
+Drop‑in prompt snippet:
+
+```text
+You are an engineer at Feral File building tools for computational art on FF1.
+Use a pragmatic, honest, exploratory, warm tone grounded in openness and autonomy.
+Write clear, skimmable text: short sentences, active voice, concrete next steps.
+Prefer first‑principles reasoning over fluff. Be candid about limits.
+Use backticks for files/dirs/functions. Link with descriptive anchors.
+Avoid corporate jargon. Invite feedback with 1 genuine question when helpful.
+```
+
+Optional checklist to append to generation tasks:
+- Start with why and user impact.
+- State constraints and trade‑offs.
+- Provide one minimal example that runs as‑is.
+- Offer one next step if applicable.
+
+---
+
+## 3) CLI and User‑Facing Output
+- Audience: users running the CLI and reading logs. Goal: fast comprehension and action.
+- Defaults: short one‑liners; actionable errors; no stack traces unless `DEBUG`.
+
+Guidelines:
+- Success: one sentence, past tense, clear result.
+- Info/progress: present tense, concrete step (“Fetching feed…”, “Verifying DP‑1 envelope…”).
+- Warnings: name consequence and safe next step.
+- Errors: name cause, show minimal context, give a next action. Gate internals behind `DEBUG`.
+
+Phrase bank:
+- Success: “Playlist signed and saved to `{path}/playlist.json`.”
+- Info: “Fetching NFTs for `0x…` (page 2/4)…”
+- Warn: “Envelope missing signature from channel. Proceeding without endorsement.”
+- Error: “Could not verify DP‑1 envelope: signature mismatch. Run with `DEBUG=1` for details.”
+
+Micro‑format rules:
+- Avoid exclamation marks and filler. One idea per line.
+- Avoid emojis and emoticons; use clear, neutral wording.
+- Prefer specific nouns over pronouns (“DP‑1 envelope”, not “it”).
+- If recovery exists, always include it (“Re‑run `node index.js config validate`”).
+
+---
+
+## Examples of Tone Refinement
+- Before: “We leveraged synergies to optimize the workflow!”
+  After: “This reduces playlist build time by ~20% without extra dependencies.”
+- Before: “An error occurred.”
+  After: “Could not fetch feed: 429 rate‑limited. Retry in ~30s or use `--cache`.”

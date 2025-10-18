@@ -1,0 +1,7 @@
+node_modules
+package-lock.json
+*.json
+!.prettierrc
+.DS_Store
+examples/**/*.json
+

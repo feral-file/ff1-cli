@@ -1,0 +1,23 @@
+{
+  "requirements": [
+    {
+      "type": "fetch_feed",
+      "playlistName": "Social Codes",
+      "quantity": 3
+    },
+    {
+      "type": "build_playlist",
+      "blockchain": "ethereum",
+      "contractAddress": "0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270",
+      "tokenIds": ["304000533", "260000014"],
+      "quantity": 2
+    }
+  ],
+  "playlistSettings": {
+    "durationPerItem": 5,
+    "preserveOrder": false,
+    "deviceName": "Living Room Display",
+    "title": "My Custom Playlist"
+  }
+}
+

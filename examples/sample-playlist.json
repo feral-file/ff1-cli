@@ -1,0 +1,72 @@
+{
+  "version": "DP1",
+  "title": "Sample NFT Collection",
+  "description": "Example DP1 playlist showing NFT structure",
+  "creator": {
+    "name": "FF1 CLI",
+    "address": "0x0000000000000000000000000000000000000000"
+  },
+  "items": [
+    {
+      "type": "nft",
+      "title": "Cool NFT #1",
+      "description": "An amazing digital artwork",
+      "media": {
+        "url": "https://example.com/nft1.png",
+        "mimeType": "image/png"
+      },
+      "duration": 10,
+      "nft": {
+        "chain": "ethereum",
+        "contract": "0x1234567890123456789012345678901234567890",
+        "tokenId": "1"
+      },
+      "metadata": {
+        "attributes": [
+          {
+            "trait_type": "Background",
+            "value": "Blue"
+          },
+          {
+            "trait_type": "Style",
+            "value": "Abstract"
+          }
+        ]
+      }
+    },
+    {
+      "type": "nft",
+      "title": "Cool NFT #2",
+      "description": "Another stunning piece",
+      "media": {
+        "url": "https://example.com/nft2.png",
+        "mimeType": "image/png"
+      },
+      "duration": 10,
+      "nft": {
+        "chain": "ethereum",
+        "contract": "0x1234567890123456789012345678901234567890",
+        "tokenId": "2"
+      },
+      "metadata": {
+        "attributes": [
+          {
+            "trait_type": "Background",
+            "value": "Red"
+          },
+          {
+            "trait_type": "Style",
+            "value": "Minimal"
+          }
+        ]
+      }
+    }
+  ],
+  "generatedAt": "2025-10-01T00:00:00.000Z",
+  "generator": {
+    "name": "ff1-cli",
+    "version": "1.0.0",
+    "model": "grok-beta"
+  }
+}
+

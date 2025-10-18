@@ -1,0 +1,74 @@
+{
+  "defaultModel": "gemini",
+  "models": {
+    "grok": {
+      "apiKey": "YOUR_GROK_API_KEY_FROM_X_AI_CONSOLE",
+      "baseURL": "https://api.x.ai/v1",
+      "model": "grok-4-fast-non-reasoning",
+      "availableModels": [
+        "grok-4-fast-reasoning",
+        "grok-4-fast-non-reasoning",
+        "grok-code-fast-1"
+      ],
+      "timeout": 120000,
+      "maxRetries": 3,
+      "temperature": 0.3,
+      "maxTokens": 4000,
+      "supportsFunctionCalling": true
+    },
+    "gpt": {
+      "apiKey": "YOUR_OPENAI_API_KEY_FROM_PLATFORM_OPENAI_COM",
+      "baseURL": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "availableModels": [
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo"
+      ],
+      "timeout": 30000,
+      "maxRetries": 3,
+      "temperature": 1,
+      "maxTokens": 4000,
+      "supportsFunctionCalling": true
+    },
+    "gemini": {
+      "apiKey": "YOUR_GOOGLE_AI_STUDIO_API_KEY_FROM_AISTUDIO_GOOGLE_COM",
+      "baseURL": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "model": "gemini-2.5-flash",
+      "availableModels": [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-flash-lite-latest"
+      ],
+      "timeout": 30000,
+      "maxRetries": 3,
+      "temperature": 0.3,
+      "maxTokens": 4000,
+      "supportsFunctionCalling": true
+    }
+  },
+  "defaultDuration": 10,
+  "browser": {
+    "timeout": 90000,
+    "sanitizationLevel": "medium"
+  },
+  "feed": {
+    "baseURLs": [
+      "https://feed.feralfile.com/api/v1",
+      "https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1"
+    ]
+  },
+  "playlist": {
+    "privateKey": "YOUR_ED25519_PRIVATE_KEY_BASE64_ENCODED_RUN_NODE_INDEX_JS_GENERATE_KEYS"
+  },
+  "ff1Devices": {
+    "devices": [
+      {
+        "name": "DISPLAY_NAME_FOR_YOUR_FF1_DEVICE",
+        "host": "http://YOUR_FF1_IP_ADDRESS:1111",
+        "apiKey": "YOUR_FF1_DEVICE_API_KEY_FROM_DEVICE_SETTINGS",
+        "topicID": "YOUR_FF1_DEVICE_TOPIC_ID_FROM_DEVICE_SETTINGS"
+      }
+    ]
+  }
+}
