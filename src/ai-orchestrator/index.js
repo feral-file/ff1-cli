@@ -305,6 +305,11 @@ function buildOrchestratorSystemPrompt(params) {
     })
     .join('\n');
 
+  const hasDevice = playlistSettings.deviceName !== undefined;
+  const sendStep = hasDevice
+    ? `6) If verification passed → you MUST call send_to_device({ playlist, deviceName: "${playlistSettings.deviceName || 'first-device'}" }) before finishing.`
+    : `6) Verification passed → you're done. Do not send to device.`;
+
   return `SYSTEM: FF1 Orchestrator (Function-Calling)
 
 ROLE
@@ -318,7 +323,7 @@ PLAYLIST SETTINGS
 - title: ${playlistSettings.title || 'auto'}
 - slug: ${playlistSettings.slug || 'auto'}
 - preserveOrder: ${playlistSettings.preserveOrder !== false ? 'true' : 'false'}
-${playlistSettings.deviceName !== undefined ? `- deviceName: ${playlistSettings.deviceName || 'first-device'}` : ''}
+${hasDevice ? `- deviceName: ${playlistSettings.deviceName || 'first-device'}` : ''}
 
 REASONING (private scratchpad)
 - Use Plan→Check→Act→Reflect for each step.
@@ -335,7 +340,7 @@ KEY RULES
 - Do not fabricate or truncate contract addresses or tokenIds.
 - Title/slug: optional. If provided in settings, pass them; otherwise omit and let the builder auto‑generate title. Slug is required.
 - Shuffle: set shuffle = ${playlistSettings.preserveOrder === false ? 'true' : 'false'}.
-- Build → Verify → Send (MANDATORY if deviceName is defined). Always verify before sending.
+- Build → Verify${hasDevice ? ' → Send' : ''} (MANDATORY to verify before${hasDevice ? ' sending' : ' finishing'}).
 
 DECISION LOOP
 1) For each requirement in order:
@@ -349,7 +354,7 @@ DECISION LOOP
 3) If some requirements failed and interactive mode → ask user; otherwise proceed with available items.
 4) Call build_playlist({ items, title?: settings.title, slug?: settings.slug, shuffle }).
 5) Call verify_playlist({ playlist }). If invalid ≤3 attempts, rebuild only what errors require; otherwise stop with clear error.
-6) If settings.deviceName is defined and verification passed → you MUST call send_to_device({ playlist, deviceName: ${playlistSettings.deviceName ? '"' + playlistSettings.deviceName + '"' : 'null'} }) before finishing.
+${sendStep}
 
 OUTPUT RULES
 - Before each function call, print exactly one sentence: "→ I'm …" describing the action.
@@ -357,7 +362,7 @@ OUTPUT RULES
 - No chain‑of‑thought or extra narration; keep public output minimal.
 
 STOPPING CONDITIONS
-- Finish only after: (items built → playlist built → verified → sent if deviceName is set) or after explaining why no progress is possible.`;
+- Finish only after: (items built → playlist built → verified${hasDevice ? ' → sent' : ''}) or after explaining why no progress is possible.`;
 }
 
 /**
