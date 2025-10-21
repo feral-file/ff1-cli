@@ -106,6 +106,16 @@ REQUIREMENT TYPES (BUILD)
   • A raw 0x…/tz… without tokenIds is an OWNER ADDRESS (query_address), not a contract.
 - fetch_feed: { type, playlistName: string, quantity?: number (default 5) }
 
+DOMAIN OWNER RULES (CRITICAL)
+- Interpret \`*.eth\` as an Ethereum OWNER DOMAIN → produce \`query_address\` with \`ownerAddress\` set to the domain string (e.g., \`reas.eth\`).
+- Interpret \`*.tez\` as a Tezos OWNER DOMAIN → produce \`query_address\` with \`ownerAddress\` set to the domain string (e.g., \`einstein-rosen.tez\`).
+- Never treat \.eth or \.tez as a contract or collection identifier.
+- Never invent or request \`tokenIds\` for \.eth/\.tez domains. Use \`quantity\` only.
+
+EXAMPLES
+- "Pick 3 artworks from reas.eth" → \`query_address\` { ownerAddress: "reas.eth", quantity: 3 }
+- "3 from einstein-rosen.tez and play on my FF1" → \`query_address\` { ownerAddress: "einstein-rosen.tez", quantity: 3 } and set \`playlistSettings.deviceName\` accordingly
+
 PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
 - preserveOrder: default true; "shuffle" → false

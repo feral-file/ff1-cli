@@ -338,7 +338,9 @@ REASONING (private scratchpad)
 KEY RULES
 - Domains: ".eth" and ".tez" are OWNER DOMAINS. Resolve to addresses before querying ownership.
 - Do not fabricate or truncate contract addresses or tokenIds.
-- Title/slug: optional. If provided in settings, pass them; otherwise omit and let the builder auto‑generate title. Slug is required.
+- Title/slug: required. If provided in settings, pass them; otherwise:
+  • Title: after gathering items from all requests, generate a concise, human-friendly title using the requirement arrays (sources, counts, collections) and the collected item titles. Prefer specific over generic (e.g., "Feral File — 12 NFTs from 3 Collections" or "Tezos Wallet 0x… — 8 Items"). Keep ≤ 60 chars.
+  • Slug: allow auto-generation by the builder when omitted.
 - Shuffle: set shuffle = ${playlistSettings.preserveOrder === false ? 'true' : 'false'}.
 - Build → Verify${hasDevice ? ' → Send' : ''} (MANDATORY to verify before${hasDevice ? ' sending' : ' finishing'}).
 
