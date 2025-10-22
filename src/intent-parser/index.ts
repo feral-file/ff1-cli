@@ -122,13 +122,22 @@ PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
 - preserveOrder: default true; synonyms ("shuffle", "randomize", "mix", "mix them up", "scramble") → false
 - title/slug: optional; include only if provided by the user
-- deviceName: from phrases like "send to", "display on", "play on"${hasDevices ? '\n- available devices:\n' + deviceInfo.replace('\n\nAVAILABLE FF1 DEVICES:\n', '') : ''}
+- deviceName: from phrases like "send to", "display on", "play on", "push to"${hasDevices ? '\n- available devices:\n' + deviceInfo.replace('\n\nAVAILABLE FF1 DEVICES:\n', '') : ''}
+
+GENERIC DEVICE RESOLUTION (CRITICAL)
+- When the user references a generic device like "FF1", "my FF1", "my device", "my display", or similar (without a specific name), you MUST:
+  1. Immediately call get_configured_devices() to retrieve the list of devices
+  2. Extract the first device's name from the returned list
+  3. Use that exact device name in playlistSettings.deviceName
+  4. After resolving, acknowledge the resolved device name in your bullet summary (e.g., "send to device: Living Room")
+- Example: "push to my FF1" → call get_configured_devices() → use devices[0].name as deviceName → show "device: Living Room" in bullets
+- Do NOT ask the user which device to use when they say generic names like "FF1" or "my device"
 
 MISSING INFO POLICY (ASK AT MOST ONE QUESTION)
 - build_playlist: ask for blockchain/contract/tokenIds if unclear
 - fetch_feed: ask for playlistName if unclear
 - query_address: ask for owner/domain if unclear
-- send: ask for device name only if user insists on a specific device and it’s ambiguous; otherwise default to first device
+- send: ask for device name only if user specifies a device by name and it's ambiguous; for generic references, always use get_configured_devices
 
 FREE‑FORM COLLECTION NAMES
 - Treat as fetch_feed; do not guess contracts. If user says "some", default quantity = 5.
@@ -150,7 +159,8 @@ COMMUNICATION STYLE
 - Bullet the extracted facts using friendly labels (no camelCase):
   • What we're building (sources/collections/addresses)
   • Settings (duration per item, keep order or shuffle, device, title/slug if provided)
-- Prefer human units and plain words (e.g., "2 minutes per item", "device: Living Room").
+- Prefer human units and plain words (e.g., "2 minutes per item", "send to device: Living Room").
+- When device is resolved via get_configured_devices, ALWAYS show the resolved device name in Settings bullets (e.g., "send to device: Living Room").
 - Use clear, direct language; no filler or corporate jargon; neutral, warm tone.
 - Immediately call the function when ready. No extra narration.`;
 }
@@ -159,6 +169,18 @@ COMMUNICATION STYLE
  * Intent parser function schemas
  */
 const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_configured_devices',
+      description:
+        'Get the list of configured FF1 devices. Call this IMMEDIATELY when the user references a generic device name like "FF1", "my FF1", "my device", "my display", or similar. Use the first device from the returned list.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -509,7 +531,69 @@ export async function processIntentParserRequest(
     // Check if AI wants to pass parsed requirements
     if (message.tool_calls && message.tool_calls.length > 0) {
       const toolCall = message.tool_calls[0];
-      if (toolCall.function.name === 'parse_requirements') {
+      if (toolCall.function.name === 'get_configured_devices') {
+        // Get the list of configured devices
+        const { getConfiguredDevices } = await import('../utilities/functions');
+        const result = await getConfiguredDevices();
+
+        // Add tool result to messages and continue conversation
+        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result),
+        };
+
+        const updatedMessages = [...messages, message, toolResultMessage];
+
+        // Continue the conversation with the device list
+        const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+          model: modelConfig.model,
+          messages: updatedMessages,
+          tools: intentParserFunctionSchemas,
+          tool_choice: 'auto',
+          stream: true,
+        };
+
+        if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+          followUpRequest.temperature = modelConfig.temperature;
+        } else if (modelConfig.temperature === 1) {
+          followUpRequest.temperature = 1;
+        }
+
+        if (modelConfig.model.startsWith('gpt-')) {
+          (followUpRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
+        } else {
+          (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+        }
+
+        const followUpStream = await client.chat.completions.create(followUpRequest);
+        const { message: followUpMessage } = await processStreamingResponse(followUpStream);
+
+        // Check if AI now wants to parse requirements
+        if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
+          const followUpToolCall = followUpMessage.tool_calls[0];
+          if (followUpToolCall.function.name === 'parse_requirements') {
+            const params = JSON.parse(followUpToolCall.function.arguments);
+
+            // Apply constraints and defaults
+            const validatedParams = applyConstraints(params, config);
+
+            return {
+              approved: true,
+              params: validatedParams as unknown as Record<string, unknown>,
+              needsMoreInfo: false,
+            };
+          }
+        }
+
+        // AI is still asking for more information
+        return {
+          approved: false,
+          needsMoreInfo: true,
+          question: followUpMessage.content || undefined,
+          messages: [...updatedMessages, followUpMessage],
+        };
+      } else if (toolCall.function.name === 'parse_requirements') {
         const params = JSON.parse(toolCall.function.arguments);
 
         // Apply constraints and defaults

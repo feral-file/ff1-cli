@@ -169,9 +169,54 @@ async function verifyPlaylist(params) {
   return result;
 }
 
+/**
+ * Get list of configured FF1 devices
+ *
+ * This function retrieves the list of all configured FF1 devices from config.
+ * Called by intent parser to resolve generic device references like "FF1", "my device".
+ *
+ * @returns {Promise<Object>} Device list result
+ * @returns {boolean} returns.success - Whether devices were retrieved
+ * @returns {Array<Object>} returns.devices - Array of device configurations
+ * @returns {string} returns.devices[].name - Device name
+ * @returns {string} returns.devices[].host - Device host URL
+ * @returns {string} [returns.devices[].topicID] - Optional topic ID
+ * @returns {string} [returns.error] - Error message if no devices configured
+ * @example
+ * const result = await getConfiguredDevices();
+ * if (result.success && result.devices.length > 0) {
+ *   const firstDevice = result.devices[0].name;
+ * }
+ */
+async function getConfiguredDevices() {
+  const { getFF1DeviceConfig } = await import('../config');
+  const deviceConfig = getFF1DeviceConfig();
+
+  if (!deviceConfig.devices || deviceConfig.devices.length === 0) {
+    return {
+      success: false,
+      devices: [],
+      error: 'No FF1 devices configured',
+    };
+  }
+
+  // Return sanitized device list (without API keys)
+  const devices = deviceConfig.devices.map((d) => ({
+    name: d.name || d.host,
+    host: d.host,
+    topicID: d.topicID,
+  }));
+
+  return {
+    success: true,
+    devices,
+  };
+}
+
 module.exports = {
   buildDP1Playlist,
   sendPlaylistToDevice,
   resolveDomains,
   verifyPlaylist,
+  getConfiguredDevices,
 };
