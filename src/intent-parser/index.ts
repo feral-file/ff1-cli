@@ -116,9 +116,11 @@ EXAMPLES
 - "Pick 3 artworks from reas.eth" → \`query_address\` { ownerAddress: "reas.eth", quantity: 3 }
 - "3 from einstein-rosen.tez and play on my FF1" → \`query_address\` { ownerAddress: "einstein-rosen.tez", quantity: 3 } and set \`playlistSettings.deviceName\` accordingly
 
+- "Pick 3 artworks from Social Codes and 2 from a2p. Mix them up." → \`fetch_feed\` { playlistName: "Social Codes", quantity: 3 } + \`fetch_feed\` { playlistName: "a2p", quantity: 2 }, and set \`playlistSettings.preserveOrder\` = false
+
 PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
-- preserveOrder: default true; "shuffle" → false
+- preserveOrder: default true; synonyms ("shuffle", "randomize", "mix", "mix them up", "scramble") → false
 - title/slug: optional; include only if provided by the user
 - deviceName: from phrases like "send to", "display on", "play on"${hasDevices ? '\n- available devices:\n' + deviceInfo.replace('\n\nAVAILABLE FF1 DEVICES:\n', '') : ''}
 
@@ -130,6 +132,12 @@ MISSING INFO POLICY (ASK AT MOST ONE QUESTION)
 
 FREE‑FORM COLLECTION NAMES
 - Treat as fetch_feed; do not guess contracts. If user says "some", default quantity = 5.
+
+FEED NAME HEURISTICS (CRITICAL)
+- If a source is named without an address or domain (no 0x… / tz… / *.eth / *.tez), interpret it as a feed playlist name and produce \`fetch_feed\` immediately.
+- Prefer acting over asking: only ask when there are zero matches or multiple plausible feed candidates after search.
+- Multi‑source phrasing like "X and Y" should yield multiple \`fetch_feed\` requirements, each with its own \`quantity\` when specified.
+- Never convert a plain name into a contract query; keep it as \`fetch_feed\`.
 
 SEND INTENT
 - Triggers: display/push/send/cast/send to device/play on FF1
