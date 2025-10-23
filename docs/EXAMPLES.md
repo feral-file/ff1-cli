@@ -80,3 +80,98 @@ npm run dev -- config init
 ```
 
 
+### Natural‑language one‑shot examples (proven)
+
+- **ETH contract + token IDs (shuffle/mix, generic device)**
+  - Format:
+    ```bash
+    npm run dev -- chat "Compose a playlist from Ethereum contract <0x...> with tokens <id> and <id>; [shuffle|mix]; [send to device|send to '<device>']" -o <output.json> -v
+    ```
+  - Example:
+    ```bash
+    npm run dev -- chat "Compose a playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; mix them up; send to device" -o playlist-eth.json -v
+    ```
+
+- **TEZ contract + token IDs (shuffle, named device)**
+  - Format:
+    ```bash
+    npm run dev -- chat "Build a playlist from Tezos contract <KT1...> with tokens <id> and <id>; shuffle; send to '<device>'" -o <output.json> -v
+    ```
+  - Example:
+    ```bash
+    npm run dev -- chat "Build a playlist from Tezos contract KT1BcNnzWze3vCviwiETYNwcFSwjv6RihZEQ with tokens 22 and 8; shuffle; send to 'Living Room'" -o playlist-tez.json -v
+    ```
+
+- **Owner address (ENS → ETH), shuffled**
+  - Format:
+    ```bash
+    npm run dev -- chat "Create a playlist from address <ens> (<n> items); [shuffle|mix]; [send/push to my device]" -o <output.json> -v
+    ```
+  - Example:
+    ```bash
+    npm run dev -- chat "Create a playlist from address reas.eth (5 items); shuffle; push to my device" -o playlist-ens.json -v
+    ```
+
+- **Owner address (Tezos tz1), shuffled**
+  - Format:
+    ```bash
+    npm run dev -- chat "Create a playlist from Tezos address <tz1...> (<n> items); [shuffle|mix]; [send to device]" -o <output.json> -v
+    ```
+  - Example:
+    ```bash
+    npm run dev -- chat "Create a playlist from Tezos address tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb (3 items); mix them up; send to device" -o playlist-tz1.json -v
+    ```
+
+- **Feed playlists (named), shuffled**
+  - Format:
+    ```bash
+    npm run dev -- chat "[Create|Build] a playlist from feed '<name>' (<n> items); shuffle; [send to device]" -o <output.json> -v
+    ```
+  - Examples:
+    ```bash
+    npm run dev -- chat "Create a playlist from feed 'Unsupervised' (3 items); shuffle; send to device" -o playlist-feed1.json -v
+    npm run dev -- chat "Build a playlist from feed 'Social Codes' (3 items); shuffle; send to device" -o playlist-feed2.json -v
+    ```
+
+- **Mixed in one prompt (ETH + TEZ + feed + ENS), shuffled, named device**
+  - Format:
+    ```bash
+    npm run dev -- chat "Compose a playlist: Tezos <KT1...> tokens <id>, <id>; Ethereum <0x...> tokens <id>, <id>; <n> from '<feed>'; <m> from <ens>; shuffle; send to '<device>'" -o <output.json> -v
+    ```
+  - Example:
+    ```bash
+    npm run dev -- chat "Compose a playlist: Tezos KT1BcNnzWze3vCviwiETYNwcFSwjv6RihZEQ tokens 22, 8; Ethereum 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 tokens 52932, 52457; 3 from 'Unsupervised'; 1 from reas.eth; shuffle; send to 'Living Room'" -o playlist-mixed.json -v
+    ```
+
+- **Multiple instructions in one prompt (incremental), shuffled**
+  - Format:
+    ```bash
+    npm run dev -- chat "Create a playlist from Ethereum contract <0x...> tokens <id>, <id>; then add <n> from '<feed>'; then add <m> from <ens>; shuffle; [send/push to my device]" -o <output.json> -v
+    ```
+  - Example:
+    ```bash
+    npm run dev -- chat "Create a playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 tokens 52932, 52457; then add 2 from 'Social Codes'; then add 1 from reas.eth; shuffle; push to my device" -o playlist-multi.json -v
+    ```
+
+- **Synonym variants for the same ETH case**
+  - Format:
+    ```bash
+    npm run dev -- chat "[Build|Create|Compose] a playlist from Ethereum contract <0x...> tokens <id> and <id>; send to device" -o <output.json> -v
+    ```
+  - Examples:
+    ```bash
+    npm run dev -- chat "Build a playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 tokens 52932 and 52457; send to device" -o playlist-eth-build.json -v
+    npm run dev -- chat "Create a playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 tokens 52932 and 52457; send to device" -o playlist-eth-create.json -v
+    ```
+
+- **Device targeting: generic vs named**
+  - Format:
+    ```bash
+    npm run dev -- chat "Compose a playlist from <ens/address> (<n> items); send to device" -o <output.json> -v
+    npm run dev -- chat "Compose a playlist from <ens/address> (<n> items); send to '<device>'" -o <output.json> -v
+    ```
+  - Examples:
+    ```bash
+    npm run dev -- chat "Compose a playlist from reas.eth (3 items); send to device" -o playlist-generic-device.json -v
+    npm run dev -- chat "Compose a playlist from reas.eth (3 items); send to 'Living Room'" -o playlist-named-device.json -v
+    ```
