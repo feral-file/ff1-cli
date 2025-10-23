@@ -7,6 +7,30 @@ const { getPlaylistConfig } = require('../config');
 const { signPlaylist } = require('./playlist-signer');
 
 /**
+ * Convert a string to a URL-friendly slug
+ *
+ * Lowercases, trims, replaces whitespace with dashes, and strips invalid chars.
+ * Falls back to a short id when input is empty.
+ *
+ * @param {string} value - Source string to slugify
+ * @returns {string} Slugified string
+ */
+function slugify(value) {
+  const base = (value || '').toString().trim().toLowerCase();
+  if (!base) {
+    const crypto = require('crypto');
+    return `playlist-${crypto.randomUUID().split('-')[0]}`;
+  }
+  return base
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip diacritics
+    .replace(/[^a-z0-9\s-]/g, '') // remove invalid chars
+    .replace(/\s+/g, '-') // spaces -> dashes
+    .replace(/-+/g, '-') // collapse dashes
+    .replace(/^-|-$/g, ''); // trim dashes
+}
+
+/**
  * Convert single NFT token info to DP1 playlist item
  *
  * @param {Object} tokenInfo - Token information from NFT indexer
@@ -194,13 +218,13 @@ function generatePlaylistTitle(items) {
  * @param {Object|Array} paramsOrItems - Playlist parameters object or items array (legacy)
  * @param {Array} [paramsOrItems.items] - Array of DP1 items
  * @param {string} [paramsOrItems.title] - Playlist title (auto-generated if not provided)
- * @param {string} [paramsOrItems.slug] - Playlist slug
+ * @param {string} [paramsOrItems.slug] - Playlist slug (auto-generated from title if not provided)
  * @param {boolean} [paramsOrItems.deterministicMode] - Enable deterministic mode for testing
  * @param {string} [paramsOrItems.fixedTimestamp] - Fixed timestamp for deterministic mode
  * @param {string} [paramsOrItems.fixedId] - Fixed ID for deterministic mode
  * @param {Object} options - Additional options (legacy parameter)
  * @param {string} [options.title] - Playlist title (legacy)
- * @param {string} [options.slug] - Playlist slug (legacy)
+ * @param {string} [options.slug] - Playlist slug (legacy; auto-generated from title if omitted)
  * @param {boolean} [options.deterministicMode] - Enable deterministic mode for testing
  * @param {string} [options.fixedTimestamp] - Fixed timestamp for deterministic mode
  * @param {string} [options.fixedId] - Fixed ID for deterministic mode
@@ -261,6 +285,11 @@ async function buildDP1Playlist(paramsOrItems, options = {}) {
     title = generatePlaylistTitle(items);
   }
 
+  // Auto-generate slug when not provided
+  if (!slug) {
+    slug = slugify(title);
+  }
+
   // Build DP1 playlist structure (DP1 v1.0.0 + OpenAPI spec compliance)
   // Support deterministic mode for testing (freeze timestamp and ID)
   const timestamp = deterministicMode && fixedTimestamp ? fixedTimestamp : new Date().toISOString();
@@ -284,10 +313,8 @@ async function buildDP1Playlist(paramsOrItems, options = {}) {
     },
   };
 
-  // Add optional slug if provided (valid DP1 field)
-  if (slug) {
-    playlist.slug = slug;
-  }
+  // Always include slug (auto-generated when missing)
+  playlist.slug = slug;
 
   // Sign the playlist if private key is configured
   try {

@@ -8,6 +8,7 @@ const nftIndexer = require('./nft-indexer');
 const feedFetcher = require('./feed-fetcher');
 const playlistBuilder = require('./playlist-builder');
 const functions = require('./functions');
+const domainResolver = require('./domain-resolver');
 
 /**
  * Query tokens from an owner address
@@ -111,7 +112,27 @@ async function queryRequirement(requirement, duration = 10) {
 
   // Handle query_address type
   if (type === 'query_address') {
-    return await queryTokensByAddress(ownerAddress, quantity, duration);
+    // Check if ownerAddress is a domain name (.eth or .tez)
+    if (ownerAddress && (ownerAddress.endsWith('.eth') || ownerAddress.endsWith('.tez'))) {
+      console.log(chalk.cyan(`\nResolving domain ${ownerAddress}...`));
+
+      const resolution = await domainResolver.resolveDomain(ownerAddress);
+
+      if (resolution.resolved && resolution.address) {
+        console.log(chalk.gray(`  ${resolution.domain} → ${resolution.address}`));
+        // Use resolved address instead of domain
+        return await queryTokensByAddress(resolution.address, quantity, duration);
+      } else {
+        console.log(
+          chalk.red(
+            `  Could not resolve domain ${ownerAddress}: ${resolution.error || 'Unknown error'}`
+          )
+        );
+        return [];
+      }
+    } else {
+      return await queryTokensByAddress(ownerAddress, quantity, duration);
+    }
   }
 
   // Handle fetch_feed type
