@@ -119,24 +119,28 @@ const functionSchemas = [
     type: 'function',
     function: {
       name: 'build_playlist',
-      description: 'Build a DP1 v1.0.0 compliant playlist from collected NFT items.',
+      description:
+        'Build a DP1 v1.0.0 compliant playlist from collected NFT items. You MUST pass the items array containing all collected NFT items from query_requirement calls.',
       parameters: {
         type: 'object',
         properties: {
           items: {
             type: 'array',
-            description: 'Array of DP1 playlist items',
+            description:
+              'Array of ALL DP1 playlist items collected from query_requirement calls. CRITICAL: You MUST include this parameter with all collected items.',
             items: {
               type: 'object',
             },
           },
           title: {
-            type: 'string',
-            description: 'Playlist title (null for auto-generation)',
+            type: ['string', 'null'],
+            description:
+              'Playlist title. Pass null (not the string "null") for auto-generation. If user did not provide a title in settings, pass null.',
           },
           slug: {
-            type: 'string',
-            description: 'Playlist slug (null for auto-generation)',
+            type: ['string', 'null'],
+            description:
+              'Playlist slug. Pass null (not the string "null") for auto-generation. If user did not provide a slug in settings, pass null.',
           },
           shuffle: {
             type: 'boolean',
@@ -151,17 +155,19 @@ const functionSchemas = [
     type: 'function',
     function: {
       name: 'send_to_device',
-      description: 'Send completed playlist to an FF1 device for display.',
+      description:
+        'Send completed playlist to an FF1 device for display. Pass the EXACT playlist object that was verified.',
       parameters: {
         type: 'object',
         properties: {
           playlist: {
             type: 'object',
-            description: 'Complete DP1 playlist object',
+            description:
+              'Complete DP1 playlist object (must be the EXACT object that was verified)',
           },
           deviceName: {
-            type: 'string',
-            description: 'Device name (null for first device)',
+            type: ['string', 'null'],
+            description: 'Device name (pass null for first device)',
           },
         },
         required: ['playlist'],
@@ -198,13 +204,14 @@ const functionSchemas = [
     function: {
       name: 'verify_playlist',
       description:
-        'Verify a playlist against the DP-1 specification before sending it to a device. This function MUST be called before send_to_device to ensure the playlist is valid. Returns validation errors if the playlist does not conform to DP-1 standards.',
+        'Verify a playlist against the DP-1 specification before sending it to a device. Pass the EXACT playlist object returned from build_playlist. This function MUST be called before send_to_device to ensure the playlist is valid. Returns validation errors if the playlist does not conform to DP-1 standards.',
       parameters: {
         type: 'object',
         properties: {
           playlist: {
             type: 'object',
-            description: 'Complete DP1 playlist object to verify',
+            description:
+              'Complete DP1 playlist object to verify (must be the EXACT object returned from build_playlist)',
           },
         },
         required: ['playlist'],
@@ -262,7 +269,10 @@ async function executeFunction(functionName, args) {
       if (args.shuffle) {
         items = utilities.shuffleArray([...items]);
       }
-      return await utilities.buildDP1Playlist(items, args.title, args.slug);
+      // Handle string "null" and convert to actual null for auto-generation
+      const title = args.title === 'null' || args.title === null ? null : args.title;
+      const slug = args.slug === 'null' || args.slug === null ? null : args.slug;
+      return await utilities.buildDP1Playlist(items, title, slug);
     }
 
     case 'send_to_device':
@@ -307,7 +317,8 @@ function buildOrchestratorSystemPrompt(params) {
 
   const hasDevice = playlistSettings.deviceName !== undefined;
   const sendStep = hasDevice
-    ? `6) If verification passed → you MUST call send_to_device({ playlist, deviceName: "${playlistSettings.deviceName || 'first-device'}" }) before finishing.`
+    ? `6) If verification passed → you MUST call send_to_device({ playlist: <the_playlist_object>, deviceName: "${playlistSettings.deviceName || 'first-device'}" }) before finishing.
+   CRITICAL: Pass the playlist object, not empty {}.`
     : `6) Verification passed → you're done. Do not send to device.`;
 
   return `SYSTEM: FF1 Orchestrator (Function-Calling)
@@ -338,9 +349,11 @@ REASONING (private scratchpad)
 KEY RULES
 - Domains: ".eth" and ".tez" are OWNER DOMAINS. Resolve to addresses before querying ownership.
 - Do not fabricate or truncate contract addresses or tokenIds.
-- Title/slug: required. If provided in settings, pass them; otherwise:
-  • Title: after gathering items from all requests, generate a concise, human-friendly title using the requirement arrays (sources, counts, collections) and the collected item titles. Prefer specific over generic (e.g., "Feral File — 12 NFTs from 3 Collections" or "Tezos Wallet 0x… — 8 Items"). Keep ≤ 60 chars.
-  • Slug: allow auto-generation by the builder when omitted.
+- Title/slug: when calling build_playlist, pass actual null (not string "null"):
+  • If title provided in settings → pass settings.title as-is
+  • If title NOT provided → pass null (NOT the string "null")
+  • If slug provided in settings → pass settings.slug as-is
+  • If slug NOT provided → pass null (NOT the string "null")
 - Shuffle: set shuffle = ${playlistSettings.preserveOrder === false ? 'true' : 'false'}.
 - Build → Verify${hasDevice ? ' → Send' : ''} (MANDATORY to verify before${hasDevice ? ' sending' : ' finishing'}).
 
@@ -351,11 +364,18 @@ DECISION LOOP
      • if ownerAddress endsWith .eth/.tez → resolve_domains([domain]); if resolved → use returned address; if not → mark failed and continue.
      • if ownerAddress is 0x…/tz… → call query_requirement(requirement, duration=${playlistSettings.durationPerItem || 10}).
    - fetch_feed: search_feed_playlist(name) → take bestMatch → fetch_feed_playlist_items(bestMatch, quantity, duration=${playlistSettings.durationPerItem || 10}).
-   - Collect items across steps.
+   - Collect items across steps in an array (let's call it collectedItems).
 2) If zero items → explain briefly and finish.
 3) If some requirements failed and interactive mode → ask user; otherwise proceed with available items.
-4) Call build_playlist({ items, title?: settings.title, slug?: settings.slug, shuffle }).
-5) Call verify_playlist({ playlist }). If invalid ≤3 attempts, rebuild only what errors require; otherwise stop with clear error.
+4) Call build_playlist({ items: collectedItems, title: settings.title || null, slug: settings.slug || null, shuffle }).
+   CRITICAL: 
+   - You MUST pass the items parameter with ALL collected items
+   - Pass actual null values for title/slug, NOT the string "null"
+   - If title/slug not in settings, pass null
+   Store the returned playlist object in a variable.
+5) Call verify_playlist({ playlist: <the_playlist_object_from_step_4> }).
+   CRITICAL: You MUST pass the playlist object. Don't pass empty object {}.
+   If invalid ≤3 attempts, rebuild only what errors require; otherwise stop with clear error.
 ${sendStep}
 
 OUTPUT RULES

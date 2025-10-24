@@ -583,6 +583,26 @@ export async function processIntentParserRequest(
               params: validatedParams as unknown as Record<string, unknown>,
               needsMoreInfo: false,
             };
+          } else {
+            // Unhandled tool call - add assistant message and tool response to messages
+            const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+              role: 'tool',
+              tool_call_id: followUpToolCall.id,
+              content: JSON.stringify({
+                error: `Unknown function: ${followUpToolCall.function.name}`,
+              }),
+            };
+            const validMessages = [...updatedMessages, followUpMessage, toolResultMessage];
+
+            // AI is still asking for more information after the error
+            return {
+              approved: false,
+              needsMoreInfo: true,
+              question:
+                followUpMessage.content ||
+                `Encountered unknown function: ${followUpToolCall.function.name}`,
+              messages: validMessages,
+            };
           }
         }
 
@@ -612,6 +632,18 @@ export async function processIntentParserRequest(
         const confirmation = await confirmPlaylistForSending(args.filePath, args.deviceName);
 
         if (!confirmation.success) {
+          // Add tool response message to make conversation valid
+          const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              success: false,
+              error: confirmation.error,
+              message: confirmation.message,
+            }),
+          };
+          const validMessages = [...messages, message, toolResultMessage];
+
           // Check if this is a device selection needed case
           if (confirmation.needsDeviceSelection) {
             // Multiple devices available - ask user to choose
@@ -620,7 +652,7 @@ export async function processIntentParserRequest(
               approved: false,
               needsMoreInfo: true,
               question: confirmation.message || 'Please choose a device',
-              messages: [...messages, message],
+              messages: validMessages,
             };
           }
 
@@ -630,7 +662,7 @@ export async function processIntentParserRequest(
             approved: false,
             needsMoreInfo: true,
             question: confirmation.message || `Failed to send playlist: ${confirmation.error}`,
-            messages: [...messages, message],
+            messages: validMessages,
           };
         }
 
@@ -645,6 +677,23 @@ export async function processIntentParserRequest(
             message: confirmation.message,
           } as unknown as Record<string, unknown>,
           needsMoreInfo: false,
+        };
+      } else {
+        // Unhandled tool call at top level
+        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({
+            error: `Unknown function: ${toolCall.function.name}`,
+          }),
+        };
+        const validMessages = [...messages, message, toolResultMessage];
+
+        return {
+          approved: false,
+          needsMoreInfo: true,
+          question: message.content || `Encountered unknown function: ${toolCall.function.name}`,
+          messages: validMessages,
         };
       }
     }
