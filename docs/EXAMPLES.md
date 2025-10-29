@@ -56,6 +56,59 @@ The CLI can parse rich requests and do it all in one go: fetch, build a DP‑1 p
 npm run dev -- chat "Get tokens 1,2 from contract 0xabc and token 42 from KT1xyz; shuffle; 6 seconds each; send to 'Living Room Display'." -o playlist.json -v
 ```
 
+## Natural Language: Display and Publish
+
+The CLI recognizes publishing keywords like "publish", "publish to my feed", "push to feed", "send to feed" and automatically publishes after building.
+
+### Basic Publishing
+
+```bash
+# Build and publish
+npm run dev -- chat "Build playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; publish to my feed" -o playlist.json -v
+
+# With feed selection (if multiple servers configured)
+# The CLI will ask: "Which feed server? 1) https://feed.feralfile.com/api/v1 2) http://localhost:8787"
+npm run dev -- chat "Get 3 from Social Codes and publish to feed" -v
+
+# Publish existing playlist (defaults to ./playlist.json)
+npm run dev chat
+# Then type: "publish playlist"
+
+# Publish specific playlist file
+npm run dev chat
+# Then type: "publish the playlist ./playlist-temp.json"
+```
+
+### Combined: Display + Publish
+
+```bash
+# Display on FF1 AND publish to feed
+npm run dev -- chat "Build playlist from contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; mix them up; send to my FF1 and publish to my feed" -o playlist.json -v
+
+# With explicit device name
+npm run dev -- chat "Get 5 from Social Codes, shuffle, display on 'Living Room', and publish to feed" -v
+```
+
+### How It Works
+
+**Mode 1: Build and Publish** (when sources are mentioned)
+1. Intent parser detects "publish" keywords with sources/requirements
+2. Calls `get_feed_servers` to retrieve configured servers
+3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
+4. Builds playlist → verifies → publishes automatically
+
+**Mode 2: Publish Existing File** (e.g., "publish playlist")
+1. Intent parser detects "publish playlist" or similar phrases
+2. Calls `get_feed_servers` to retrieve configured servers
+3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
+4. Publishes the playlist from `./playlist.json` (or specified path)
+
+Output shows:
+- Playlist build progress (Mode 1 only)
+- Device sending (if requested): `✓ Sent to device: Living Room`
+- Publishing status: `✓ Published to feed server`
+- Playlist ID: `Playlist ID: 84e028f8-...`
+
 ## Validate / Sign / Send
 
 ```bash
@@ -67,6 +120,107 @@ npm run dev -- sign playlist.json -o signed.json
 
 # Send to device
 npm run dev -- send playlist.json -d "Living Room Display"
+```
+
+## Publish to Feed Server
+
+Publish validated playlists to a DP-1 feed server for sharing and discovery.
+
+### Configuration
+
+Add feed servers to `config.json`:
+
+```json
+{
+  "feedServers": [
+    {
+      "baseUrl": "http://localhost:8787/api/v1",
+      "apiKey": "your-api-key"
+    },
+    {
+      "baseUrl": "https://feed.example.com/api/v1",
+      "apiKey": "your-api-key"
+    }
+  ]
+}
+```
+
+### Publish Commands
+
+```bash
+# Interactive: list servers and ask which to use
+npm run dev -- publish playlist.json
+
+# Direct: publish to specific server (server index 0)
+npm run dev -- publish playlist.json -s 0
+
+# Show help
+npm run dev -- publish --help
+```
+
+### Flow
+
+1. **Validate** - Playlist verified against DP-1 specification
+2. **Select Server** - If multiple servers, choose which one (interactive or via `-s` flag)
+3. **Publish** - Send validated playlist to selected feed server
+4. **Confirm** - Returns playlist ID and server details
+
+### Example Output
+
+```
+$ npm run dev -- publish playlist.json
+
+📡 Publishing playlist to feed server...
+
+Multiple feed servers found. Select one:
+  0: http://localhost:8787/api/v1
+  1: https://feed.example.com/api/v1
+
+Select server (0-based index): 0
+
+✅ Playlist published successfully!
+   Playlist ID: 84e028f8-ea12-4779-a496-64f95f0486cd
+   Server: http://localhost:8787/api/v1
+   Status: Published to feed server (created)
+```
+
+### Error Handling
+
+**Validation failed:**
+```
+❌ Failed to publish playlist
+   Playlist validation failed: dpVersion: Required; id: Required
+```
+
+**File not found:**
+```
+❌ Failed to publish playlist
+   Playlist file not found: /path/to/playlist.json
+```
+
+**API error:**
+```
+❌ Failed to publish playlist
+   Failed to publish: {"error":"unauthorized","message":"Invalid API key"}
+```
+
+## Validate / Sign / Send / Publish (Complete Flow)
+
+```bash
+# 1. Create a playlist (via chat or build)
+npm run dev -- chat "Get tokens 1,2,3 from contract 0xabc" -o playlist.json
+
+# 2. Validate it
+npm run dev -- validate playlist.json
+
+# 3. Sign it
+npm run dev -- sign playlist.json -o signed.json
+
+# 4. Send to device
+npm run dev -- send signed.json -d "My Display"
+
+# 5. Publish to feed server
+npm run dev -- publish signed.json -s 0
 ```
 
 ## Troubleshooting

@@ -94,8 +94,9 @@ REASONING (private scratchpad)
 - Keep reasoning hidden; publicly print one status sentence before each tool call.
 
 OUTPUT CONTRACT
-- BUILD → call parse_requirements with { requirements: Requirement[], playlistSettings?: { title?: string | null, slug?: string | null, durationPerItem?: number, preserveOrder?: boolean, deviceName?: string } }
+- BUILD → call parse_requirements with { requirements: Requirement[], playlistSettings?: { title?: string | null, slug?: string | null, durationPerItem?: number, preserveOrder?: boolean, deviceName?: string, feedServer?: { baseUrl: string, apiKey?: string } } }
 - SEND → call confirm_send_playlist with { filePath: string, deviceName?: string }
+- PUBLISH (existing file) → call confirm_publish_playlist with { filePath: string, feedServer: { baseUrl: string, apiKey?: string } }
 - QUESTION → answer briefly (no tool call)
 - Use correct types; never truncate addresses/tokenIds; tokenIds are strings; quantity is a number.
 
@@ -153,6 +154,32 @@ SEND INTENT
 - Always call confirm_send_playlist with filePath (default "./playlist.json") and optional deviceName
 - Device selection: exact match → case‑insensitive → if multiple/none → ask user to choose
 
+PUBLISH INTENT (CRITICAL)
+- Triggers: "publish", "publish to my feed", "push to feed", "send to feed", "publish to feed"
+- Distinguish from FF1 device commands: "publish" = feed server, "display/send to device" = FF1 device
+- TWO MODES:
+  
+  MODE 1: BUILD AND PUBLISH (user includes sources/requirements)
+  - Example: "Get tokens from 0xabc and publish to feed"
+  - When user mentions publishing WITH sources/requirements:
+    1. Immediately call get_feed_servers() to retrieve available feed servers
+    2. If only 1 server → use it directly in playlistSettings.feedServer
+    3. If 2+ servers → ask user "Which feed server?" with numbered list (e.g., "1) https://feed.feralfile.com 2) http://localhost:8787")
+    4. After selection, set playlistSettings.feedServer = { baseUrl, apiKey } from selected server
+    5. Acknowledge in Settings bullets (e.g., "publish to: https://feed.feralfile.com/api/v1")
+  - User can request both device display AND publishing (e.g., "send to FF1 and publish to feed") → set both deviceName and feedServer
+  - Publishing happens automatically after playlist verification passes
+  
+  MODE 2: PUBLISH EXISTING FILE (user mentions "publish playlist" or "publish the playlist")
+  - Triggers: "publish playlist", "publish the playlist", "publish this playlist", "publish last playlist"
+  - Default file path: "./playlist.json" (unless user specifies a different path like "publish ./playlist-temp.json")
+  - When user wants to publish an existing file WITHOUT specifying sources:
+    1. Immediately call get_feed_servers() to retrieve available feed servers
+    2. If only 1 server → use it directly
+    3. If 2+ servers → ask user "Which feed server?" with numbered list
+    4. After selection, call confirm_publish_playlist with { filePath: "./playlist.json" (or user-specified path), feedServer: { baseUrl, apiKey } }
+  - DO NOT ask for sources/requirements in this mode—user wants to publish an already-created playlist file
+
 COMMUNICATION STYLE
 - Acknowledge briefly: "Got it." or "Understood." (one line).
 - Do not repeat the user's request; do not paraphrase it.
@@ -175,6 +202,18 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
       name: 'get_configured_devices',
       description:
         'Get the list of configured FF1 devices. Call this IMMEDIATELY when the user references a generic device name like "FF1", "my FF1", "my device", "my display", or similar. Use the first device from the returned list.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_feed_servers',
+      description:
+        'Get the list of configured feed servers for publishing playlists. Call this IMMEDIATELY when the user mentions "publish", "push to feed", "send to feed", or "publish to my feed". Return list of available feed servers.',
       parameters: {
         type: 'object',
         properties: {},
@@ -271,6 +310,22 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
                 description:
                   'Device name to display on (null for first device, omit if no display requested)',
               },
+              feedServer: {
+                type: 'object',
+                description:
+                  'Feed server for publishing playlist (omit if no publishing requested)',
+                properties: {
+                  baseUrl: {
+                    type: 'string',
+                    description: 'Feed server base URL',
+                  },
+                  apiKey: {
+                    type: 'string',
+                    description: 'Optional API key for authentication',
+                  },
+                },
+                required: ['baseUrl'],
+              },
             },
           },
         },
@@ -298,6 +353,39 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           },
         },
         required: ['filePath'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'confirm_publish_playlist',
+      description:
+        'Confirm the playlist file path and feed server for publishing. This function is called when the user wants to publish an existing playlist file (e.g., "publish playlist", "publish the playlist").',
+      parameters: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Path to the playlist file (default: "./playlist.json")',
+          },
+          feedServer: {
+            type: 'object',
+            description: 'Feed server configuration for publishing',
+            properties: {
+              baseUrl: {
+                type: 'string',
+                description: 'Feed server base URL',
+              },
+              apiKey: {
+                type: 'string',
+                description: 'Optional API key for authentication',
+              },
+            },
+            required: ['baseUrl'],
+          },
+        },
+        required: ['filePath', 'feedServer'],
       },
     },
   },
@@ -583,6 +671,208 @@ export async function processIntentParserRequest(
               params: validatedParams as unknown as Record<string, unknown>,
               needsMoreInfo: false,
             };
+          } else if (followUpToolCall.function.name === 'get_feed_servers') {
+            // Handle nested get_feed_servers call
+            const { getFeedConfig } = await import('../config');
+            const feedConfig = getFeedConfig();
+            const servers = feedConfig.servers || [];
+
+            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+              role: 'tool',
+              tool_call_id: followUpToolCall.id,
+              content: JSON.stringify({ servers }),
+            };
+
+            const nestedMessages = [...updatedMessages, followUpMessage, feedToolResultMessage];
+
+            // Continue conversation to handle feed server selection
+            const nestedRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+              model: modelConfig.model,
+              messages: nestedMessages,
+              tools: intentParserFunctionSchemas,
+              tool_choice: 'auto',
+              stream: true,
+            };
+
+            if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+              nestedRequest.temperature = modelConfig.temperature;
+            } else if (modelConfig.temperature === 1) {
+              nestedRequest.temperature = 1;
+            }
+
+            if (modelConfig.model.startsWith('gpt-')) {
+              (nestedRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
+            } else {
+              (nestedRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+            }
+
+            const nestedStream = await client.chat.completions.create(nestedRequest);
+            const { message: nestedMessage } = await processStreamingResponse(nestedStream);
+
+            // Check if AI now wants to parse requirements
+            if (nestedMessage.tool_calls && nestedMessage.tool_calls.length > 0) {
+              const nestedToolCall = nestedMessage.tool_calls[0];
+              if (nestedToolCall.function.name === 'parse_requirements') {
+                const params = JSON.parse(nestedToolCall.function.arguments);
+                const validatedParams = applyConstraints(params, config);
+
+                return {
+                  approved: true,
+                  params: validatedParams as unknown as Record<string, unknown>,
+                  needsMoreInfo: false,
+                  messages: [...nestedMessages, nestedMessage],
+                };
+              }
+            }
+
+            // AI might be asking a question or needs more info
+            if (nestedMessage.content) {
+              return {
+                approved: false,
+                needsMoreInfo: true,
+                question: nestedMessage.content,
+                messages: [...nestedMessages, nestedMessage],
+              };
+            }
+
+            return {
+              approved: false,
+              needsMoreInfo: false,
+            };
+          } else if (followUpToolCall.function.name === 'confirm_send_playlist') {
+            const sendParams = JSON.parse(followUpToolCall.function.arguments);
+            return {
+              approved: true,
+              params: { ...sendParams, action: 'send_playlist' },
+              needsMoreInfo: false,
+            };
+          }
+
+          return {
+            approved: false,
+            needsMoreInfo: false,
+          };
+        }
+
+        // AI might be asking a question or needs more info
+        if (followUpMessage.content) {
+          return {
+            approved: false,
+            needsMoreInfo: true,
+            question: followUpMessage.content,
+            messages: [...updatedMessages, followUpMessage],
+          };
+        }
+
+        return {
+          approved: false,
+          needsMoreInfo: false,
+        };
+      } else if (toolCall.function.name === 'get_feed_servers') {
+        // Get the list of configured feed servers
+        const { getFeedConfig } = await import('../config');
+        const feedConfig = getFeedConfig();
+        const servers = feedConfig.servers || [];
+
+        // Add tool result to messages and continue conversation
+        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ servers }),
+        };
+
+        const updatedMessages = [...messages, message, toolResultMessage];
+
+        // Continue the conversation with the feed server list
+        const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+          model: modelConfig.model,
+          messages: updatedMessages,
+          tools: intentParserFunctionSchemas,
+          tool_choice: 'auto',
+          stream: true,
+        };
+
+        if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+          followUpRequest.temperature = modelConfig.temperature;
+        } else if (modelConfig.temperature === 1) {
+          followUpRequest.temperature = 1;
+        }
+
+        if (modelConfig.model.startsWith('gpt-')) {
+          (followUpRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
+        } else {
+          (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+        }
+
+        const followUpStream = await client.chat.completions.create(followUpRequest);
+        const { message: followUpMessage } = await processStreamingResponse(followUpStream);
+
+        // Check if AI now wants to parse requirements
+        if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
+          const followUpToolCall = followUpMessage.tool_calls[0];
+          if (followUpToolCall.function.name === 'parse_requirements') {
+            const params = JSON.parse(followUpToolCall.function.arguments);
+
+            // Apply constraints and defaults
+            const validatedParams = applyConstraints(params, config);
+
+            return {
+              approved: true,
+              params: validatedParams as unknown as Record<string, unknown>,
+              needsMoreInfo: false,
+            };
+          } else if (followUpToolCall.function.name === 'confirm_publish_playlist') {
+            // Handle publish after feed server selection
+            const args = JSON.parse(followUpToolCall.function.arguments);
+            const { publishPlaylist } = await import('../utilities/playlist-publisher');
+
+            console.log();
+            console.log(chalk.cyan('Publishing to feed server...'));
+
+            const publishResult = await publishPlaylist(
+              args.filePath,
+              args.feedServer.baseUrl,
+              args.feedServer.apiKey
+            );
+
+            if (publishResult.success) {
+              console.log(chalk.green('✓ Published to feed server'));
+              if (publishResult.playlistId) {
+                console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+              }
+              if (publishResult.feedServer) {
+                console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+              }
+              console.log();
+
+              return {
+                approved: true,
+                params: {
+                  action: 'publish_playlist',
+                  filePath: args.filePath,
+                  feedServer: args.feedServer,
+                  playlistId: publishResult.playlistId,
+                  success: true,
+                } as unknown as Record<string, unknown>,
+                needsMoreInfo: false,
+              };
+            } else {
+              console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+              if (publishResult.message) {
+                console.error(chalk.gray(`   ${publishResult.message}`));
+              }
+              console.log();
+
+              return {
+                approved: false,
+                needsMoreInfo: false,
+                params: {
+                  action: 'publish_playlist',
+                  success: false,
+                  error: publishResult.error,
+                } as unknown as Record<string, unknown>,
+              };
+            }
           } else {
             // Unhandled tool call - add assistant message and tool response to messages
             const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
@@ -678,6 +968,58 @@ export async function processIntentParserRequest(
           } as unknown as Record<string, unknown>,
           needsMoreInfo: false,
         };
+      } else if (toolCall.function.name === 'confirm_publish_playlist') {
+        const args = JSON.parse(toolCall.function.arguments);
+        const { publishPlaylist } = await import('../utilities/playlist-publisher');
+
+        // Publish the playlist
+        console.log();
+        console.log(chalk.cyan('Publishing to feed server...'));
+
+        const publishResult = await publishPlaylist(
+          args.filePath,
+          args.feedServer.baseUrl,
+          args.feedServer.apiKey
+        );
+
+        if (publishResult.success) {
+          console.log(chalk.green('✓ Published to feed server'));
+          if (publishResult.playlistId) {
+            console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+          }
+          if (publishResult.feedServer) {
+            console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+          }
+          console.log();
+
+          return {
+            approved: true,
+            params: {
+              action: 'publish_playlist',
+              filePath: args.filePath,
+              feedServer: args.feedServer,
+              playlistId: publishResult.playlistId,
+              success: true,
+            } as unknown as Record<string, unknown>,
+            needsMoreInfo: false,
+          };
+        } else {
+          console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+          if (publishResult.message) {
+            console.error(chalk.gray(`   ${publishResult.message}`));
+          }
+          console.log();
+
+          return {
+            approved: false,
+            needsMoreInfo: false,
+            params: {
+              action: 'publish_playlist',
+              success: false,
+              error: publishResult.error,
+            } as unknown as Record<string, unknown>,
+          };
+        }
       } else {
         // Unhandled tool call at top level
         const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {

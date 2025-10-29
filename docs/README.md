@@ -98,10 +98,10 @@ The model orchestrates; deterministic tools keep us honest and DP1‑conformant.
    - Build a DP1 playlist envelope deterministically
    - Optionally sign with Ed25519 (canonical JSON via `dp1-js`)
 3. Preview/send: Send to an FF1 on your LAN over HTTP (recommended). Point `ff1Devices.devices[].host` at a local relay if needed.
-4. Publish: Optional feed/registry publishing (not shipped in this CLI).
+4. Publish: Optional feed/registry publishing via the `publish` command.
 
 Notes:
-- **Deterministic by design**: Validation rejects bad or hallucinated data; we loop until it’s valid or stop.
+- **Deterministic by design**: Validation rejects bad or hallucinated data; we loop until it's valid or stop.
 - **OSS‑first**: `viem` and `@taquito/taquito`, with room for local caching.
 - **Relay**: Swap the example host for a local Node/Hono relay; avoid vendor lock‑in.
 
@@ -116,6 +116,8 @@ Notes:
   - Options: `-k, --key <base64>`, `-o, --output <file>`
 - `send <file>` – Send playlist to an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
+- `publish <file>` – Publish a playlist to a feed server
+  - Options: `-s, --server <index>` (server index if multiple configured)
 - `config <init|show|validate>` – Manage configuration
 
 ## Usage Highlights
@@ -138,11 +140,30 @@ npm run dev -- chat "From Ethereum contract 0xabc get tokens 1,2 and from Tezos 
 ```
 
 How it works (at a glance):
-- The intent parser maps your text to `requirements` (what to fetch) and `playlistSettings` (e.g., `durationPerItem`, `preserveOrder=false` for shuffle, `deviceName`).
+- The intent parser maps your text to `requirements` (what to fetch) and `playlistSettings` (e.g., `durationPerItem`, `preserveOrder=false` for shuffle, `deviceName`, `feedServer`).
 - Deterministic tools fetch NFT metadata, build a DP‑1 playlist, and validate it.
 - If `deviceName` is present, the CLI will send the validated playlist to that FF1 device.
+- If `feedServer` is present (via "publish to my feed"), the CLI will publish the playlist to the selected feed server.
 
 Use `--model grok|chatgpt|gemini` to switch models, or set `defaultModel` in `config.json`.
+
+### Natural language publishing
+
+The intent parser recognizes publishing keywords and can both display and publish in one command:
+
+```bash
+# Build and publish
+npm run dev -- chat "Build playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; publish to my feed" -o playlist.json -v
+
+# Display on FF1 AND publish to feed
+npm run dev -- chat "Get tokens 1,2 from 0xabc; shuffle; send to my FF1 and publish to feed" -o playlist.json -v
+```
+
+Publishing keywords: "publish", "publish to my feed", "push to feed", "send to feed". The CLI will:
+1. Detect the keyword and call `get_feed_servers`
+2. If multiple servers → ask which one to use
+3. Build → verify → publish automatically
+4. Display playlist ID and server URL on success
 
 ### Deterministic (no AI)
 
@@ -164,6 +185,40 @@ npm run dev -- sign playlist.json -o signed.json
 
 # Send to device (verifies by default)
 npm run dev -- send playlist.json -d "Living Room Display"
+```
+
+### Publish to feed server
+
+```bash
+# Publish to first configured feed server
+npm run dev -- publish playlist.json
+
+# Publish to specific server (if multiple configured)
+npm run dev -- publish playlist.json -s 0
+npm run dev -- publish playlist.json -s 1
+```
+
+The `publish` command:
+- Validates the playlist against DP-1 spec
+- Shows interactive server selection if multiple are configured
+- Sends the validated playlist to the chosen feed server
+- Returns the playlist ID on success
+
+Configure feed servers in `config.json`:
+
+```json
+{
+  "feedServers": [
+    {
+      "baseUrl": "http://localhost:8787/api/v1",
+      "apiKey": "your-api-key-optional"
+    },
+    {
+      "baseUrl": "https://feed.example.com/api/v1",
+      "apiKey": "your-api-key-optional"
+    }
+  ]
+}
 ```
 
 ### FF1 device configuration

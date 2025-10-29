@@ -32,6 +32,7 @@ function displayPlaylistSummary(playlist: Playlist, outputPath: string) {
   console.log(chalk.bold('Next steps:'));
   console.log(chalk.gray(` • View it locally: open ./${outputPath}`));
   console.log(chalk.gray(` • Send it to your FF1: send last`));
+  console.log(chalk.gray(` • Publish to feed: publish playlist`));
   console.log();
 }
 
@@ -345,6 +346,102 @@ program
         if (result.details) {
           console.error(chalk.gray(`   Details: ${result.details}`));
         }
+        process.exit(1);
+      }
+    } catch (error) {
+      console.error(chalk.red('\n❌ Error:'), (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('publish')
+  .description('Publish a playlist to a feed server')
+  .argument('<file>', 'Path to the playlist file')
+  .option('-s, --server <index>', 'Feed server index (use this if multiple servers configured)')
+  .action(async (file: string, options: { server?: string }) => {
+    try {
+      console.log(chalk.blue('\n📡 Publishing playlist to feed server...\n'));
+
+      const { getFeedConfig } = await import('./src/config');
+      const { publishPlaylist } = await import('./src/utilities/playlist-publisher');
+
+      const feedConfig = getFeedConfig();
+
+      if (!feedConfig.baseURLs || feedConfig.baseURLs.length === 0) {
+        console.error(chalk.red('\n❌ No feed servers configured'));
+        console.log(chalk.yellow('   Add feed server URLs to config.json: feed.baseURLs\n'));
+        process.exit(1);
+      }
+
+      // If multiple servers and no index specified, show options
+      let serverUrl = feedConfig.baseURLs[0];
+      let serverApiKey = feedConfig.apiKey; // Default to legacy apiKey
+
+      if (feedConfig.baseURLs.length > 1) {
+        if (!options.server) {
+          console.log(chalk.yellow('Multiple feed servers found. Select one:'));
+          console.log();
+          feedConfig.baseURLs.forEach((url, index) => {
+            console.log(chalk.cyan(`  ${index}: ${url}`));
+          });
+          console.log();
+
+          const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+
+          const selection = await new Promise<string>((resolve) => {
+            rl.question(chalk.yellow('Select server (0-based index): '), (answer: string) => {
+              rl.close();
+              resolve(answer.trim());
+            });
+          });
+
+          console.log();
+
+          options.server = selection;
+        }
+
+        const serverIndex = parseInt(options.server || '0', 10);
+        if (isNaN(serverIndex) || serverIndex < 0 || serverIndex >= feedConfig.baseURLs.length) {
+          console.error(chalk.red('\n❌ Invalid server index'));
+          process.exit(1);
+        }
+
+        serverUrl = feedConfig.baseURLs[serverIndex];
+
+        // Use individual server API key if available (new feedServers format)
+        if (feedConfig.servers && feedConfig.servers[serverIndex]) {
+          serverApiKey = feedConfig.servers[serverIndex].apiKey;
+        }
+      } else if (feedConfig.servers && feedConfig.servers[0]) {
+        // Single server with new feedServers format
+        serverApiKey = feedConfig.servers[0].apiKey;
+      }
+
+      const result = await publishPlaylist(file, serverUrl, serverApiKey);
+
+      if (result.success) {
+        console.log(chalk.green('✅ Playlist published successfully!'));
+        if (result.playlistId) {
+          console.log(chalk.gray(`   Playlist ID: ${result.playlistId}`));
+        }
+        console.log(chalk.gray(`   Server: ${result.feedServer}`));
+        if (result.message) {
+          console.log(chalk.gray(`   Status: ${result.message}`));
+        }
+        console.log();
+      } else {
+        console.error(chalk.red('\n❌ Failed to publish playlist'));
+        if (result.error) {
+          console.error(chalk.red(`   ${result.error}`));
+        }
+        if (result.message) {
+          console.log(chalk.yellow(`\n${result.message}`));
+        }
+        console.log();
         process.exit(1);
       }
     } catch (error) {

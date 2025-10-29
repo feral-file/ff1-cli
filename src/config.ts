@@ -172,11 +172,30 @@ export function getPlaylistConfig(): PlaylistConfig {
 /**
  * Get feed configuration for DP1 feed API
  *
+ * Supports both legacy (feed.baseURLs/apiKey) and new (feedServers array) formats.
+ *
  * @returns {Object} Feed configuration
  * @returns {string[]} returns.baseURLs - Array of base URLs for feed APIs
+ * @returns {string} [returns.apiKey] - Optional API key for authentication (legacy)
+ * @returns {Array<Object>} [returns.servers] - Array of feed servers with individual API keys (new)
  */
-export function getFeedConfig(): { baseURLs: string[] } {
+export function getFeedConfig(): {
+  baseURLs: string[];
+  apiKey?: string;
+  servers?: Array<{ baseUrl: string; apiKey?: string }>;
+} {
   const config = getConfig();
+
+  // Check for new feedServers format first
+  if (config.feedServers && Array.isArray(config.feedServers) && config.feedServers.length > 0) {
+    const baseURLs = config.feedServers.map((server) => server.baseUrl);
+    return {
+      baseURLs,
+      servers: config.feedServers,
+    };
+  }
+
+  // Fall back to legacy feed format
   const feedConfig: FeedConfig = config.feed || {};
 
   // Support both legacy baseURL and new baseURLs
@@ -192,6 +211,7 @@ export function getFeedConfig(): { baseURLs: string[] } {
 
   return {
     baseURLs: urls,
+    apiKey: feedConfig.apiKey,
   };
 }
 

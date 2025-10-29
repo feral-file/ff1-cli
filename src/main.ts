@@ -261,6 +261,27 @@ export async function buildPlaylist(
       }
     }
 
+    // Check if this is a publish_playlist action
+    if (params && (params as Record<string, unknown>).action === 'publish_playlist') {
+      // Publishing was already handled by intent parser, just return the result
+      const publishParams = params as Record<string, unknown>;
+
+      if (publishParams.success) {
+        return {
+          success: true,
+          action: 'publish_playlist',
+          playlistId: publishParams.playlistId,
+          feedServer: publishParams.feedServer,
+        };
+      } else {
+        return {
+          success: false,
+          error: publishParams.error as string,
+          action: 'publish_playlist',
+        };
+      }
+    }
+
     // STEP 2: AI ORCHESTRATOR (Function Calling)
     // AI orchestrates function calls to build playlist
     const { buildPlaylistWithAI } = getAIOrchestrator();

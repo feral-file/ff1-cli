@@ -742,7 +742,47 @@ async function buildPlaylistWithAI(params, options = {}) {
             sentToDevice: false,
           };
         }
-        return { playlist: finalPlaylist, sentToDevice };
+
+        // Publish to feed server if requested
+        let publishResult = null;
+        if (params.playlistSettings && params.playlistSettings.feedServer) {
+          console.log(chalk.cyan('\n→ Publishing to feed server...'));
+          try {
+            const { publishPlaylist } = require('../utilities/playlist-publisher');
+            publishResult = await publishPlaylist(
+              outputPath,
+              params.playlistSettings.feedServer.baseUrl,
+              params.playlistSettings.feedServer.apiKey
+            );
+
+            if (publishResult.success) {
+              console.log(chalk.green(`✓ Published to feed server`));
+              if (publishResult.playlistId) {
+                console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+              }
+              if (publishResult.feedServer) {
+                console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+              }
+            } else {
+              console.error(chalk.red(`✗ Failed to publish: ${publishResult.error}`));
+              if (publishResult.message) {
+                console.error(chalk.gray(`   ${publishResult.message}`));
+              }
+            }
+          } catch (error) {
+            console.error(chalk.red(`✗ Failed to publish: ${error.message}`));
+            if (verbose) {
+              console.error(chalk.gray(error.stack));
+            }
+          }
+        }
+
+        return {
+          playlist: finalPlaylist,
+          sentToDevice,
+          published: publishResult?.success || false,
+          publishResult,
+        };
       }
       // AI finished without building a playlist - check if it provided an explanation
       if (message.content) {

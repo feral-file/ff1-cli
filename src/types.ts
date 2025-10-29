@@ -26,7 +26,13 @@ export interface PlaylistConfig {
 
 export interface FeedConfig {
   baseURL?: string; // Legacy: single URL
-  baseURLs?: string[]; // New: array of URLs
+  baseURLs?: string[]; // Legacy: array of URLs
+  apiKey?: string; // Legacy: single API key for all servers
+}
+
+export interface FeedServer {
+  baseUrl: string; // Feed server base URL
+  apiKey?: string; // Optional API key for this server
 }
 
 export interface FF1Device {
@@ -47,7 +53,8 @@ export interface Config {
   };
   defaultDuration: number;
   browser: BrowserConfig;
-  feed: FeedConfig;
+  feed?: FeedConfig; // Legacy
+  feedServers?: FeedServer[]; // New: array of feed servers with individual API keys
   playlist?: PlaylistConfig;
   ff1Devices?: FF1DeviceConfig;
 }
@@ -79,6 +86,7 @@ export interface PlaylistSettings {
   durationPerItem: number;
   preserveOrder: boolean;
   deviceName?: string;
+  feedServer?: { baseUrl: string; apiKey?: string };
 }
 
 export interface BuildPlaylistRequirement {
