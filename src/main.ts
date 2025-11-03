@@ -190,6 +190,11 @@ export async function buildPlaylist(
         output: process.stdout,
       });
 
+      // Display the AI's question before asking for input
+      if (intentParserResult.question) {
+        console.log(chalk.cyan('\n🤖 ') + intentParserResult.question);
+      }
+
       const userResponse = await new Promise<string>((resolve) => {
         rl.question(chalk.yellow('Your response: '), (answer: string) => {
           rl.close();

@@ -12,6 +12,7 @@ module.exports = [
       '.DS_Store',
       'package-lock.json',
       'dist/**',
+      '.tmp/**',
     ],
   },
   // JavaScript files

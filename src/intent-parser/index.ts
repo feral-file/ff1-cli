@@ -140,6 +140,13 @@ MISSING INFO POLICY (ASK AT MOST ONE QUESTION)
 - query_address: ask for owner/domain if unclear
 - send: ask for device name only if user specifies a device by name and it's ambiguous; for generic references, always use get_configured_devices
 
+ADDRESS VALIDATION (CRITICAL)
+- When user enters any Ethereum (0x...) or Tezos (tz.../KT1) addresses, IMMEDIATELY call verify_addresses() BEFORE parsing requirements
+- This includes: contract addresses in build_playlist, owner addresses in query_address, or any wallet/contract address mentioned
+- Example: user says "get tokens from 0xABC" → first call verify_addresses(['0xABC']) → get validation result → then parse_requirements
+- If verify_addresses returns valid=false, show user the error and ask them to provide the correct address
+- If valid=true, proceed to parse_requirements with the verified addresses
+
 FREE‑FORM COLLECTION NAMES
 - Treat as fetch_feed; do not guess contracts. If user says "some", default quantity = 5.
 
@@ -386,6 +393,27 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           },
         },
         required: ['filePath', 'feedServer'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'verify_addresses',
+      description:
+        'Verify and validate Ethereum (0x...) and Tezos (tz1/tz2/tz3/KT1) wallet addresses. Call this when you detect the user has entered addresses and need to validate them before proceeding to parse requirements. This helps catch format errors early.',
+      parameters: {
+        type: 'object',
+        properties: {
+          addresses: {
+            type: 'array',
+            description: 'Array of Ethereum or Tezos addresses to verify',
+            items: {
+              type: 'string',
+            },
+          },
+        },
+        required: ['addresses'],
       },
     },
   },
@@ -1020,6 +1048,100 @@ export async function processIntentParserRequest(
             } as unknown as Record<string, unknown>,
           };
         }
+      } else if (toolCall.function.name === 'verify_addresses') {
+        const args = JSON.parse(toolCall.function.arguments);
+        const { verifyAddresses } = await import('../utilities/functions');
+
+        const verificationResult = await verifyAddresses({ addresses: args.addresses });
+
+        if (!verificationResult.valid) {
+          // Add tool response message for invalid addresses
+          const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              valid: false,
+              errors: verificationResult.errors,
+              results: verificationResult.results,
+            }),
+          };
+          const validMessages = [...messages, message, toolResultMessage];
+
+          // Ask user to correct the addresses
+          return {
+            approved: false,
+            needsMoreInfo: true,
+            question: `Some addresses are invalid. ${verificationResult.errors.join(' ')} Please provide correct addresses.`,
+            messages: validMessages,
+          };
+        }
+
+        // All addresses are valid - continue to next step
+        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({
+            valid: true,
+            results: verificationResult.results,
+          }),
+        };
+        const validMessages = [...messages, message, toolResultMessage];
+
+        // Continue conversation after validation
+        const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+          model: modelConfig.model,
+          messages: validMessages,
+          tools: intentParserFunctionSchemas,
+          tool_choice: 'auto',
+          stream: true,
+        };
+
+        if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+          followUpRequest.temperature = modelConfig.temperature;
+        } else if (modelConfig.temperature === 1) {
+          followUpRequest.temperature = 1;
+        }
+
+        if (modelConfig.model.startsWith('gpt-')) {
+          (followUpRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
+        } else {
+          (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+        }
+
+        const followUpStream = await client.chat.completions.create(followUpRequest);
+        const { message: followUpMessage } = await processStreamingResponse(followUpStream);
+
+        // Check if AI now wants to parse requirements
+        if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
+          const followUpToolCall = followUpMessage.tool_calls[0];
+          if (followUpToolCall.function.name === 'parse_requirements') {
+            const params = JSON.parse(followUpToolCall.function.arguments);
+
+            // Apply constraints and defaults
+            const validatedParams = applyConstraints(params, config);
+
+            return {
+              approved: true,
+              params: validatedParams as unknown as Record<string, unknown>,
+              needsMoreInfo: false,
+            };
+          }
+        }
+
+        // AI might be asking a question or needs more info
+        if (followUpMessage.content) {
+          return {
+            approved: false,
+            needsMoreInfo: true,
+            question: followUpMessage.content,
+            messages: [...validMessages, followUpMessage],
+          };
+        }
+
+        return {
+          approved: false,
+          needsMoreInfo: false,
+        };
       } else {
         // Unhandled tool call at top level
         const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {

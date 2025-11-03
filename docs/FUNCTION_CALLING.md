@@ -33,6 +33,7 @@ Defined in `src/ai-orchestrator/index.js` as tool schemas for OpenAI‑compatibl
 - `fetch_feed_playlist_items(playlistName, quantity, duration)`
 - `build_playlist(items, title?, slug?, shuffle?)` → returns DP1 playlist
 - `verify_playlist(playlist)` → validates DP1 compliance (must precede send)
+- `verify_addresses(addresses[])` → validates Ethereum (0x...) and Tezos (tz.../KT1) address formats
 - `send_to_device(playlist, deviceName?)`
 - `resolve_domains(domains[], displayResults?)` → ENS/TNS resolution
 
@@ -51,6 +52,7 @@ Located in `src/utilities/` and wired in `src/ai-orchestrator/index.js`:
 - `sendPlaylistToDevice({ playlist, deviceName })` → `src/utilities/ff1-device.ts`
 - `resolveDomains({ domains, displayResults })` → `src/utilities/domain-resolver.ts`
 - `verifyPlaylist({ playlist })` → `src/utilities/playlist-verifier.ts`
+- `verifyAddresses({ addresses })` → `src/utilities/functions.js` (uses `address-validator.ts`)
 - Feed utilities: `feed-fetcher.js`
 
 ## Deterministic Paths

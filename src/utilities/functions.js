@@ -170,6 +170,69 @@ async function verifyPlaylist(params) {
 }
 
 /**
+ * Verify and validate Ethereum and Tezos addresses
+ *
+ * This function is called by the intent parser to validate addresses entered by users.
+ * It provides detailed feedback on address validity and format issues.
+ *
+ * @param {Object} params - Verification parameters
+ * @param {Array<string>} params.addresses - Array of addresses to verify
+ * @returns {Promise<Object>} Verification result
+ * @returns {boolean} returns.valid - Whether all addresses are valid
+ * @returns {Array<Object>} returns.results - Detailed validation for each address
+ * @returns {Array<string>} returns.errors - List of validation errors
+ * @example
+ * const result = await verifyAddresses({
+ *   addresses: ['0x1234567890123456789012345678901234567890', 'tz1VSUr8wwNhLAzempoch5d6hLKEUNvD14']
+ * });
+ * if (!result.valid) {
+ *   result.errors.forEach(err => console.error(err));
+ * }
+ */
+async function verifyAddresses(params) {
+  const { addresses } = params;
+
+  if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+    return {
+      valid: false,
+      results: [],
+      errors: ['No addresses provided for verification'],
+    };
+  }
+
+  // Dynamic import to avoid circular dependency
+  const { validateAddresses } = await import('./address-validator');
+
+  const result = validateAddresses(addresses);
+
+  // Display results
+  if (result.valid) {
+    console.log(chalk.green('\n✓ All addresses are valid'));
+    result.results.forEach((r) => {
+      const typeLabel =
+        r.type === 'ethereum'
+          ? 'Ethereum'
+          : r.type === 'contract'
+            ? 'Tezos Contract'
+            : 'Tezos User';
+      console.log(chalk.gray(`  • ${r.address} (${typeLabel})`));
+      if (r.normalized) {
+        console.log(chalk.gray(`    Checksummed: ${r.normalized}`));
+      }
+    });
+    console.log();
+  } else {
+    console.error(chalk.red('\n✗ Address validation failed'));
+    result.errors.forEach((err) => {
+      console.error(chalk.red(`  • ${err}`));
+    });
+    console.log();
+  }
+
+  return result;
+}
+
+/**
  * Get list of configured FF1 devices
  *
  * This function retrieves the list of all configured FF1 devices from config.
@@ -219,4 +282,5 @@ module.exports = {
   resolveDomains,
   verifyPlaylist,
   getConfiguredDevices,
+  verifyAddresses,
 };
