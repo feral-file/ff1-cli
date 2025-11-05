@@ -30,15 +30,27 @@ function hexToUint8Array(hexKey) {
 }
 
 /**
+ * Check if a string is valid hex (with or without 0x prefix)
+ *
+ * @param {string} str - String to test
+ * @returns {boolean} True if string is valid hex
+ */
+function isHexString(str) {
+  const cleanHex = str.replace(/^0x/, '');
+  return /^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0;
+}
+
+/**
  * Sign a playlist using ed25519 as per DP-1 specification
  * Uses dp1-js library for standards-compliant signing
+ * Accepts private key in hex (with or without 0x prefix) or base64 format
  *
  * @param {Object} playlist - Playlist object without signature
- * @param {string} [privateKeyBase64] - Ed25519 private key in base64 format (optional, uses config if not provided)
+ * @param {string} [privateKeyBase64] - Ed25519 private key in hex or base64 format (optional, uses config if not provided)
  * @returns {Promise<string>} Signature in format "ed25519:0x{hex}"
  * @throws {Error} If private key is invalid or signing fails
  * @example
- * const signature = await signPlaylist(playlist, privateKeyBase64);
+ * const signature = await signPlaylist(playlist, privateKeyHexOrBase64);
  * // Returns: "ed25519:0x1234abcd..."
  */
 async function signPlaylist(playlist, privateKeyBase64) {
@@ -58,13 +70,13 @@ async function signPlaylist(playlist, privateKeyBase64) {
     const playlistToSign = { ...playlist };
     delete playlistToSign.signature;
 
-    // dp1-js accepts both hex string or Uint8Array
-    // Try as hex first, then base64
+    // Try hex first (with or without 0x prefix), then fall back to base64
     let keyInput;
-    if (privateKey.startsWith('0x')) {
-      keyInput = privateKey;
+    if (isHexString(privateKey)) {
+      // It's hex - ensure it has 0x prefix for dp1-js
+      keyInput = privateKey.startsWith('0x') ? privateKey : '0x' + privateKey;
     } else {
-      // Convert base64 to hex format (dp1-js prefers hex)
+      // Fall back to base64
       const keyBytes = base64ToUint8Array(privateKey);
       keyInput = '0x' + Buffer.from(keyBytes).toString('hex');
     }
@@ -118,7 +130,7 @@ async function verifyPlaylist(playlist, publicKeyHex) {
  * Reads playlist from file, signs it, and writes back
  *
  * @param {string} playlistPath - Path to playlist JSON file
- * @param {string} [privateKeyBase64] - Ed25519 private key in base64 format (optional, uses config if not provided)
+ * @param {string} [privateKeyBase64] - Ed25519 private key in hex or base64 format (optional, uses config if not provided)
  * @param {string} [outputPath] - Output path (optional, overwrites input if not provided)
  * @returns {Promise<Object>} Result with signed playlist
  * @returns {boolean} returns.success - Whether signing succeeded

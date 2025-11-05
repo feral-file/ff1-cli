@@ -59,7 +59,34 @@ Optional settings used where headless/browser‑like behavior is needed.
 
 Used for signing DP‑1 playlists.
 
-- `playlist.privateKey` (string, base64 Ed25519): Used by the `sign` command. May also be provided as `PLAYLIST_PRIVATE_KEY` in `.env`.
+- `playlist.privateKey` (string, Ed25519 private key in hex or base64): Used by the `sign` command. Hex may include or omit the `0x` prefix. You can also set this via `PLAYLIST_PRIVATE_KEY` in `.env`.
+
+### Generate an Ed25519 private key
+
+You can generate a key locally. The CLI accepts either base64 (preferred) or hex
+
+OpenSSL (recommended):
+
+```bash
+# Base64 (preferred)
+openssl genpkey -algorithm ED25519 -outform DER | base64 | tr -d '\n'
+
+# Hex (alternative)
+openssl genpkey -algorithm ED25519 -outform DER | xxd -p -c 256
+```
+
+Paste either value into `playlist.privateKey`:
+
+- Hex example (either is valid):
+  - `0xabc123...` (with prefix)
+  - `abc123...` (without prefix)
+- Base64 example: `uQd9m8S...==`
+
+If you already have a base64 key and want hex, convert it:
+
+```bash
+echo -n "<BASE64_KEY>" | base64 -d | xxd -p -c 256
+```
 
 ## feed
 
@@ -119,7 +146,7 @@ Minimal `config.json` example (selected fields):
   },
   "defaultDuration": 10,
   "playlist": {
-    "privateKey": "your_ed25519_private_key_base64_here"
+    "privateKey": "your_ed25519_private_key_hex_or_base64_here"
   },
   "feed": {
     "baseURLs": [
