@@ -134,6 +134,11 @@ export async function buildPlaylistDirect(
   const playlistSettings = applyPlaylistDefaults(params.playlistSettings);
 
   const utilities = getUtilities();
+  const config = getConfig();
+
+  // Initialize utilities with config (indexer endpoint, API key, etc.)
+  utilities.initializeUtilities(config);
+
   return await utilities.buildPlaylistDirect({ requirements, playlistSettings }, options);
 }
 
@@ -159,6 +164,11 @@ export async function buildPlaylist(
   if (verbose) {
     logger.setVerbose(true);
   }
+
+  // Initialize utilities with config (indexer endpoint, API key, etc.)
+  const utilities = getUtilities();
+  const config = getConfig();
+  utilities.initializeUtilities(config);
 
   try {
     // STEP 1: INTENT PARSER

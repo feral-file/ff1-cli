@@ -11,6 +11,18 @@ const functions = require('./functions');
 const domainResolver = require('./domain-resolver');
 
 /**
+ * Initialize utilities with configuration
+ * Must be called once at startup to configure indexer
+ *
+ * @param {Object} config - Application config from config.json
+ */
+function initializeUtilities(config) {
+  if (config && config.indexer) {
+    nftIndexer.initializeIndexer(config.indexer);
+  }
+}
+
+/**
  * Query tokens from an owner address
  *
  * Fetches all tokens owned by an address, with optional random selection.
@@ -68,9 +80,10 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
     // Convert tokens to DP1 items
     const items = [];
     for (const token of selectedTokens) {
-      // Detect blockchain from contract address
+      // Detect blockchain from contract address (support both camelCase and snake_case)
       let chain = 'ethereum';
-      if (token.contractAddress.startsWith('KT')) {
+      const contractAddr = token.contract_address || token.contractAddress || '';
+      if (contractAddr.startsWith('KT')) {
         chain = 'tezos';
       }
 
@@ -364,6 +377,7 @@ async function buildPlaylistDirect(params, options = {}) {
 }
 
 module.exports = {
+  initializeUtilities,
   queryRequirement,
   queryTokensByAddress,
   buildDP1Playlist,

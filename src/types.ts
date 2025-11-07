@@ -46,6 +46,11 @@ export interface FF1DeviceConfig {
   devices: FF1Device[];
 }
 
+export interface IndexerConfig {
+  endpoint: string;
+  apiKey?: string;
+}
+
 export interface Config {
   defaultModel: string;
   models: {
@@ -57,6 +62,7 @@ export interface Config {
   feedServers?: FeedServer[]; // New: array of feed servers with individual API keys
   playlist?: PlaylistConfig;
   ff1Devices?: FF1DeviceConfig;
+  indexer?: IndexerConfig;
 }
 
 export interface ValidationResult {
@@ -128,4 +134,21 @@ export interface BuildPlaylistResult {
   playlist?: Playlist;
   error?: string;
   [key: string]: unknown;
+}
+
+export interface WorkflowStatus {
+  workflow_id: string;
+  run_id: string;
+  status: string;
+  start_time?: string;
+  close_time?: string;
+  execution_time_ms?: number;
+}
+
+export interface PollingResult {
+  success: boolean;
+  completed?: boolean;
+  timedOut?: boolean;
+  status?: string;
+  error?: string;
 }
