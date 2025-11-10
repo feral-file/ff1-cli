@@ -1111,91 +1111,6 @@ async function queryTokensByOwner(ownerAddress, limit = 100) {
   }
 }
 
-/**
- * Trigger indexing workflow for an address
- *
- * Calls the indexer GraphQL mutation to start indexing all tokens for a given address.
- * This is a fire-and-forget operation that starts a background workflow.
- *
- * @param {string} ownerAddress - Owner wallet address
- * @returns {Promise<Object>} Result indicating if indexing was triggered
- * @returns {boolean} returns.success - Whether indexing was triggered
- * @returns {string} [returns.message] - Success message
- * @returns {string} [returns.workflow_id] - Workflow ID if triggered
- * @returns {string} [returns.run_id] - Run ID if triggered
- * @returns {string} [returns.error] - Error message if failed
- * @example
- * const result = await triggerAddressIndexing('0x1234...');
- * if (result.success) {
- *   console.log('Indexing started in background');
- * }
- */
-async function triggerAddressIndexing(ownerAddress) {
-  try {
-    logger.info('[NFT Indexer] Triggering address indexing workflow via GraphQL mutation...');
-    logger.info('[NFT Indexer] → Owner address:', ownerAddress);
-
-    const mutation = `
-      mutation TriggerIndexing($addresses: [String!]!) {
-        triggerIndexing(addresses: $addresses) {
-          workflow_id
-          run_id
-        }
-      }
-    `;
-
-    const variables = {
-      addresses: [ownerAddress],
-    };
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (INDEXER_API_KEY) {
-      headers.Authorization = `ApiKey ${INDEXER_API_KEY}`;
-    }
-
-    const response = await fetch(GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query: mutation, variables }),
-    });
-
-    logger.info(`[NFT Indexer] ← Response status: ${response.status} ${response.statusText}`);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    if (result.errors) {
-      throw new Error(`GraphQL errors: ${result.errors.map((e) => e.message).join(', ')}`);
-    }
-
-    const triggerResult = result.data?.triggerIndexing;
-    if (triggerResult?.workflow_id) {
-      logger.info('[NFT Indexer] ✓ Address indexing workflow started successfully');
-      return {
-        success: true,
-        message: `Indexing workflow started for ${ownerAddress}. This may take a few moments.`,
-        workflow_id: triggerResult.workflow_id,
-        run_id: triggerResult.run_id,
-      };
-    } else {
-      logger.warn('[NFT Indexer] Unexpected mutation response:', result);
-      return {
-        success: false,
-        error: 'Unexpected response from indexing service',
-      };
-    }
-  } catch (error) {
-    logger.error('[NFT Indexer] Address indexing exception:', error.message);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
 module.exports = {
   // Initialization
   initializeIndexer,
@@ -1213,7 +1128,6 @@ module.exports = {
   convertToDP1Item,
   // Address-based functions
   queryTokensByOwner,
-  triggerAddressIndexing,
   // Unified GraphQL query
   queryTokens,
   // Workflow and polling functions

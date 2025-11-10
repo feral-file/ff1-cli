@@ -26,7 +26,7 @@ function initializeUtilities(config) {
  * Query tokens from an owner address
  *
  * Fetches all tokens owned by an address, with optional random selection.
- * If no tokens found, triggers indexing workflow.
+ * If no tokens found, instructs user to add address via Feral File mobile app.
  *
  * @param {string} ownerAddress - Owner wallet address
  * @param {number} [quantity] - Number of random tokens to select (all if not specified)
@@ -39,32 +39,22 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
     const result = await nftIndexer.queryTokensByOwner(ownerAddress, 100);
 
     if (!result.success) {
-      console.log(chalk.yellow(`   Could not fetch tokens. Indexing this address...`));
-
-      // Trigger indexing workflow
-      const indexResult = await nftIndexer.triggerAddressIndexing(ownerAddress, false);
-
-      if (indexResult.success) {
-        console.log(chalk.yellow(`   Started indexing. Please try again in a moment.`));
-      } else {
-        console.log(chalk.red(`   Could not start indexing: ${indexResult.error}`));
-      }
-
+      console.log(chalk.yellow(`   Could not fetch tokens for ${ownerAddress}`));
+      console.log(
+        chalk.cyan(
+          `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+        )
+      );
       return [];
     }
 
     if (result.tokens.length === 0) {
-      console.log(chalk.yellow(`   No tokens found. Starting indexing...`));
-
-      // Trigger indexing workflow
-      const indexResult = await nftIndexer.triggerAddressIndexing(ownerAddress, false);
-
-      if (indexResult.success) {
-        console.log(chalk.yellow(`   Started indexing. Please try again in a moment.`));
-      } else {
-        console.log(chalk.red(`   Could not start indexing: ${indexResult.error}`));
-      }
-
+      console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
+      console.log(
+        chalk.cyan(
+          `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+        )
+      );
       return [];
     }
 
