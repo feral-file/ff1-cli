@@ -12,14 +12,14 @@ const domainResolver = require('./domain-resolver');
 
 /**
  * Initialize utilities with configuration
- * Must be called once at startup to configure indexer
  *
- * @param {Object} config - Application config from config.json
+ * The indexer now uses a hardcoded production endpoint, so no configuration is needed.
+ * This function is kept for backwards compatibility.
+ *
+ * @param {Object} _config - Unused config parameter
  */
-function initializeUtilities(config) {
-  if (config && config.indexer) {
-    nftIndexer.initializeIndexer(config.indexer);
-  }
+function initializeUtilities(_config) {
+  nftIndexer.initializeIndexer();
 }
 
 /**

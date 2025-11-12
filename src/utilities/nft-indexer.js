@@ -4,8 +4,7 @@
  * to retrieve comprehensive token information.
  */
 
-let GRAPHQL_ENDPOINT = 'https://indexer.autonomy.io/v2/graphql';
-let INDEXER_API_KEY = null;
+const GRAPHQL_ENDPOINT = 'https://indexer-v2.feralfile.com/graphql';
 const logger = require('../logger');
 
 // Polling configuration (in milliseconds)
@@ -13,16 +12,16 @@ const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
 const POLLING_TIMEOUT_MS = 60000; // Max poll for 1 minute
 
 /**
- * Initialize indexer with config
+ * Initialize indexer (no-op for compatibility)
  *
- * @param {Object} config - Indexer configuration from config.json
+ * The indexer endpoint is now hardcoded to the Feral File production endpoint.
+ * This function is kept for backwards compatibility but does nothing.
+ *
+ * @deprecated This function is no longer needed as the endpoint is hardcoded
+ * @param {Object} _config - Unused config parameter
  */
-function initializeIndexer(config) {
-  if (config && config.endpoint) {
-    GRAPHQL_ENDPOINT = config.endpoint;
-    INDEXER_API_KEY = config.apiKey || null;
-    logger.debug('[NFT Indexer] Initialized with endpoint:', GRAPHQL_ENDPOINT);
-  }
+function initializeIndexer(_config) {
+  logger.debug('[NFT Indexer] Using endpoint:', GRAPHQL_ENDPOINT);
 }
 
 /**
@@ -116,12 +115,12 @@ async function queryTokens(params = {}) {
 
   // Build GraphQL query without variables - inline parameters
   // (API expects inline parameters, not variables)
-  const ownerFilter = owners.length > 0 ? `owner: ${JSON.stringify(owners)},` : '';
+  const ownerFilter = owners.length > 0 ? `owners: ${JSON.stringify(owners)},` : '';
   const tokenCidsFilter = token_cids.length > 0 ? `token_cids: ${JSON.stringify(token_cids)},` : '';
 
   const query = `
       query {
-        tokens(${ownerFilter} ${tokenCidsFilter} expand: ["enrichment_source", "metadata_media_asset", "enrichment_source_media_asset"], limit: ${limit}, offset: ${offset}) {
+        tokens(${ownerFilter} ${tokenCidsFilter} expands: ["enrichment_source", "metadata_media_asset", "enrichment_source_media_asset"], limit: ${limit}, offset: ${offset}) {
         items {
           token_cid
           chain
@@ -169,9 +168,6 @@ async function queryTokens(params = {}) {
 
   try {
     const headers = { 'Content-Type': 'application/json' };
-    if (INDEXER_API_KEY) {
-      headers.Authorization = `ApiKey ${INDEXER_API_KEY}`;
-    }
 
     logger.debug('[NFT Indexer] Querying tokens:', { token_cids, owners, limit, offset });
     logger.debug('[NFT Indexer] GraphQL query:', query);
@@ -745,8 +741,8 @@ async function triggerIndexingAsync(chain, contractAddress, tokenId) {
     });
 
     const mutation = `
-      mutation TriggerIndexing($token_cids: [String!]!) {
-        triggerIndexing(token_cids: $token_cids) {
+      mutation TriggerTokenIndexing($token_cids: [String!]!) {
+        triggerTokenIndexing(token_cids: $token_cids) {
           workflow_id
           run_id
         }
@@ -758,9 +754,6 @@ async function triggerIndexingAsync(chain, contractAddress, tokenId) {
     };
 
     const headers = { 'Content-Type': 'application/json' };
-    if (INDEXER_API_KEY) {
-      headers.Authorization = `ApiKey ${INDEXER_API_KEY}`;
-    }
 
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -778,7 +771,7 @@ async function triggerIndexingAsync(chain, contractAddress, tokenId) {
       throw new Error(`GraphQL errors: ${result.errors.map((e) => e.message).join(', ')}`);
     }
 
-    const triggerResult = result.data?.triggerIndexing;
+    const triggerResult = result.data?.triggerTokenIndexing;
     if (triggerResult?.workflow_id) {
       logger.debug('[NFT Indexer] ✓ Async indexing workflow started:', triggerResult);
       return {
@@ -836,9 +829,6 @@ async function queryWorkflowStatus(workflowId, runId) {
     };
 
     const headers = { 'Content-Type': 'application/json' };
-    if (INDEXER_API_KEY) {
-      headers.Authorization = `ApiKey ${INDEXER_API_KEY}`;
-    }
 
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
