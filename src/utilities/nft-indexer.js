@@ -4,203 +4,200 @@
  * to retrieve comprehensive token information.
  */
 
-const GRAPHQL_ENDPOINT = 'https://indexer.autonomy.io/v2/graphql';
-const INDEXING_ENDPOINT = 'https://indexer.autonomy.io/v2/nft/index_one';
+const GRAPHQL_ENDPOINT = 'https://indexer-v2.feralfile.com/graphql';
 const logger = require('../logger');
 
+// Polling configuration (in milliseconds)
+const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
+const POLLING_TIMEOUT_MS = 60000; // Max poll for 1 minute
+
 /**
- * Check if a string looks like a wallet address
- * @param {string} str - String to check
- * @returns {boolean}
+ * Initialize indexer (no-op for compatibility)
+ *
+ * The indexer endpoint is now hardcoded to the Feral File production endpoint.
+ * This function is kept for backwards compatibility but does nothing.
+ *
+ * @deprecated This function is no longer needed as the endpoint is hardcoded
+ * @param {Object} _config - Unused config parameter
  */
-function isWalletAddress(str) {
-  return /^0x[a-fA-F0-9]{40}$/.test(str);
+function initializeIndexer(_config) {
+  logger.debug('[NFT Indexer] Using endpoint:', GRAPHQL_ENDPOINT);
 }
 
 /**
- * Resolve artist name using various strategies
- * @param {Object} tokenData - Token data
- * @returns {Object}
- */
-function resolveArtistName(tokenData) {
-  const latest = tokenData.asset?.metadata?.project?.latest;
-  if (!latest) {
-    return tokenData;
-  }
-
-  const artistName = latest.artistName;
-  const artistID = latest.artistID;
-
-  // If artist name looks like a wallet address, try to resolve it
-  if (artistName && isWalletAddress(artistName)) {
-    // Strategy 1: If artistID is different and not a wallet address, use it
-    if (artistID && !isWalletAddress(artistID) && artistID !== artistName) {
-      latest.artistName = artistID;
-      return tokenData;
-    }
-
-    // Strategy 2: Fallback to truncated wallet address for readability
-    latest.artistName = `${artistName.slice(0, 6)}...${artistName.slice(-4)}`;
-  }
-
-  return tokenData;
-}
-
-/**
- * Build full token ID in indexer format
+ * Detect token standard based on chain and contract address
+ *
+ * Determines the appropriate ERC/token standard for the given blockchain
+ * and contract format.
+ *
  * @param {string} chain - Blockchain network
  * @param {string} contractAddress - Contract address
- * @param {string} tokenId - Token ID
- * @returns {string}
+ * @returns {string} Token standard (erc721, erc1155, fa2, or other)
  */
-function buildIndexerTokenId(chain, contractAddress, tokenId) {
-  // Map chain names to indexer chain codes
-  const chainMap = {
-    ethereum: 'eth',
-    tezos: 'tez',
-    fa2: 'tez',
-    bitmark: 'bmk',
-    polygon: 'polygon',
-    arbitrum: 'arbitrum',
-    optimism: 'optimism',
-    base: 'base',
-    zora: 'zora',
-  };
+function detectTokenStandard(chain, contractAddress) {
+  const lowerChain = chain.toLowerCase();
 
-  const chainCode = chainMap[chain.toLowerCase()] || chain.toLowerCase();
-  return `${chainCode}-${contractAddress}-${tokenId}`;
+  // Tezos contracts use FA2 standard
+  if (lowerChain === 'tezos' || contractAddress.startsWith('KT')) {
+    return 'fa2';
+  }
+
+  // Ethereum uses ERC721
+  // TODO: Enhance with on-chain detection for ERC1155 support
+  if (lowerChain === 'ethereum') {
+    return 'erc721';
+  }
+
+  return 'other';
 }
 
 /**
- * Unified GraphQL query for tokens from indexer
+ * Build CAIP-2 token CID for indexer v2
  *
- * Supports querying by IDs, owners, or both. Returns tokens with full metadata.
+ * Constructs a token identifier in CAIP-2 format compatible with ff-indexer-v2.
+ * Format: `{caip2Chain}:{standard}:{contractAddress}:{tokenNumber}`
+ *
+ * @param {string} chain - Blockchain network (ethereum, polygon, tezos, etc)
+ * @param {string} contractAddress - Contract address
+ * @param {string} tokenId - Token ID
+ * @returns {string} Token CID in CAIP-2 format
+ * @example
+ * // Returns: eip155:1:erc721:0xabc123:456
+ * const cid = buildTokenCID('ethereum', '0xabc123', '456');
+ * @example
+ * // Returns: tezos:mainnet:fa2:KT1abc:789
+ * const cid = buildTokenCID('tezos', 'KT1abc', '789');
+ */
+function buildTokenCID(chain, contractAddress, tokenId) {
+  // Map chain names to CAIP-2 format (supports only Ethereum and Tezos)
+  const caip2Map = {
+    ethereum: 'eip155:1',
+    tezos: 'tezos:mainnet',
+    fa2: 'tezos:mainnet', // FA2 is Tezos
+  };
+
+  const lowerChain = chain.toLowerCase();
+  const caip2Chain = caip2Map[lowerChain];
+
+  if (!caip2Chain) {
+    throw new Error(`Unsupported chain: ${chain}. Only ethereum and tezos are supported.`);
+  }
+
+  const standard = detectTokenStandard(chain, contractAddress);
+
+  return `${caip2Chain}:${standard}:${contractAddress}:${tokenId}`;
+}
+
+/**
+ * Unified GraphQL query for tokens from indexer v2
+ *
+ * Supports querying by token CIDs and/or owners. Returns tokens with full metadata.
  *
  * @param {Object} params - Query parameters
- * @param {Array<string>} [params.ids] - Array of token IDs to query
+ * @param {Array<string>} [params.token_cids] - Array of token CIDs to query
  * @param {Array<string>} [params.owners] - Array of owner addresses to query
- * @param {number} [params.size] - Maximum number of tokens to return
- * @param {number} [params.offset] - Offset for pagination
- * @param {boolean} [params.burnedIncluded] - Include burned tokens
+ * @param {number} [params.limit] - Maximum number of tokens to return (default: 50)
+ * @param {number} [params.offset] - Offset for pagination (default: 0)
  * @returns {Promise<Array<Object>>} Array of token data
  * @throws {Error} When query fails
  * @example
- * // Query by token ID
- * const tokens = await queryTokens({ ids: ['eth-0xabc-123'] });
+ * // Query by token CID
+ * const tokens = await queryTokens({ token_cids: ['eip155:1:erc721:0xabc:123'] });
  *
  * // Query by owner address
- * const tokens = await queryTokens({ owners: ['0x1234...'], size: 100 });
+ * const tokens = await queryTokens({ owners: ['0x1234...'], limit: 100 });
  *
  * // Query specific tokens for a specific owner
- * const tokens = await queryTokens({ ids: ['eth-0xabc-123'], owners: ['0x1234...'] });
+ * const tokens = await queryTokens({ token_cids: ['eip155:1:erc721:0xabc:123'], owners: ['0x1234...'] });
  */
 async function queryTokens(params = {}) {
-  const { ids = [], owners = [], size = 50, offset = 0, burnedIncluded = false } = params;
+  const { token_cids = [], owners = [], limit = 50, offset = 0 } = params;
 
-  // Build GraphQL query with proper variables
+  // Build GraphQL query without variables - inline parameters
+  // (API expects inline parameters, not variables)
+  const ownerFilter = owners.length > 0 ? `owners: ${JSON.stringify(owners)},` : '';
+  const tokenCidsFilter = token_cids.length > 0 ? `token_cids: ${JSON.stringify(token_cids)},` : '';
+
   const query = `
-    query getTokens($owners: [String!]!, $ids: [String!]!, $size: Int64!, $offset: Int64!, $burnedIncluded: Boolean!) {
-      tokens(owners: $owners, ids: $ids, size: $size, offset: $offset, burnedIncluded: $burnedIncluded) {
-        id
-        blockchain
-        fungible
-        contractType
-        contractAddress
-        edition
-        editionName
-        mintedAt
-        balance
-        owner
-        indexID
-        source
-        swapped
-        burned
-        lastActivityTime
-        lastRefreshedTime
-        asset {
-          indexID
-          thumbnailID
-          lastRefreshedTime
+      query {
+        tokens(${ownerFilter} ${tokenCidsFilter} expands: ["enrichment_source", "metadata_media_asset", "enrichment_source_media_asset"], limit: ${limit}, offset: ${offset}) {
+        items {
+          token_cid
+          chain
+          standard
+          contract_address
+          token_number
+          current_owner
+          burned
           metadata {
-            project {
-              origin {
-                artistID
-                artistName
-                artistURL
-                assetID
-                title
-                description
-                mimeType
-                medium
-                maxEdition
-                baseCurrency
-                basePrice
-                source
-                sourceURL
-                previewURL
-                thumbnailURL
-                galleryThumbnailURL
-                assetData
-                assetURL
-              }
-              latest {
-                artistID
-                artistName
-                artistURL
-                assetID
-                title
-                description
-                mimeType
-                medium
-                maxEdition
-                baseCurrency
-                basePrice
-                source
-                sourceURL
-                previewURL
-                thumbnailURL
-                galleryThumbnailURL
-                assetData
-                assetURL
-              }
+            name
+            description
+            mime_type
+            image_url
+            animation_url
+            artists {
+              did
+              name
             }
           }
+          enrichment_source {
+            name
+            description
+            image_url
+            animation_url
+            artists {
+              did
+              name
+            }
+          }
+          metadata_media_assets {
+            source_url
+            mime_type
+            variant_urls
+          }
+          enrichment_source_media_assets {
+            source_url
+            mime_type
+            variant_urls
+          }
         }
+        total
       }
     }
   `;
 
-  const variables = {
-    owners,
-    ids,
-    size,
-    offset,
-    burnedIncluded,
-  };
-
   try {
+    const headers = { 'Content-Type': 'application/json' };
+
+    logger.debug('[NFT Indexer] Querying tokens:', { token_cids, owners, limit, offset });
+    logger.debug('[NFT Indexer] GraphQL query:', query);
+
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
+      headers,
+      body: JSON.stringify({ query }),
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error('[NFT Indexer] HTTP error response:', {
+        status: response.status,
+        body: errorBody.substring(0, 500),
+      });
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
 
     if (result.errors) {
+      logger.error('[NFT Indexer] GraphQL errors:', result.errors);
       throw new Error(`GraphQL errors: ${result.errors.map((e) => e.message).join(', ')}`);
     }
 
-    const tokens = result.data?.tokens || [];
-
-    // Resolve artist names for all tokens
-    const processedTokens = tokens.map((token) => resolveArtistName(token));
-
-    return processedTokens;
+    // v2 API wraps tokens in { items: [...], total: N }
+    const tokenList = result.data?.tokens;
+    const tokens = tokenList?.items || [];
+    return tokens;
   } catch (error) {
     logger.error('[NFT Indexer] Failed to query tokens:', error.message);
     throw error;
@@ -208,16 +205,16 @@ async function queryTokens(params = {}) {
 }
 
 /**
- * Query single token data from indexer by ID
+ * Query single token data from indexer by token CID
  *
  * Convenience wrapper around queryTokens for single token queries.
  *
- * @param {string} indexerTokenId - Full token ID in indexer format
+ * @param {string} tokenCID - Token CID in CAIP-2 format
  * @returns {Promise<Object|null>} Token data or null if not found
  */
-async function queryTokenDataFromIndexer(indexerTokenId) {
+async function queryTokenDataFromIndexer(tokenCID) {
   try {
-    const tokens = await queryTokens({ ids: [indexerTokenId], burnedIncluded: true });
+    const tokens = await queryTokens({ token_cids: [tokenCID] });
     return tokens[0] || null;
   } catch (error) {
     logger.error('[NFT Indexer] Failed to query token data:', error.message);
@@ -226,39 +223,99 @@ async function queryTokenDataFromIndexer(indexerTokenId) {
 }
 
 /**
- * Map DryRun response to standard indexer format
- * DryRun response has a different structure with projectMetadata at top level
- * @param {Object} dryRunData - Data from dryrun API
- * @returns {Object} Normalized indexer data
+ * Extract artist name from artists array
+ *
+ * Converts the new artists array format to a single artist name string.
+ *
+ * @param {Array} artists - Array of artist objects with did and name
+ * @returns {string} Artist name or empty string
  */
-function normalizeDryRunData(dryRunData) {
-  if (!dryRunData || !dryRunData.projectMetadata) {
-    return null;
+function extractArtistName(artists) {
+  if (!Array.isArray(artists) || artists.length === 0) {
+    return '';
+  }
+  // Use first artist's name, or join multiple if needed
+  return artists[0]?.name || '';
+}
+
+/**
+ * Get best media URL from metadata and enrichment source
+ *
+ * Prioritizes: enrichment_source.animation_url > metadata.animation_url > media_assets.source_url > image_url
+ *
+ * @param {Object} metadata - Token metadata object
+ * @param {Object} enrichmentSource - Token enrichment_source object
+ * @param {Array} metadataMediaAssets - Token metadata media assets array
+ * @param {Array} enrichmentMediaAssets - Token enrichment source media assets array
+ * @returns {Object} Object with url and thumbnail properties
+ */
+function getBestMediaUrl(
+  metadata = {},
+  enrichmentSource = {},
+  metadataMediaAssets = [],
+  enrichmentMediaAssets = []
+) {
+  // Priority: enrichment_source.animation_url > metadata.animation_url > media_assets > image_url
+
+  // Prefer enrichment_source animation URL first (if enrichment_source is available)
+  if (enrichmentSource && enrichmentSource.animation_url) {
+    return {
+      url: enrichmentSource.animation_url,
+      thumbnail: enrichmentSource.image_url || metadata.image_url || '',
+    };
   }
 
-  // Convert DryRun structure to match GraphQL structure
+  // Fallback to metadata animation URL
+  if (metadata && metadata.animation_url) {
+    return {
+      url: metadata.animation_url,
+      thumbnail: metadata.image_url || (enrichmentSource && enrichmentSource.image_url) || '',
+    };
+  }
+
+  // Check enrichment source media assets (if enrichment_source is available)
+  if (
+    enrichmentSource &&
+    Array.isArray(enrichmentMediaAssets) &&
+    enrichmentMediaAssets.length > 0
+  ) {
+    const asset = enrichmentMediaAssets[0];
+    if (asset && asset.source_url) {
+      return {
+        url: asset.source_url,
+        thumbnail: enrichmentSource.image_url || metadata.image_url || '',
+      };
+    }
+  }
+
+  // Check metadata media assets (fallback if enrichment_source not available)
+  if (Array.isArray(metadataMediaAssets) && metadataMediaAssets.length > 0) {
+    const asset = metadataMediaAssets[0];
+    if (asset && asset.source_url) {
+      return {
+        url: asset.source_url,
+        thumbnail: metadata.image_url || (enrichmentSource && enrichmentSource.image_url) || '',
+      };
+    }
+  }
+
+  // Fallback to static image URLs (prefer enrichment_source if available)
+  const imageUrl = (enrichmentSource && enrichmentSource.image_url) || metadata.image_url || '';
   return {
-    id: dryRunData.id,
-    indexID: dryRunData.tokens?.[0]?.indexID,
-    contractAddress: dryRunData.tokens?.[0]?.contractAddress,
-    mintedAt: dryRunData.tokens?.[0]?.mintedAt,
-    owner: dryRunData.tokens?.[0]?.owner,
-    asset: {
-      lastRefreshedTime: dryRunData.tokens?.[0]?.lastRefreshedTime,
-      metadata: {
-        project: {
-          latest: dryRunData.projectMetadata,
-        },
-      },
-    },
+    url: imageUrl,
+    thumbnail: imageUrl,
   };
 }
 
 /**
- * Map indexer token data to standard format
- * @param {Object} indexerData - Data from indexer (GraphQL or normalized DryRun)
+ * Map indexer v2 token data to standard format
+ *
+ * Converts the new GraphQL v2 schema format to internal standard format
+ * for compatibility with existing code.
+ *
+ * @param {Object} indexerData - Data from indexer GraphQL v2 query
  * @param {string} chain - Blockchain network
- * @returns {Object}
+ * @returns {Object} Standardized token data
  */
 function mapIndexerDataToStandardFormat(indexerData, chain) {
   if (!indexerData) {
@@ -268,45 +325,52 @@ function mapIndexerDataToStandardFormat(indexerData, chain) {
     };
   }
 
-  const latest = indexerData.asset?.metadata?.project?.latest || {};
+  // Use metadata first, fallback to enrichment_source for missing fields
+  const metadata = indexerData.metadata || {};
+  const enrichmentSource = indexerData.enrichment_source || {};
+  const metadataMediaAssets = indexerData.metadata_media_assets || [];
+  const enrichmentMediaAssets = indexerData.enrichment_source_media_assets || [];
 
-  // Determine the best source URL with priority order based on actual API fields:
-  // 1. previewURL (Art Blocks generator URL - interactive/live content)
-  // 2. assetURL (primary asset link, e.g., OpenSea)
-  // 3. thumbnailURL (fallback static image)
-  const sourceUrl = latest.previewURL || latest.assetURL || latest.thumbnailURL || '';
+  // Get best media URLs (prioritizes enrichment_source.animation_url first)
+  const media = getBestMediaUrl(
+    metadata,
+    enrichmentSource,
+    metadataMediaAssets,
+    enrichmentMediaAssets
+  );
 
-  // For thumbnail, use dedicated thumbnail or gallery thumbnail
-  const thumbnailUrl = latest.thumbnailURL || latest.galleryThumbnailURL || '';
+  // Extract artist name from array format
+  const artistName =
+    extractArtistName(metadata.artists) || extractArtistName(enrichmentSource.artists) || '';
+
+  // Determine best name and description
+  const name = metadata.name || enrichmentSource.name || `Token #${indexerData.token_number}`;
+  const description = metadata.description || enrichmentSource.description || '';
 
   return {
     success: true,
     token: {
       chain,
-      contractAddress: indexerData.contractAddress,
-      tokenId: indexerData.id,
-      name: latest.title || `Token #${indexerData.id}`,
-      description: latest.description || '',
+      contractAddress: indexerData.contract_address,
+      tokenId: indexerData.token_number,
+      name,
+      description,
       image: {
-        url: sourceUrl,
-        mimeType: 'image/png', // Default, would need to detect from URL
-        thumbnail: thumbnailUrl,
+        url: media.url,
+        mimeType: metadata.mime_type || 'image/png',
+        thumbnail: media.thumbnail,
       },
-      animation_url: latest.medium === 'video' ? latest.previewURL : undefined,
+      animation_url: metadata.animation_url || enrichmentSource.animation_url,
       metadata: {
         attributes: [],
-        medium: latest.medium,
-        artistName: latest.artistName,
-        artistID: latest.artistID,
-        artistURL: latest.artistURL,
+        artistName,
       },
-      owner: indexerData.owner,
+      owner: indexerData.current_owner,
       collection: {
-        name: latest.title ? latest.title.split('#')[0].trim() : 'Unknown Collection',
-        description: latest.description || '',
+        name: name.split('#')[0].trim(),
+        description,
       },
-      mintedAt: indexerData.mintedAt,
-      lastTransferredAt: indexerData.asset?.lastRefreshedTime,
+      burned: indexerData.burned || false,
     },
   };
 }
@@ -339,10 +403,13 @@ function convertToDP1Item(tokenData, duration = 10) {
   // Format as UUID-like string for consistency
   const itemId = `${hash.substr(0, 8)}-${hash.substr(8, 4)}-${hash.substr(12, 4)}-${hash.substr(16, 4)}-${hash.substr(20, 12)}`;
 
-  // Get source URL from indexer data (priority: animation_url > image.url)
-  // The source has already been prioritized in mapIndexerDataToStandardFormat
-  const sourceUrl =
-    token.animation_url || token.animationUrl || token.image?.url || token.image || '';
+  // Get source URL from indexer data
+  // Priority: animation_url > image.url (from getBestMediaUrl)
+  let sourceUrl = token.animation_url || token.animationUrl;
+  if (!sourceUrl && token.image && typeof token.image === 'object') {
+    sourceUrl = token.image.url;
+  }
+  sourceUrl = String(sourceUrl || '');
 
   if (!sourceUrl) {
     logger.warn('[NFT Indexer] No source URL found for token:', {
@@ -390,7 +457,7 @@ function convertToDP1Item(tokenData, duration = 10) {
 
   logger.debug('[NFT Indexer] ✓ Converted to DP1:', {
     title: token.name,
-    source: sourceUrl.substring(0, 60) + '...',
+    source: sourceUrl ? sourceUrl.substring(0, 60) + '...' : '(no source URL)',
   });
 
   return {
@@ -421,9 +488,17 @@ async function getNFTTokenInfo(params) {
 
 /**
  * Get single NFT token information from indexer and return as DP1 item
+ *
+ * Queries the indexer for token data. If not found, triggers async indexing workflow,
+ * polls for completion, and retries token query. Also polls for metadata_media_assets
+ * to ensure indexed media is available.
+ *
  * @param {Object} params - Token parameters
+ * @param {string} params.chain - Blockchain network
+ * @param {string} params.contractAddress - Contract address
+ * @param {string} params.tokenId - Token ID
  * @param {number} duration - Display duration in seconds
- * @returns {Promise<Object>} DP1 item
+ * @returns {Promise<Object>} DP1 item with success/error status
  */
 async function getNFTTokenInfoSingle(params, duration = 10) {
   let chain = params.chain;
@@ -432,12 +507,12 @@ async function getNFTTokenInfoSingle(params, duration = 10) {
   // DEFENSIVE: Auto-detect and correct chain based on contract address format
   if (contractAddress.startsWith('KT') && chain !== 'tezos') {
     logger.warn(
-      `[NFT Indexer] ⚠️  Chain mismatch detected! Contract ${contractAddress} starts with KT but chain="${chain}". Auto-correcting to "tezos".`
+      `[NFT Indexer] Chain mismatch detected! Contract ${contractAddress} starts with KT but chain="${chain}". Auto-correcting to "tezos".`
     );
     chain = 'tezos';
   } else if (contractAddress.startsWith('0x') && chain === 'tezos') {
     logger.warn(
-      `[NFT Indexer] ⚠️  Chain mismatch detected! Contract ${contractAddress} starts with 0x but chain="tezos". Auto-correcting to "ethereum".`
+      `[NFT Indexer] Chain mismatch detected! Contract ${contractAddress} starts with 0x but chain="tezos". Auto-correcting to "ethereum".`
     );
     chain = 'ethereum';
   }
@@ -449,54 +524,89 @@ async function getNFTTokenInfoSingle(params, duration = 10) {
   });
 
   try {
-    // Build indexer token ID
-    const indexerTokenId = buildIndexerTokenId(chain, contractAddress, tokenId);
-    logger.info(`[NFT Indexer] Built indexer token ID: ${indexerTokenId}`);
+    // Build token CID in CAIP-2 format
+    const tokenCID = buildTokenCID(chain, contractAddress, tokenId);
+    logger.info(`[NFT Indexer] Built token CID: ${tokenCID}`);
 
     // Query the indexer
     logger.info(`[NFT Indexer] Querying indexer GraphQL for token...`);
-    let indexerData = await queryTokenDataFromIndexer(indexerTokenId);
+    let indexerData = await queryTokenDataFromIndexer(tokenCID);
 
-    // If token not found, use dryrun to get data immediately
+    // If token not found, trigger async indexing and poll
     if (!indexerData) {
-      logger.info(`[NFT Indexer] ❌ Token not in database, using DRYRUN to fetch immediately...`);
+      logger.info(`[NFT Indexer] Token not in database, triggering async indexing...`);
 
-      // Get data immediately via dryrun
-      logger.info(`[NFT Indexer] → Calling indexTokenDryRun(${contractAddress}, ${tokenId})`);
-      const dryRunData = await indexTokenDryRun(contractAddress, tokenId);
+      // Trigger background indexing workflow
+      const indexResult = await triggerIndexingAsync(chain, contractAddress, tokenId);
 
-      if (dryRunData) {
-        logger.info(`[NFT Indexer] ✓ Got token data from DRYRUN`);
-        logger.debug(`[NFT Indexer] DryRun data keys:`, Object.keys(dryRunData));
-
-        // Normalize DryRun data to match GraphQL structure
-        logger.debug(`[NFT Indexer] → Normalizing DryRun data structure...`);
-        indexerData = normalizeDryRunData(dryRunData);
-
-        if (indexerData) {
-          logger.info(`[NFT Indexer] ✓ DryRun data normalized successfully`);
-
-          // Trigger async indexing to persist (fire-and-forget)
-          logger.info(`[NFT Indexer] → Starting async indexing workflow (background)...`);
-          triggerIndexingAsync(contractAddress, tokenId).catch((error) => {
-            logger.warn('[NFT Indexer] Async indexing failed (non-critical):', error.message);
-          });
-        } else {
-          logger.error(`[NFT Indexer] ❌ Failed to normalize DryRun data`);
-          return {
-            success: false,
-            error: `Failed to normalize DryRun data for ${contractAddress}/${tokenId}`,
-          };
-        }
-      } else {
-        logger.error(`[NFT Indexer] ❌ DRYRUN also failed for ${contractAddress}/${tokenId}`);
+      if (!indexResult.success) {
+        logger.error(`[NFT Indexer] Failed to trigger indexing:`, indexResult.error);
         return {
           success: false,
-          error: `Token not found and dryrun indexing failed: ${contractAddress}/${tokenId}`,
+          error: `Token not found and indexing failed: ${indexResult.error}`,
         };
       }
-    } else {
-      logger.info(`[NFT Indexer] ✓ Token found in database`);
+
+      logger.info('[NFT Indexer] Indexing workflow triggered', {
+        workflow_id: indexResult.workflow_id,
+        run_id: indexResult.run_id,
+      });
+
+      // Poll for workflow completion
+      const pollResult = await pollForWorkflowCompletion(
+        indexResult.workflow_id,
+        indexResult.run_id
+      );
+
+      if (!pollResult.success) {
+        logger.error('[NFT Indexer] Workflow polling failed:', pollResult.error);
+        return {
+          success: false,
+          error: `Indexing workflow failed: ${pollResult.error}`,
+        };
+      }
+
+      if (pollResult.timedOut) {
+        logger.warn('[NFT Indexer] Workflow polling timed out before completion');
+        return {
+          success: false,
+          error: `Token indexing timed out. Please try again in a moment.`,
+        };
+      }
+
+      // Workflow completed, query token again
+      logger.info(`[NFT Indexer] Workflow completed, querying token again...`);
+      indexerData = await queryTokenDataFromIndexer(tokenCID);
+
+      // If still not found after indexing, consider it invalid
+      if (!indexerData) {
+        logger.warn(
+          `[NFT Indexer] Token still not found after indexing. Contract or token ID may be invalid.`
+        );
+        return {
+          success: false,
+          error: `Token not found. Invalid contract address or token ID.`,
+        };
+      }
+    }
+
+    logger.info(`[NFT Indexer] ✓ Token found in database`);
+
+    // If token found but no metadata_media_assets, poll for them
+    if (
+      !Array.isArray(indexerData.metadata_media_assets) ||
+      indexerData.metadata_media_assets.length === 0
+    ) {
+      logger.info('[NFT Indexer] Metadata assets not available, polling...');
+      indexerData = await pollForMetadataAssets(tokenCID);
+
+      if (!indexerData) {
+        logger.warn('[NFT Indexer] Failed to retrieve token data during metadata polling');
+        return {
+          success: false,
+          error: `Failed to retrieve complete token data`,
+        };
+      }
     }
 
     // Map to standard format and convert to DP1
@@ -513,6 +623,13 @@ async function getNFTTokenInfoSingle(params, duration = 10) {
 
 /**
  * Get NFT token information in batch and return as DP1 items (parallel processing)
+ *
+ * For tokens not in database:
+ * 1. Triggers indexing for all missing tokens in parallel
+ * 2. Collects workflow IDs
+ * 3. Polls each workflow individually with its own ID
+ * 4. Continues with remaining tokens even if some fail
+ *
  * @param {Array} tokens - Array of token parameters
  * @param {number} duration - Display duration in seconds
  * @returns {Promise<Array>} Array of DP1 items
@@ -554,9 +671,8 @@ async function getNFTTokenInfoBatch(tokens, duration = 10) {
 
   logger.info(`[NFT Indexer] ✓ Batch processing complete: ${results.length} total results`);
   const successCount = results.filter((r) => r.success && r.item).length;
-  logger.info(
-    `[NFT Indexer] Final: ${successCount} items with data, ${results.length - successCount} without`
-  );
+  const failedCount = results.length - successCount;
+  logger.info(`[NFT Indexer] Final: ${successCount} items with data, ${failedCount} without`);
 
   // Return only items (not error objects)
   const items = results.filter((r) => r.success && r.item).map((r) => r.item);
@@ -601,142 +717,300 @@ async function getCollectionInfo(params) {
 }
 
 /**
- * Index a token using dryrun mode to get data immediately
+ * Trigger async indexing workflow for a token (fire-and-forget)
  *
- * Uses dryrun mode to synchronously index and return token data without
- * persisting to the database. This provides immediate results.
+ * Starts an asynchronous background workflow to index and persist the token via GraphQL mutation.
+ * Does not wait for completion - returns immediately.
  *
+ * @param {string} chain - Blockchain network
  * @param {string} contractAddress - Contract address (required)
  * @param {string} tokenId - Token ID (required)
- * @param {string} [owner] - Owner address (optional)
- * @returns {Promise<Object|null>} Token data from indexer or null on error
- * @see https://raw.githubusercontent.com/feral-file/ff-indexer/refs/heads/main/services/api-gateway/index.go
+ * @returns {Promise<Object>} Result with workflow info
+ * @returns {boolean} returns.success - Whether workflow was triggered
+ * @returns {string} [returns.workflow_id] - Workflow ID if triggered
+ * @returns {string} [returns.run_id] - Run ID if triggered
+ * @returns {string} [returns.error] - Error message if failed
  */
-async function indexTokenDryRun(contractAddress, tokenId, owner = '') {
+async function triggerIndexingAsync(chain, contractAddress, tokenId) {
   try {
-    const requestBody = {
-      contract: contractAddress,
-      tokenID: tokenId,
-      dryrun: true,
-      preview: false,
-    };
+    // Build token CID
+    const tokenCID = buildTokenCID(chain, contractAddress, tokenId);
 
-    if (owner) {
-      requestBody.owner = owner;
-    }
-
-    logger.info('[NFT Indexer] 🔄 Starting DryRun indexing (immediate fetch)...');
-    logger.info('[NFT Indexer] → POST', INDEXING_ENDPOINT);
-    logger.info('[NFT Indexer] → Request:', JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(INDEXING_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+    logger.debug('[NFT Indexer] Triggering async indexing workflow via GraphQL mutation:', {
+      tokenCID,
     });
 
-    logger.info(`[NFT Indexer] ← Response status: ${response.status} ${response.statusText}`);
-
-    if (response.ok) {
-      const result = await response.json();
-      logger.info(
-        '[NFT Indexer] ← Response body:',
-        JSON.stringify(result, null, 2).substring(0, 500)
-      );
-
-      // Server returns {"update": {...}} with token data in dryrun mode
-      if (result.update) {
-        logger.info('[NFT Indexer] ✓ DryRun successful, got token data');
-        logger.debug('[NFT Indexer] Token data structure:', {
-          hasAsset: !!result.update.asset,
-          hasMetadata: !!result.update.asset?.metadata,
-          hasProject: !!result.update.asset?.metadata?.project,
-          hasLatest: !!result.update.asset?.metadata?.project?.latest,
-        });
-        return result.update;
-      } else {
-        logger.warn('[NFT Indexer] ⚠️  DryRun returned unexpected format (no "update" field)');
-        logger.warn('[NFT Indexer] Response keys:', Object.keys(result));
-        return null;
+    const mutation = `
+      mutation TriggerTokenIndexing($token_cids: [String!]!) {
+        triggerTokenIndexing(token_cids: $token_cids) {
+          workflow_id
+          run_id
+        }
       }
+    `;
+
+    const variables = {
+      token_cids: [tokenCID],
+    };
+
+    const headers = { 'Content-Type': 'application/json' };
+
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query: mutation, variables }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${result.errors.map((e) => e.message).join(', ')}`);
+    }
+
+    const triggerResult = result.data?.triggerTokenIndexing;
+    if (triggerResult?.workflow_id) {
+      logger.debug('[NFT Indexer] ✓ Async indexing workflow started:', triggerResult);
+      return {
+        success: true,
+        workflow_id: triggerResult.workflow_id,
+        run_id: triggerResult.run_id,
+      };
     } else {
-      const errorText = await response.text().catch(() => 'Unable to read error response');
-      logger.error('[NFT Indexer] ❌ DryRun HTTP error:', {
-        contractAddress,
-        tokenId,
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText.substring(0, 200),
-      });
-      return null;
+      logger.warn('[NFT Indexer] Unexpected mutation response:', result);
+      return {
+        success: false,
+        error: 'No workflow ID returned',
+      };
     }
   } catch (error) {
-    logger.error('[NFT Indexer] ❌ DryRun exception:', error.message);
-    logger.error('[NFT Indexer] Stack:', error.stack);
-    return null;
+    logger.error('[NFT Indexer] Async indexing error:', error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 }
 
 /**
- * Trigger async indexing workflow for a token (fire-and-forget)
+ * Query workflow status from indexer
  *
- * Starts an asynchronous background workflow to index and persist the token.
- * Does not wait for completion - returns immediately.
+ * Checks the status of an async indexing workflow to determine if it has completed.
  *
- * @param {string} contractAddress - Contract address (required)
- * @param {string} tokenId - Token ID (required)
- * @param {string} [owner] - Owner address (optional)
- * @returns {Promise<boolean>} True if workflow was successfully triggered
- * @see https://raw.githubusercontent.com/feral-file/ff-indexer/refs/heads/main/services/api-gateway/index.go
+ * @param {string} workflowId - Workflow ID returned from triggerIndexing
+ * @param {string} runId - Run ID returned from triggerIndexing
+ * @returns {Promise<Object>} Status result
+ * @returns {boolean} returns.success - Whether query succeeded
+ * @returns {string} [returns.status] - Workflow status (running, completed, failed)
+ * @returns {Object} [returns.workflowData] - Full workflow data
+ * @returns {string} [returns.error] - Error message if failed
  */
-async function triggerIndexingAsync(contractAddress, tokenId, owner = '') {
+async function queryWorkflowStatus(workflowId, runId) {
   try {
-    const requestBody = {
-      contract: contractAddress,
-      tokenID: tokenId,
-      dryrun: false,
-      preview: false,
+    const query = `
+      query WorkflowStatus($workflow_id: String!, $run_id: String!) {
+        workflowStatus(workflow_id: $workflow_id, run_id: $run_id) {
+          workflow_id
+          run_id
+          status
+          start_time
+          close_time
+          execution_time_ms
+        }
+      }
+    `;
+
+    const variables = {
+      workflow_id: workflowId,
+      run_id: runId,
     };
 
-    if (owner) {
-      requestBody.owner = owner;
+    const headers = { 'Content-Type': 'application/json' };
+
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    logger.debug('[NFT Indexer] Triggering async indexing workflow:', {
-      contract: contractAddress,
-      tokenID: tokenId,
-    });
+    const result = await response.json();
 
-    const response = await fetch(INDEXING_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${result.errors.map((e) => e.message).join(', ')}`);
+    }
 
-    if (response.ok) {
-      const result = await response.json();
-
-      // Server returns {"ok": 1} when workflow starts
-      if (result.ok === 1) {
-        logger.debug('[NFT Indexer] ✓ Async indexing workflow started');
-        return true;
-      } else {
-        logger.warn('[NFT Indexer] Unexpected async response:', result);
-        return false;
-      }
+    const workflowData = result.data?.workflowStatus;
+    if (workflowData) {
+      return {
+        success: true,
+        status: workflowData.status,
+        workflowData,
+      };
     } else {
-      const errorText = await response.text().catch(() => 'Unable to read error response');
-      logger.error('[NFT Indexer] Failed to trigger async indexing:', {
-        contractAddress,
-        tokenId,
-        status: response.status,
-        error: errorText,
-      });
-      return false;
+      return {
+        success: false,
+        error: 'No workflow data returned',
+      };
     }
   } catch (error) {
-    logger.error('[NFT Indexer] Async indexing error:', error.message);
-    return false;
+    logger.error('[NFT Indexer] Failed to query workflow status:', error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Poll for workflow completion with configurable interval and timeout
+ *
+ * Continuously checks workflow status until completion or timeout.
+ *
+ * @param {string} workflowId - Workflow ID
+ * @param {string} runId - Run ID
+ * @returns {Promise<Object>} Polling result
+ * @returns {boolean} returns.success - Whether polling succeeded
+ * @returns {boolean} returns.completed - Whether workflow completed
+ * @returns {boolean} returns.timedOut - Whether polling timed out
+ * @returns {string} [returns.status] - Final workflow status
+ * @returns {string} [returns.error] - Error message if failed
+ */
+async function pollForWorkflowCompletion(workflowId, runId) {
+  const startTime = Date.now();
+  let pollCount = 0;
+
+  logger.debug('[NFT Indexer] Starting workflow polling...', {
+    workflowId,
+    runId,
+    timeoutMs: POLLING_TIMEOUT_MS,
+    intervalMs: POLLING_INTERVAL_MS,
+  });
+
+  try {
+    while (true) {
+      const statusResult = await queryWorkflowStatus(workflowId, runId);
+
+      if (!statusResult.success) {
+        return {
+          success: false,
+          error: statusResult.error,
+        };
+      }
+
+      const status = statusResult.status;
+      pollCount += 1;
+
+      logger.debug(`[NFT Indexer] Poll #${pollCount}: status = ${status}`);
+
+      // Check if workflow has completed (case-insensitive)
+      if (status.toLowerCase() === 'completed') {
+        const elapsedMs = Date.now() - startTime;
+        logger.info(`[NFT Indexer] ✓ Workflow completed after ${pollCount} polls (${elapsedMs}ms)`);
+        return {
+          success: true,
+          completed: true,
+          timedOut: false,
+          status,
+        };
+      }
+
+      // Check if workflow failed (case-insensitive)
+      if (status.toLowerCase() === 'failed') {
+        logger.warn('[NFT Indexer] Workflow failed');
+        return {
+          success: false,
+          completed: false,
+          timedOut: false,
+          status,
+          error: 'Workflow failed',
+        };
+      }
+
+      // Check timeout
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs >= POLLING_TIMEOUT_MS) {
+        logger.warn(`[NFT Indexer] Polling timed out after ${pollCount} polls (${elapsedMs}ms)`);
+        return {
+          success: true,
+          completed: false,
+          timedOut: true,
+          status,
+        };
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+    }
+  } catch (error) {
+    logger.error('[NFT Indexer] Error during workflow polling:', error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Poll for metadata assets to appear on a token
+ *
+ * Continuously queries token until metadata_media_assets appears or timeout.
+ *
+ * @param {string} tokenCID - Token CID in CAIP-2 format
+ * @returns {Promise<Object|null>} Token data when assets appear, null if timeout
+ */
+async function pollForMetadataAssets(tokenCID) {
+  const startTime = Date.now();
+  let pollCount = 0;
+
+  logger.debug('[NFT Indexer] Starting metadata assets polling...', {
+    tokenCID,
+    timeoutMs: POLLING_TIMEOUT_MS,
+    intervalMs: POLLING_INTERVAL_MS,
+  });
+
+  try {
+    while (true) {
+      const tokenData = await queryTokenDataFromIndexer(tokenCID);
+
+      pollCount += 1;
+
+      // Check if metadata_media_assets exists
+      if (
+        tokenData &&
+        Array.isArray(tokenData.metadata_media_assets) &&
+        tokenData.metadata_media_assets.length > 0
+      ) {
+        const elapsedMs = Date.now() - startTime;
+        logger.info(
+          `[NFT Indexer] ✓ Metadata assets found after ${pollCount} polls (${elapsedMs}ms)`
+        );
+        return tokenData;
+      }
+
+      logger.debug(`[NFT Indexer] Poll #${pollCount}: metadata_media_assets not yet available`);
+
+      // Check timeout
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs >= POLLING_TIMEOUT_MS) {
+        logger.warn(
+          `[NFT Indexer] Metadata assets polling timed out after ${pollCount} polls (${elapsedMs}ms). Using fallback URLs.`
+        );
+        return tokenData; // Return token data as-is, will use fallback URLs
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+    }
+  } catch (error) {
+    logger.error('[NFT Indexer] Error during metadata assets polling:', error.message);
+    return null;
   }
 }
 
@@ -805,9 +1079,8 @@ async function queryTokensByOwner(ownerAddress, limit = 100) {
 
     const tokens = await queryTokens({
       owners: [ownerAddress],
-      size: limit,
+      limit,
       offset: 0,
-      burnedIncluded: false,
     });
 
     logger.info(`[NFT Indexer] Found ${tokens.length} token(s) for owner ${ownerAddress}`);
@@ -828,86 +1101,9 @@ async function queryTokensByOwner(ownerAddress, limit = 100) {
   }
 }
 
-/**
- * Trigger indexing workflow for an address
- *
- * Calls the indexer API to start indexing all tokens for a given address.
- * This is a fire-and-forget operation that starts a background workflow.
- *
- * @param {string} ownerAddress - Owner wallet address
- * @param {boolean} [includeHistory=false] - Whether to include historical data
- * @returns {Promise<Object>} Result indicating if indexing was triggered
- * @returns {boolean} returns.success - Whether indexing was triggered
- * @returns {string} [returns.message] - Success message
- * @returns {string} [returns.error] - Error message if failed
- * @see https://raw.githubusercontent.com/feral-file/ff-indexer/refs/heads/main/services/api-gateway/index.go
- * @example
- * const result = await triggerAddressIndexing('0x1234...');
- * if (result.success) {
- *   console.log('Indexing started in background');
- * }
- */
-async function triggerAddressIndexing(ownerAddress, includeHistory = false) {
-  const INDEXING_ADDRESS_ENDPOINT = 'https://indexer.autonomy.io/v2/nft/index';
-
-  try {
-    const requestBody = {
-      owner: ownerAddress,
-      history: includeHistory,
-    };
-
-    logger.info('[NFT Indexer] 🔄 Triggering address indexing workflow...');
-    logger.info('[NFT Indexer] → POST', INDEXING_ADDRESS_ENDPOINT);
-    logger.info('[NFT Indexer] → Request:', JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(INDEXING_ADDRESS_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
-
-    logger.info(`[NFT Indexer] ← Response status: ${response.status} ${response.statusText}`);
-
-    if (response.ok) {
-      const result = await response.json();
-
-      // Server returns {"ok": 1} when workflow starts
-      if (result.ok === 1) {
-        logger.info('[NFT Indexer] ✓ Address indexing workflow started successfully');
-        return {
-          success: true,
-          message: `Indexing workflow started for ${ownerAddress}. This may take a few moments.`,
-        };
-      } else {
-        logger.warn('[NFT Indexer] ⚠️  Unexpected response:', result);
-        return {
-          success: false,
-          error: 'Unexpected response from indexing service',
-        };
-      }
-    } else {
-      const errorText = await response.text().catch(() => 'Unable to read error response');
-      logger.error('[NFT Indexer] ❌ Address indexing HTTP error:', {
-        ownerAddress,
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText.substring(0, 200),
-      });
-      return {
-        success: false,
-        error: `Failed to trigger indexing: ${response.status} ${response.statusText}`,
-      };
-    }
-  } catch (error) {
-    logger.error('[NFT Indexer] ❌ Address indexing exception:', error.message);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
 module.exports = {
+  // Initialization
+  initializeIndexer,
   // Primary functions (return DP1 items)
   getNFTTokenInfo,
   // Batch processing
@@ -917,17 +1113,21 @@ module.exports = {
   // Additional functions
   getCollectionInfo,
   searchNFTs,
-  indexTokenDryRun,
   triggerIndexingAsync,
-  buildIndexerTokenId,
+  buildTokenCID,
   convertToDP1Item,
   // Address-based functions
   queryTokensByOwner,
-  triggerAddressIndexing,
   // Unified GraphQL query
   queryTokens,
+  // Workflow and polling functions
+  queryWorkflowStatus,
+  pollForWorkflowCompletion,
+  pollForMetadataAssets,
   // Export for testing
   queryTokenDataFromIndexer,
-  normalizeDryRunData,
   mapIndexerDataToStandardFormat,
+  detectTokenStandard,
+  extractArtistName,
+  getBestMediaUrl,
 };
