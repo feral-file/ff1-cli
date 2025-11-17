@@ -10,6 +10,7 @@ import type { Playlist } from '../types';
 interface SendPlaylistParams {
   playlist: Playlist;
   deviceName?: string;
+  intent?: 'now_display' | 'display_at_boot';
 }
 
 interface SendPlaylistResult {
@@ -33,6 +34,7 @@ interface SendPlaylistResult {
  * @param {Object} params - Function parameters
  * @param {Object} params.playlist - Complete DP1 v1.0.0 playlist object to send
  * @param {string} [params.deviceName] - Name of the device to send to (exact match required)
+ * @param {string} [params.intent] - Intent action: 'now_display' (default) or 'display_at_boot'
  * @returns {Promise<Object>} Result object
  * @returns {boolean} returns.success - Whether the cast was successful
  * @returns {string} [returns.device] - Device host that received the playlist
@@ -41,7 +43,7 @@ interface SendPlaylistResult {
  * @returns {string} [returns.error] - Error message if failed
  * @throws {Error} When device configuration is invalid or missing
  * @example
- * // Send to first device
+ * // Send to first device (immediate display)
  * const result = await sendPlaylistToDevice({
  *   playlist: { version: '1.0.0', title: 'My Collection', items: [...] }
  * });
@@ -52,10 +54,19 @@ interface SendPlaylistResult {
  *   playlist: { version: '1.0.0', title: 'My Collection', items: [...] },
  *   deviceName: 'Living Room Display'
  * });
+ *
+ * @example
+ * // Set playlist to display on device boot
+ * const result = await sendPlaylistToDevice({
+ *   playlist: { version: '1.0.0', title: 'Boot Playlist', items: [...] },
+ *   deviceName: 'Living Room Display',
+ *   intent: 'display_at_boot'
+ * });
  */
 export async function sendPlaylistToDevice({
   playlist,
   deviceName,
+  intent = 'now_display',
 }: SendPlaylistParams): Promise<SendPlaylistResult> {
   try {
     // Validate input
@@ -117,7 +128,7 @@ export async function sendPlaylistToDevice({
       command: 'displayPlaylist',
       request: {
         dp1_call: playlist,
-        intent: { action: 'now_display' },
+        intent: { action: intent },
       },
     };
 
@@ -170,4 +181,62 @@ export async function sendPlaylistToDevice({
       error: (error as Error).message,
     };
   }
+}
+
+interface SetDeviceSettingsParams {
+  playlist: Playlist;
+  setting: 'display_at_boot';
+  deviceName?: string;
+}
+
+/**
+ * Set device settings by sending a playlist with a specific intent
+ *
+ * This function is a convenience wrapper around sendPlaylistToDevice for setting
+ * device-specific configurations. Currently supports setting the 'display_at_boot'
+ * playlist, which determines what playlist the FF1 displays when it boots.
+ *
+ * @param {Object} params - Function parameters
+ * @param {Object} params.playlist - Complete DP1 v1.0.0 playlist object
+ * @param {string} params.setting - Setting to configure: 'display_at_boot'
+ * @param {string} [params.deviceName] - Name of the device to configure (exact match required)
+ * @returns {Promise<Object>} Result object
+ * @returns {boolean} returns.success - Whether the setting was applied
+ * @returns {string} [returns.device] - Device host that received the setting
+ * @returns {string} [returns.deviceName] - Name of the device configured
+ * @returns {Object} [returns.response] - Response from the device
+ * @returns {string} [returns.error] - Error message if failed
+ * @example
+ * // Set boot playlist for first configured device
+ * const result = await setDeviceSettings({
+ *   playlist: { version: '1.0.0', title: 'Boot Display', items: [...] },
+ *   setting: 'display_at_boot'
+ * });
+ *
+ * @example
+ * // Set boot playlist for specific device
+ * const result = await setDeviceSettings({
+ *   playlist: { version: '1.0.0', title: 'Boot Display', items: [...] },
+ *   setting: 'display_at_boot',
+ *   deviceName: 'Living Room Display'
+ * });
+ */
+export async function setDeviceSettings({
+  playlist,
+  setting,
+  deviceName,
+}: SetDeviceSettingsParams): Promise<SendPlaylistResult> {
+  if (setting === 'display_at_boot') {
+    logger.info('Setting display_at_boot playlist for FF1 device');
+    return await sendPlaylistToDevice({
+      playlist,
+      deviceName,
+      intent: 'display_at_boot',
+    });
+  }
+
+  return {
+    success: false,
+    error: `Unsupported setting: ${setting}`,
+  };
 }

@@ -233,6 +233,54 @@ async function verifyAddresses(params) {
 }
 
 /**
+ * Set FF1 device settings with a playlist
+ *
+ * This function configures FF1 device settings by sending a playlist with a specific intent.
+ * Currently supports setting the display_at_boot playlist, which determines what content
+ * the FF1 displays when it boots.
+ *
+ * @param {Object} params - Settings parameters
+ * @param {Object} params.playlist - DP1 playlist object
+ * @param {string} params.setting - Setting to configure: 'display_at_boot'
+ * @param {string} [params.deviceName] - Device name (null for first device)
+ * @returns {Promise<Object>} Result
+ * @returns {boolean} returns.success - Whether setting was applied
+ * @returns {string} [returns.deviceHost] - Device host address
+ * @returns {string} [returns.deviceName] - Device name
+ * @returns {string} [returns.error] - Error message if failed
+ * @example
+ * const result = await setDeviceSettings({
+ *   playlist,
+ *   setting: 'display_at_boot',
+ *   deviceName: 'Living Room Display'
+ * });
+ */
+async function setDeviceSettings(params) {
+  const { playlist, setting, deviceName } = params;
+
+  const result = await ff1Device.setDeviceSettings({
+    playlist,
+    setting,
+    deviceName,
+  });
+
+  if (result.success) {
+    console.log(chalk.green('\n✓ Device settings updated'));
+    if (result.deviceName) {
+      console.log(chalk.gray(`  Device: ${result.deviceName}`));
+    }
+    console.log(chalk.gray(`  Setting: ${setting}`));
+  } else {
+    console.error(chalk.red('\n✗ Could not update device settings'));
+    if (result.error) {
+      console.error(chalk.red(`  ${result.error}`));
+    }
+  }
+
+  return result;
+}
+
+/**
  * Get list of configured FF1 devices
  *
  * This function retrieves the list of all configured FF1 devices from config.
@@ -279,6 +327,7 @@ async function getConfiguredDevices() {
 module.exports = {
   buildDP1Playlist,
   sendPlaylistToDevice,
+  setDeviceSettings,
   resolveDomains,
   verifyPlaylist,
   getConfiguredDevices,

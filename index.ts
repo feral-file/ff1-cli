@@ -355,6 +355,92 @@ program
   });
 
 program
+  .command('settings')
+  .description('Configure FF1 device settings with a playlist')
+  .argument('<setting>', 'Setting to configure (currently only: display_at_boot)')
+  .argument('<file>', 'Path to the playlist file')
+  .option('-d, --device <name>', 'Device name (uses first device if not specified)')
+  .option('--skip-verify', 'Skip playlist verification before sending')
+  .action(
+    async (setting: string, file: string, options: { device?: string; skipVerify?: boolean }) => {
+      try {
+        // Validate setting parameter
+        if (setting !== 'display_at_boot') {
+          console.error(
+            chalk.red('\n❌ Invalid setting:'),
+            `"${setting}". Currently only "display_at_boot" is supported.`
+          );
+          process.exit(1);
+        }
+
+        console.log(chalk.blue('\n⚙️  Configuring FF1 device settings...\n'));
+
+        // Read the playlist file
+        const content = await fs.readFile(file, 'utf-8');
+        const playlist: Playlist = JSON.parse(content);
+
+        // Verify playlist before sending (unless skipped)
+        if (!options.skipVerify) {
+          console.log(chalk.cyan('🔍 Verifying playlist...'));
+
+          const verifier = await import('./src/utilities/playlist-verifier');
+          const { verifyPlaylist } = verifier;
+
+          const verifyResult = verifyPlaylist(playlist);
+
+          if (!verifyResult.valid) {
+            console.error(chalk.red('\n❌ Playlist verification failed:'), verifyResult.error);
+
+            if (verifyResult.details && verifyResult.details.length > 0) {
+              console.log(chalk.yellow('\n   Validation errors:'));
+              verifyResult.details.forEach((detail: { path: string; message: string }) => {
+                console.log(chalk.yellow(`     • ${detail.path}: ${detail.message}`));
+              });
+            }
+
+            console.log(chalk.yellow('\n   Use --skip-verify to send anyway (not recommended)\n'));
+            process.exit(1);
+          }
+
+          console.log(chalk.green('✓ Playlist verified successfully\n'));
+        }
+
+        // Import the device utility
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { setDeviceSettings } = require('./src/utilities/ff1-device');
+
+        // Apply the setting
+        const result = await setDeviceSettings({
+          playlist,
+          setting,
+          deviceName: options.device,
+        });
+
+        if (result.success) {
+          console.log(chalk.green('✅ Device settings updated successfully!'));
+          if (result.deviceName) {
+            console.log(chalk.gray(`   Device: ${result.deviceName}`));
+          }
+          if (result.device) {
+            console.log(chalk.gray(`   Host: ${result.device}`));
+          }
+          console.log(chalk.gray(`   Setting: ${setting}`));
+          console.log();
+        } else {
+          console.error(chalk.red('\n❌ Failed to update device settings:'), result.error);
+          if (result.details) {
+            console.error(chalk.gray(`   Details: ${result.details}`));
+          }
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error(chalk.red('\n❌ Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    }
+  );
+
+program
   .command('publish')
   .description('Publish a playlist to a feed server')
   .argument('<file>', 'Path to the playlist file')

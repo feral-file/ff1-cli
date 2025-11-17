@@ -97,6 +97,7 @@ OUTPUT CONTRACT
 - BUILD → call parse_requirements with { requirements: Requirement[], playlistSettings?: { title?: string | null, slug?: string | null, durationPerItem?: number, preserveOrder?: boolean, deviceName?: string, feedServer?: { baseUrl: string, apiKey?: string } } }
 - SEND → call confirm_send_playlist with { filePath: string, deviceName?: string }
 - PUBLISH (existing file) → call confirm_publish_playlist with { filePath: string, feedServer: { baseUrl: string, apiKey?: string } }
+- SET DEVICE SETTING → call configure_device_setting with { filePath: string, setting: "display_at_boot", deviceName?: string }
 - QUESTION → answer briefly (no tool call)
 - Use correct types; never truncate addresses/tokenIds; tokenIds are strings; quantity is a number.
 
@@ -393,6 +394,33 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           },
         },
         required: ['filePath', 'feedServer'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'configure_device_setting',
+      description:
+        'Configure FF1 device settings with a playlist. Use this when the user wants to set a playlist to display on boot (e.g., "set playlist as boot display", "display this on boot", "set as startup playlist").',
+      parameters: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Path to the playlist file (default: "./playlist.json")',
+          },
+          setting: {
+            type: 'string',
+            description: 'Setting to configure (currently only "display_at_boot" is supported)',
+            enum: ['display_at_boot'],
+          },
+          deviceName: {
+            type: 'string',
+            description: 'Name of the device to configure (omit or leave empty for first device)',
+          },
+        },
+        required: ['filePath', 'setting'],
       },
     },
   },
@@ -774,6 +802,13 @@ export async function processIntentParserRequest(
               params: { ...sendParams, action: 'send_playlist' },
               needsMoreInfo: false,
             };
+          } else if (followUpToolCall.function.name === 'configure_device_setting') {
+            const settingParams = JSON.parse(followUpToolCall.function.arguments);
+            return {
+              approved: true,
+              params: { ...settingParams, action: 'configure_device_setting' },
+              needsMoreInfo: false,
+            };
           }
 
           return {
@@ -898,6 +933,90 @@ export async function processIntentParserRequest(
                   action: 'publish_playlist',
                   success: false,
                   error: publishResult.error,
+                } as unknown as Record<string, unknown>,
+              };
+            }
+          } else if (toolCall.function.name === 'configure_device_setting') {
+            const args = JSON.parse(toolCall.function.arguments);
+            const { setDeviceSettings } = await import('../utilities/ff1-device');
+            const { verifyPlaylist } = await import('../utilities/playlist-verifier');
+            const { promises: fs } = await import('fs');
+
+            try {
+              // Read and verify the playlist
+              console.log();
+              console.log(chalk.cyan('Configuring device settings...'));
+
+              const content = await fs.readFile(args.filePath, 'utf-8');
+              const playlist = JSON.parse(content);
+
+              // Verify playlist
+              const verifyResult = verifyPlaylist(playlist);
+              if (!verifyResult.valid) {
+                console.error(chalk.red('✗ Playlist verification failed: ' + verifyResult.error));
+                console.log();
+
+                return {
+                  approved: false,
+                  needsMoreInfo: false,
+                  params: {
+                    action: 'configure_device_setting',
+                    success: false,
+                    error: verifyResult.error,
+                  } as unknown as Record<string, unknown>,
+                };
+              }
+
+              // Apply the device setting
+              const result = await setDeviceSettings({
+                playlist,
+                setting: args.setting,
+                deviceName: args.deviceName,
+              });
+
+              if (result.success) {
+                console.log(chalk.green('✓ Device settings updated'));
+                if (result.deviceName) {
+                  console.log(chalk.gray(`   Device: ${result.deviceName}`));
+                }
+                console.log(chalk.gray(`   Setting: ${args.setting}`));
+                console.log();
+
+                return {
+                  approved: true,
+                  params: {
+                    action: 'configure_device_setting',
+                    setting: args.setting,
+                    deviceName: result.deviceName,
+                    success: true,
+                  } as unknown as Record<string, unknown>,
+                  needsMoreInfo: false,
+                };
+              } else {
+                console.error(chalk.red('✗ Failed to update device settings: ' + result.error));
+                console.log();
+
+                return {
+                  approved: false,
+                  needsMoreInfo: false,
+                  params: {
+                    action: 'configure_device_setting',
+                    success: false,
+                    error: result.error,
+                  } as unknown as Record<string, unknown>,
+                };
+              }
+            } catch (error) {
+              console.error(chalk.red('✗ Error: ' + (error as Error).message));
+              console.log();
+
+              return {
+                approved: false,
+                needsMoreInfo: false,
+                params: {
+                  action: 'configure_device_setting',
+                  success: false,
+                  error: (error as Error).message,
                 } as unknown as Record<string, unknown>,
               };
             }

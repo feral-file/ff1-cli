@@ -297,6 +297,27 @@ export async function buildPlaylist(
       }
     }
 
+    // Check if this is a configure_device_setting action
+    if (params && (params as Record<string, unknown>).action === 'configure_device_setting') {
+      // Device settings were already configured by intent parser, just return the result
+      const settingParams = params as Record<string, unknown>;
+
+      if (settingParams.success) {
+        return {
+          success: true,
+          action: 'configure_device_setting',
+          setting: settingParams.setting,
+          deviceName: settingParams.deviceName,
+        };
+      } else {
+        return {
+          success: false,
+          error: settingParams.error as string,
+          action: 'configure_device_setting',
+        };
+      }
+    }
+
     // STEP 2: AI ORCHESTRATOR (Function Calling)
     // AI orchestrates function calls to build playlist
     const { buildPlaylistWithAI } = getAIOrchestrator();
