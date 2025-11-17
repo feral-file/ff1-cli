@@ -3,7 +3,7 @@
  * Uses dp1-js library for DP-1 specification-compliant playlist signing
  */
 
-const { signDP1Playlist, verifyPlaylistSignature } = require('dp1-js');
+const { signDP1Playlist, verifyPlaylistSignature } = require('ff-dp1-js');
 const { getPlaylistConfig } = require('../config');
 
 /**

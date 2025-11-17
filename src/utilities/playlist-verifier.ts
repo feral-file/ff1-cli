@@ -3,7 +3,7 @@
  * Uses dp1-js library for DP-1 specification-compliant playlist validation
  */
 
-import { parseDP1Playlist } from 'dp1-js';
+import { parseDP1Playlist } from 'ff-dp1-js';
 import type { Playlist } from '../types';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
