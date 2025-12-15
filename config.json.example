@@ -45,6 +45,21 @@
       "temperature": 0.3,
       "maxTokens": 4000,
       "supportsFunctionCalling": true
+    },
+    "claude": {
+      "apiKey": "YOUR_ANTHROPIC_API_KEY",
+      "baseURL": "https://api.anthropic.com",
+      "model": "claude-sonnet-4-20250514",
+      "availableModels": [
+        "claude-sonnet-4-20250514",
+        "claude-opus-4-20250514",
+        "claude-haiku-4-20250514"
+      ],
+      "timeout": 120000,
+      "maxRetries": 3,
+      "temperature": 0.3,
+      "maxTokens": 4000,
+      "supportsFunctionCalling": true
     }
   },
   "defaultDuration": 10,
