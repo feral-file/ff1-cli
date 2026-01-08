@@ -108,8 +108,14 @@ export function validateTezosAddress(address: string): {
 }
 
 /**
- * Validate mixed Ethereum and Tezos addresses
+ * Validate mixed Ethereum and Tezos addresses, ENS domains, and Tezos domains
  * Detects address type and applies appropriate validation
+ *
+ * Supported formats:
+ * - Ethereum addresses: 0x followed by 40 hex characters
+ * - Tezos addresses: tz1/tz2/tz3 (user) or KT1 (contract)
+ * - ENS domains: alphanumeric names ending in .eth
+ * - Tezos domains: alphanumeric names ending in .tez
  *
  * @param {Array<string>} addresses - Array of addresses to validate
  * @returns {Object} Validation result
@@ -117,7 +123,7 @@ export function validateTezosAddress(address: string): {
  * @returns {Array<Object>} returns.results - Validation result for each address
  * @returns {Array<string>} returns.errors - List of error messages
  * @example
- * const result = validateAddresses(['0x...', 'tz1...']);
+ * const result = validateAddresses(['0x...', 'tz1...', 'reas.eth', 'einstein-rosen.tez']);
  * if (!result.valid) console.log(result.errors);
  */
 export function validateAddresses(addresses: unknown[]): {
@@ -197,14 +203,55 @@ export function validateAddresses(addresses: unknown[]): {
           error: tezResult.error,
         });
       }
+    } else if (trimmed.endsWith('.eth')) {
+      // ENS domain name (Ethereum Name Service)
+      // These are valid owner identifiers that will be resolved to addresses
+      const ensPattern = /^[a-z0-9-]+\.eth$/i;
+      if (ensPattern.test(trimmed)) {
+        results.push({
+          address: trimmed,
+          valid: true,
+          type: 'ens',
+        });
+      } else {
+        const errorMsg = `Invalid ENS domain "${trimmed}". Must be alphanumeric with hyphens ending in .eth`;
+        errors.push(errorMsg);
+        results.push({
+          address: trimmed,
+          valid: false,
+          type: 'ens',
+          error: 'Invalid ENS domain format',
+        });
+      }
+    } else if (trimmed.endsWith('.tez')) {
+      // Tezos domain name
+      // These are valid owner identifiers that will be resolved to addresses
+      const tezDomainPattern = /^[a-z0-9-]+\.tez$/i;
+      if (tezDomainPattern.test(trimmed)) {
+        results.push({
+          address: trimmed,
+          valid: true,
+          type: 'tezos-domain',
+        });
+      } else {
+        const errorMsg = `Invalid Tezos domain "${trimmed}". Must be alphanumeric with hyphens ending in .tez`;
+        errors.push(errorMsg);
+        results.push({
+          address: trimmed,
+          valid: false,
+          type: 'tezos-domain',
+          error: 'Invalid Tezos domain format',
+        });
+      }
     } else {
-      const errorMsg = `Unknown address format "${trimmed}". Must start with 0x (Ethereum) or tz/KT1 (Tezos)`;
+      const errorMsg = `Unknown address format "${trimmed}". Must be 0x... (Ethereum), tz/KT1 (Tezos), .eth (ENS), or .tez (Tezos domain)`;
       errors.push(errorMsg);
       results.push({
         address: trimmed,
         valid: false,
         type: 'unknown',
-        error: 'Must be Ethereum (0x...) or Tezos (tz1/tz2/tz3/KT1)',
+        error:
+          'Must be Ethereum (0x...), Tezos (tz1/tz2/tz3/KT1), ENS (.eth), or Tezos domain (.tez)',
       });
     }
   }

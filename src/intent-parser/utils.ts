@@ -61,60 +61,47 @@ export function applyConstraints(params: RequirementParams, config: Config): Req
     }
 
     // Set default quantity if not provided
-    const quantity = (r.quantity as number) || 5;
+    // Allow "all" as a string value for query_address type
+    let quantity: number | string;
+    if (r.quantity === 'all' || r.quantity === null || r.quantity === undefined) {
+      quantity = r.type === 'query_address' ? 'all' : 5;
+    } else if (typeof r.quantity === 'string') {
+      // Try to parse string numbers
+      const parsed = parseInt(r.quantity as string, 10);
+      quantity = isNaN(parsed) ? (r.quantity as string) : parsed;
+    } else {
+      quantity = r.quantity as number;
+    }
 
     return {
       ...r,
-      quantity: Math.min(quantity, 20), // Cap at 20 items per requirement
+      quantity: quantity, // No cap - registry system handles large playlists efficiently
       tokenIds: (r.tokenIds as string[]) || [],
     } as Requirement;
   });
 
-  // Apply total cap if all requirements exceed 20 items total
-  const totalRequested = params.requirements.reduce((sum, r) => sum + (r.quantity || 0), 0);
-  if (totalRequested > 20) {
+  // Note: No cap needed - registry system handles large playlists efficiently
+  // Full items are stored in memory, only IDs are sent to AI model
+  const hasAllQuantity = params.requirements.some((r) => r.quantity === 'all');
+  const totalRequested = params.requirements.reduce((sum, r) => {
+    if (typeof r.quantity === 'number') {
+      return sum + r.quantity;
+    }
+    return sum;
+  }, 0);
+
+  if (hasAllQuantity) {
     console.log(
       chalk.yellow(
-        `\n⚠️  Total requested items (${totalRequested}) exceeds maximum (20). Reducing proportionally...\n`
+        `\n⚠️  Requesting all tokens from one or more addresses. This may take a while to fetch and process...\n`
       )
     );
-
-    const scale = 20 / totalRequested;
-    let allocated = 0;
-
-    params.requirements = params.requirements.map((req, index) => {
-      if (index === params.requirements.length - 1) {
-        // Last requirement gets remainder
-        return {
-          ...req,
-          quantity: 20 - allocated,
-        };
-      } else {
-        const newQuantity = Math.max(1, Math.floor((req.quantity || 0) * scale));
-        allocated += newQuantity;
-        return {
-          ...req,
-          quantity: newQuantity,
-        };
-      }
-    });
-
-    console.log(chalk.yellow('   Adjusted quantities:'));
-    params.requirements.forEach((r) => {
-      if (r.type === 'fetch_feed') {
-        console.log(chalk.yellow(`   - Feed "${r.playlistName}": ${r.quantity} items`));
-      } else if (r.type === 'query_address') {
-        console.log(chalk.yellow(`   - Address ${r.ownerAddress}: ${r.quantity} items`));
-      } else if (r.type === 'build_playlist') {
-        const contractAddr = r.contractAddress;
-        console.log(
-          chalk.yellow(
-            `   - ${r.blockchain}${contractAddr ? ' ' + contractAddr.substring(0, 10) + '...' : ''}: ${r.quantity} items`
-          )
-        );
-      }
-    });
-    console.log();
+  } else if (totalRequested > 100) {
+    console.log(
+      chalk.yellow(
+        `\n⚠️  Requesting ${totalRequested} items. This may take a while to fetch and process...\n`
+      )
+    );
   }
 
   // Set playlist defaults

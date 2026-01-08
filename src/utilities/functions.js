@@ -212,9 +212,13 @@ async function verifyAddresses(params) {
       const typeLabel =
         r.type === 'ethereum'
           ? 'Ethereum'
-          : r.type === 'contract'
-            ? 'Tezos Contract'
-            : 'Tezos User';
+          : r.type === 'ens'
+            ? 'ENS Domain'
+            : r.type === 'tezos-domain'
+              ? 'Tezos Domain'
+              : r.type === 'contract'
+                ? 'Tezos Contract'
+                : 'Tezos User';
       console.log(chalk.gray(`  • ${r.address} (${typeLabel})`));
       if (r.normalized) {
         console.log(chalk.gray(`    Checksummed: ${r.normalized}`));

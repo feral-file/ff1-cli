@@ -100,19 +100,19 @@ export interface BuildPlaylistRequirement {
   blockchain: string;
   contractAddress: string;
   tokenIds: string[];
-  quantity?: number;
+  quantity?: number | string;
 }
 
 export interface QueryAddressRequirement {
   type: 'query_address';
   ownerAddress: string;
-  quantity?: number;
+  quantity?: number | string;
 }
 
 export interface FetchFeedRequirement {
   type: 'fetch_feed';
   playlistName: string;
-  quantity?: number;
+  quantity?: number | string;
 }
 
 export type Requirement = BuildPlaylistRequirement | QueryAddressRequirement | FetchFeedRequirement;

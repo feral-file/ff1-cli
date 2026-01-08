@@ -4,6 +4,7 @@
  */
 
 const chalk = require('chalk');
+const registry = require('./registry');
 
 /**
  * Function schemas for playlist building
@@ -55,9 +56,9 @@ const functionSchemas = [
                 description: 'Feed playlist name (REQUIRED for fetch_feed)',
               },
               quantity: {
-                type: 'number',
+                type: ['number', 'string'],
                 description:
-                  'Maximum number of items to fetch (optional for all types, enables random selection for query_address)',
+                  'Maximum number of items to fetch. Can be a number for specific count, or "all" to fetch all available tokens with pagination (optional for all types, enables random selection for query_address when numeric)',
               },
             },
             required: ['type'],
@@ -120,34 +121,32 @@ const functionSchemas = [
     function: {
       name: 'build_playlist',
       description:
-        'Build a DP1 v1.0.0 compliant playlist from collected NFT items. You MUST pass the items array containing all collected NFT items from query_requirement calls.',
+        'Build a DP1 v1.0.0 compliant playlist from collected item IDs. Pass the id field from each item returned by query_requirement.',
       parameters: {
         type: 'object',
         properties: {
-          items: {
+          itemIds: {
             type: 'array',
             description:
-              'Array of ALL DP1 playlist items collected from query_requirement calls. CRITICAL: You MUST include this parameter with all collected items.',
+              'Array of item IDs (from id field) collected from query_requirement calls. Example: ["uuid-1", "uuid-2"]',
             items: {
-              type: 'object',
+              type: 'string',
             },
           },
           title: {
             type: ['string', 'null'],
-            description:
-              'Playlist title. Pass null (not the string "null") for auto-generation. If user did not provide a title in settings, pass null.',
+            description: 'Playlist title. Pass null for auto-generation.',
           },
           slug: {
             type: ['string', 'null'],
-            description:
-              'Playlist slug. Pass null (not the string "null") for auto-generation. If user did not provide a slug in settings, pass null.',
+            description: 'Playlist slug. Pass null for auto-generation.',
           },
           shuffle: {
             type: 'boolean',
-            description: 'Whether to shuffle the items before building playlist',
+            description: 'Whether to shuffle items',
           },
         },
-        required: ['items'],
+        required: ['itemIds'],
       },
     },
   },
@@ -156,21 +155,20 @@ const functionSchemas = [
     function: {
       name: 'send_to_device',
       description:
-        'Send completed playlist to an FF1 device for display. Pass the EXACT playlist object that was verified.',
+        'Send verified playlist to an FF1 device. Pass the playlistId from build_playlist.',
       parameters: {
         type: 'object',
         properties: {
-          playlist: {
-            type: 'object',
-            description:
-              'Complete DP1 playlist object (must be the EXACT object that was verified)',
+          playlistId: {
+            type: 'string',
+            description: 'Playlist ID from build_playlist',
           },
           deviceName: {
             type: ['string', 'null'],
             description: 'Device name (pass null for first device)',
           },
         },
-        required: ['playlist'],
+        required: ['playlistId'],
       },
     },
   },
@@ -204,17 +202,16 @@ const functionSchemas = [
     function: {
       name: 'verify_playlist',
       description:
-        'Verify a playlist against the DP-1 specification before sending it to a device. Pass the EXACT playlist object returned from build_playlist. This function MUST be called before send_to_device to ensure the playlist is valid. Returns validation errors if the playlist does not conform to DP-1 standards.',
+        'Verify a playlist against the DP-1 specification. Pass the playlistId returned from build_playlist.',
       parameters: {
         type: 'object',
         properties: {
-          playlist: {
-            type: 'object',
-            description:
-              'Complete DP1 playlist object to verify (must be the EXACT object returned from build_playlist)',
+          playlistId: {
+            type: 'string',
+            description: 'Playlist ID returned from build_playlist (e.g., the playlistId field)',
           },
         },
-        required: ['playlist'],
+        required: ['playlistId'],
       },
     },
   },
@@ -234,8 +231,37 @@ async function executeFunction(functionName, args) {
   const utilities = require('../utilities');
 
   switch (functionName) {
-    case 'query_requirement':
-      return await utilities.queryRequirement(args.requirement, args.duration);
+    case 'query_requirement': {
+      const items = await utilities.queryRequirement(args.requirement, args.duration);
+
+      // Store full items in registry
+      items.forEach((item) => {
+        if (item.id) {
+          registry.storeItem(item.id, item);
+        }
+      });
+
+      // Return only minimal metadata for AI context
+      return items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        source: item.source?.substring(0, 50) + '...',
+        duration: item.duration,
+        license: item.license,
+        provenance: item.provenance
+          ? {
+              type: item.provenance.type,
+              contract: item.provenance.contract
+                ? {
+                    chain: item.provenance.contract.chain,
+                    address: item.provenance.contract.address?.substring(0, 10) + '...',
+                    tokenId: item.provenance.contract.tokenId,
+                  }
+                : undefined,
+            }
+          : undefined,
+      }));
+    }
 
     case 'search_feed_playlist': {
       const result = await utilities.feedFetcher.searchFeedPlaylists(args.playlistName);
@@ -264,26 +290,92 @@ async function executeFunction(functionName, args) {
       );
 
     case 'build_playlist': {
-      let items = args.items;
-      // Shuffle items if requested
-      if (args.shuffle) {
-        items = utilities.shuffleArray([...items]);
+      // Retrieve full items from registry using IDs
+      const itemIds = args.itemIds;
+      if (!Array.isArray(itemIds) || itemIds.length === 0) {
+        throw new Error('build_playlist requires itemIds array');
       }
-      // Handle string "null" and convert to actual null for auto-generation
+
+      const fullItems = itemIds
+        .map((id) => registry.getItem(id))
+        .filter((item) => item !== undefined);
+
+      if (fullItems.length === 0) {
+        throw new Error('No valid items found in registry for provided IDs');
+      }
+
+      // Apply shuffle if requested
+      const items = args.shuffle ? utilities.shuffleArray([...fullItems]) : fullItems;
+
+      // Build playlist
       const title = args.title === 'null' || args.title === null ? null : args.title;
       const slug = args.slug === 'null' || args.slug === null ? null : args.slug;
-      return await utilities.buildDP1Playlist(items, title, slug);
+      const playlist = await utilities.buildDP1Playlist(items, title, slug);
+
+      // Store in registry
+      registry.storePlaylist(playlist.id, playlist);
+
+      // Return minimal metadata
+      return {
+        playlistId: playlist.id,
+        itemCount: playlist.items.length,
+        title: playlist.title,
+        dpVersion: playlist.dpVersion,
+        hasSigned: !!playlist.signature,
+        slug: playlist.slug,
+      };
     }
 
-    case 'send_to_device':
-      return await utilities.sendToDevice(args.playlist, args.deviceName);
+    case 'send_to_device': {
+      // Retrieve playlist from registry
+      const playlistId = args.playlistId;
+      if (!playlistId || !registry.hasPlaylist(playlistId)) {
+        throw new Error('Invalid playlistId or playlist not found in registry');
+      }
+
+      const playlist = registry.getPlaylist(playlistId);
+      const result = await utilities.sendToDevice(playlist, args.deviceName);
+
+      // Return minimal response
+      return {
+        success: result.success,
+        deviceName: result.deviceName,
+        message: result.message,
+        error: result.error,
+      };
+    }
 
     case 'resolve_domains':
       return await utilities.resolveDomains(args);
 
     case 'verify_playlist': {
       const { verifyPlaylist } = require('../utilities/functions');
-      return await verifyPlaylist(args);
+
+      // Retrieve playlist from registry
+      const playlistId = args.playlistId;
+      if (!playlistId || !registry.hasPlaylist(playlistId)) {
+        throw new Error('Invalid playlistId or playlist not found in registry');
+      }
+
+      const playlist = registry.getPlaylist(playlistId);
+      const result = await verifyPlaylist({ playlist });
+
+      // Return minimal response
+      if (result.valid) {
+        return {
+          valid: true,
+          playlistId: playlistId,
+          itemCount: playlist.items.length,
+        };
+      } else {
+        // Only return first 3 errors to save context
+        return {
+          valid: false,
+          playlistId: playlistId,
+          error: result.error,
+          details: result.details?.slice(0, 3) || [],
+        };
+      }
     }
 
     default:
@@ -305,7 +397,9 @@ function buildOrchestratorSystemPrompt(params) {
       if (req.type === 'fetch_feed') {
         return `${i + 1}. Fetch ${req.quantity || 5} items from playlist "${req.playlistName}"`;
       } else if (req.type === 'query_address') {
-        return `${i + 1}. Query ${req.quantity ? req.quantity + ' random ' : 'all '}tokens from address ${req.ownerAddress}`;
+        const quantityText =
+          req.quantity === 'all' ? 'all ' : req.quantity ? req.quantity + ' random ' : 'all ';
+        return `${i + 1}. Query ${quantityText}tokens from address ${req.ownerAddress}`;
       } else {
         return (
           `${i + 1}. ${req.blockchain} - ${req.tokenIds?.length || 0} tokens` +
@@ -317,8 +411,8 @@ function buildOrchestratorSystemPrompt(params) {
 
   const hasDevice = playlistSettings.deviceName !== undefined;
   const sendStep = hasDevice
-    ? `6) If verification passed → you MUST call send_to_device({ playlist: <the_playlist_object>, deviceName: "${playlistSettings.deviceName || 'first-device'}" }) before finishing.
-   CRITICAL: Pass the playlist object, not empty {}.`
+    ? `6) If verification passed → you MUST call send_to_device({ playlistId: <the_playlistId>, deviceName: "${playlistSettings.deviceName || 'first-device'}" }) before finishing.
+   CRITICAL: Pass the playlistId string from step 4.`
     : `6) Verification passed → you're done. Do not send to device.`;
 
   return `SYSTEM: FF1 Orchestrator (Function-Calling)
@@ -360,23 +454,30 @@ KEY RULES
 DECISION LOOP
 1) For each requirement in order:
    - build_playlist: call query_requirement(requirement, duration=${playlistSettings.durationPerItem || 10}).
+     Returns array with minimal item data including id field. Collect the id values.
    - query_address:
      • if ownerAddress endsWith .eth/.tez → resolve_domains([domain]); if resolved → use returned address; if not → mark failed and continue.
      • if ownerAddress is 0x…/tz… → call query_requirement(requirement, duration=${playlistSettings.durationPerItem || 10}).
    - fetch_feed: search_feed_playlist(name) → take bestMatch → fetch_feed_playlist_items(bestMatch, quantity, duration=${playlistSettings.durationPerItem || 10}).
-   - Collect items across steps in an array (let's call it collectedItems).
+   - Collect item IDs across all steps in an array (let's call it collectedItemIds).
 2) If zero items → explain briefly and finish.
 3) If some requirements failed and interactive mode → ask user; otherwise proceed with available items.
-4) Call build_playlist({ items: collectedItems, title: settings.title || null, slug: settings.slug || null, shuffle }).
+4) Call build_playlist({ itemIds: collectedItemIds, title: settings.title || null, slug: settings.slug || null, shuffle }).
    CRITICAL: 
-   - You MUST pass the items parameter with ALL collected items
+   - Pass itemIds array containing the id field from each item
    - Pass actual null values for title/slug, NOT the string "null"
-   - If title/slug not in settings, pass null
-   Store the returned playlist object in a variable.
-5) Call verify_playlist({ playlist: <the_playlist_object_from_step_4> }).
-   CRITICAL: You MUST pass the playlist object. Don't pass empty object {}.
-   If invalid ≤3 attempts, rebuild only what errors require; otherwise stop with clear error.
+   - Returns: { playlistId, itemCount, title, dpVersion, hasSigned, slug }
+   - Store the playlistId in a variable.
+5) Call verify_playlist({ playlistId: <the_playlistId_from_step_4> }).
+   CRITICAL: Pass the playlistId string, not an object.
+   Returns: { valid: true/false, playlistId, itemCount } or { valid: false, error, details }
+   If invalid ≤3 attempts, analyze error.details and rebuild; otherwise stop with clear error.
 ${sendStep}
+
+KEY RULES
+- NEVER pass full item objects or playlist objects to functions
+- ALWAYS use item IDs (strings) and playlist IDs (strings)
+- The registry system handles full objects internally
 
 OUTPUT RULES
 - Before each function call, print exactly one sentence: "→ I'm …" describing the action.
@@ -438,7 +539,13 @@ async function buildPlaylistWithAI(params, options = {}) {
         if (req.type === 'fetch_feed') {
           return `${i + 1}. Fetch ${req.quantity || 5} items from playlist "${req.playlistName}"`;
         } else if (req.type === 'query_address') {
-          return `${i + 1}. Query tokens from address:\n   - ownerAddress: "${req.ownerAddress}"${req.quantity ? `\n   - quantity: ${req.quantity} (random selection)` : '\n   - quantity: all tokens'}`;
+          const quantityDesc =
+            req.quantity === 'all'
+              ? 'all tokens (with pagination)'
+              : req.quantity
+                ? `${req.quantity} (random selection)`
+                : 'all tokens';
+          return `${i + 1}. Query tokens from address:\n   - ownerAddress: "${req.ownerAddress}"\n   - quantity: ${quantityDesc}`;
         } else {
           return `${i + 1}. Query tokens:\n   - blockchain: "${req.blockchain}"\n   - contractAddress: "${req.contractAddress}"\n   - tokenIds: ${JSON.stringify(req.tokenIds)}\n   - quantity: ${req.quantity}`;
         }
@@ -511,24 +618,31 @@ async function buildPlaylistWithAI(params, options = {}) {
           );
         }
 
-        // Call build_playlist directly with the collected items
+        // Call build_playlist directly with the collected item IDs
         try {
           const utilities = require('../utilities');
-          const result = await utilities.buildDP1Playlist(
-            collectedItems,
-            params.playlistSettings?.title || null,
-            params.playlistSettings?.slug || null
-          );
+          // Retrieve full items from registry using IDs
+          const fullItems = collectedItems
+            .map((id) => registry.getItem(id))
+            .filter((item) => item !== undefined);
 
-          if (result.dpVersion) {
-            finalPlaylist = result;
-            const { savePlaylist } = require('../utils');
-            await savePlaylist(result, outputPath);
+          if (fullItems.length > 0) {
+            const result = await utilities.buildDP1Playlist(
+              fullItems,
+              params.playlistSettings?.title || null,
+              params.playlistSettings?.slug || null
+            );
 
-            if (verbose) {
-              console.log(chalk.green(`✓ Successfully built playlist directly`));
+            if (result.dpVersion) {
+              finalPlaylist = result;
+              const { savePlaylist } = require('../utils');
+              await savePlaylist(result, outputPath);
+
+              if (verbose) {
+                console.log(chalk.green(`✓ Successfully built playlist directly`));
+              }
+              break; // Exit the loop
             }
-            break; // Exit the loop
           }
         } catch (error) {
           if (verbose) {
@@ -591,25 +705,28 @@ async function buildPlaylistWithAI(params, options = {}) {
             );
           }
 
-          // Track collected items from query_requirement
+          // Track collected item IDs from query_requirement
           if (functionName === 'query_requirement' && Array.isArray(result)) {
-            collectedItems = collectedItems.concat(result);
+            // Result now contains minimal item objects with id field
+            const itemIds = result.map((item) => item.id).filter((id) => id);
+            collectedItems = collectedItems.concat(itemIds); // Now storing IDs, not full items
             if (verbose) {
               console.log(
                 chalk.green(
-                  `    ✓ Collected ${result.length} items (total: ${collectedItems.length})`
+                  `    ✓ Collected ${result.length} item IDs (total: ${collectedItems.length})`
                 )
               );
             }
           }
 
-          // Track final playlist
-          if (functionName === 'build_playlist' && result.dpVersion) {
-            finalPlaylist = result;
+          // Track final playlist by retrieving it from registry
+          if (functionName === 'build_playlist' && result.playlistId) {
+            // Retrieve full playlist from registry
+            finalPlaylist = registry.getPlaylist(result.playlistId);
 
             // Save playlist
             const { savePlaylist } = require('../utils');
-            await savePlaylist(result, outputPath);
+            await savePlaylist(finalPlaylist, outputPath);
           }
 
           // Track device sending
@@ -777,6 +894,9 @@ async function buildPlaylistWithAI(params, options = {}) {
           }
         }
 
+        // Clear registries after successful build
+        registry.clearRegistries();
+
         return {
           playlist: finalPlaylist,
           sentToDevice,
@@ -817,6 +937,7 @@ async function buildPlaylistWithAI(params, options = {}) {
   }
 
   if (!finalPlaylist) {
+    registry.clearRegistries(); // Clear on failure
     throw new Error(
       'Failed to build playlist - No items found or AI did not complete the task. Check if the requirements match any available data.'
     );

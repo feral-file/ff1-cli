@@ -57,9 +57,10 @@ export function validateRequirements(requirements: Requirement[]): Requirement[]
       if (!req.playlistName) {
         throw new Error(`Requirement ${index + 1}: playlistName is required for fetch_feed`);
       }
+      const quantity = typeof req.quantity === 'number' ? Math.min(req.quantity, 20) : 5;
       return {
         ...req,
-        quantity: Math.min(req.quantity || 5, 20),
+        quantity,
       };
     }
 
@@ -69,9 +70,18 @@ export function validateRequirements(requirements: Requirement[]): Requirement[]
       if (!req.ownerAddress) {
         throw new Error(`Requirement ${index + 1}: ownerAddress is required for query_address`);
       }
+      // Allow "all" as a string, or cap numeric values
+      let quantity: number | string | undefined;
+      if (req.quantity === 'all') {
+        quantity = 'all';
+      } else if (typeof req.quantity === 'number') {
+        quantity = Math.min(req.quantity, 100);
+      } else {
+        quantity = undefined;
+      }
       return {
         ...req,
-        quantity: req.quantity ? Math.min(req.quantity, 100) : undefined,
+        quantity,
       };
     }
 
@@ -85,9 +95,13 @@ export function validateRequirements(requirements: Requirement[]): Requirement[]
         throw new Error(`Requirement ${index + 1}: at least one token ID is required`);
       }
 
+      const quantity =
+        typeof req.quantity === 'number'
+          ? Math.min(req.quantity, 20)
+          : Math.min(req.tokenIds.length, 20);
       return {
         ...req,
-        quantity: Math.min(req.quantity || req.tokenIds.length, 20),
+        quantity,
         tokenIds: req.tokenIds || [],
       };
     }

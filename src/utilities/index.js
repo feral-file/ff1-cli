@@ -27,41 +27,102 @@ function initializeUtilities(_config) {
  *
  * Fetches all tokens owned by an address, with optional random selection.
  * If no tokens found, instructs user to add address via Feral File mobile app.
+ * Supports pagination to fetch all tokens when quantity is "all".
  *
  * @param {string} ownerAddress - Owner wallet address
- * @param {number} [quantity] - Number of random tokens to select (all if not specified)
+ * @param {number|string} [quantity] - Number of random tokens to select, or "all" to fetch all tokens
  * @param {number} duration - Duration per item in seconds
  * @returns {Promise<Array>} Array of DP1 playlist items
  */
 async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
   try {
-    // Query tokens by owner
-    const result = await nftIndexer.queryTokensByOwner(ownerAddress, 100);
+    const shouldFetchAll = quantity === 'all' || quantity === undefined || quantity === null;
+    const batchSize = 100; // Fetch 100 tokens per page
+    let allTokens = [];
+    let offset = 0;
+    let hasMore = true;
 
-    if (!result.success) {
-      console.log(chalk.yellow(`   Could not fetch tokens for ${ownerAddress}`));
-      console.log(
-        chalk.cyan(
-          `   → Add this address in the Feral File mobile app, then try again with the CLI.`
-        )
-      );
-      return [];
+    // Fetch tokens with pagination if "all" is requested
+    if (shouldFetchAll) {
+      console.log(chalk.cyan(`   Fetching all tokens from ${ownerAddress}...`));
+
+      while (hasMore) {
+        const result = await nftIndexer.queryTokensByOwner(ownerAddress, batchSize, offset);
+
+        if (!result.success) {
+          if (offset === 0) {
+            // First page failed
+            console.log(chalk.yellow(`   Could not fetch tokens for ${ownerAddress}`));
+            console.log(
+              chalk.cyan(
+                `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+              )
+            );
+            return [];
+          }
+          // Subsequent pages failed - stop pagination but keep what we have
+          hasMore = false;
+          break;
+        }
+
+        if (result.tokens.length === 0) {
+          // No more tokens
+          hasMore = false;
+          break;
+        }
+
+        allTokens = allTokens.concat(result.tokens);
+        offset += batchSize;
+
+        console.log(chalk.gray(`   → Fetched ${allTokens.length} tokens so far...`));
+
+        // If we got fewer tokens than the batch size, we've reached the end
+        if (result.tokens.length < batchSize) {
+          hasMore = false;
+        }
+      }
+
+      if (allTokens.length === 0 && offset === 0) {
+        console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
+        console.log(
+          chalk.cyan(
+            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+          )
+        );
+        return [];
+      }
+    } else {
+      // Fetch specific quantity with single request
+      const limit = Math.min(quantity, 100); // Cap at 100 per request
+      const result = await nftIndexer.queryTokensByOwner(ownerAddress, limit);
+
+      if (!result.success) {
+        console.log(chalk.yellow(`   Could not fetch tokens for ${ownerAddress}`));
+        console.log(
+          chalk.cyan(
+            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+          )
+        );
+        return [];
+      }
+
+      if (result.tokens.length === 0) {
+        console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
+        console.log(
+          chalk.cyan(
+            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+          )
+        );
+        return [];
+      }
+
+      allTokens = result.tokens;
     }
 
-    if (result.tokens.length === 0) {
-      console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
-      console.log(
-        chalk.cyan(
-          `   → Add this address in the Feral File mobile app, then try again with the CLI.`
-        )
-      );
-      return [];
-    }
+    let selectedTokens = allTokens;
 
-    let selectedTokens = result.tokens;
-
-    // Apply quantity limit with random selection
-    if (quantity && selectedTokens.length > quantity) {
+    // Apply quantity limit with random selection (only if numeric quantity specified)
+    if (typeof quantity === 'number' && selectedTokens.length > quantity) {
       selectedTokens = shuffleArray([...selectedTokens]).slice(0, quantity);
     }
 
@@ -69,6 +130,7 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
 
     // Convert tokens to DP1 items
     const items = [];
+    let skippedCount = 0;
     for (const token of selectedTokens) {
       // Detect blockchain from contract address (support both camelCase and snake_case)
       let chain = 'ethereum';
@@ -84,8 +146,18 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
         const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
         if (dp1Result.success && dp1Result.item) {
           items.push(dp1Result.item);
+        } else if (!dp1Result.success) {
+          skippedCount++;
         }
       }
+    }
+
+    if (skippedCount > 0) {
+      console.log(
+        chalk.yellow(
+          `   ⚠ Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
+        )
+      );
     }
 
     return items;

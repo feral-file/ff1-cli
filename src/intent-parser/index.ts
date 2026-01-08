@@ -102,9 +102,15 @@ OUTPUT CONTRACT
 
 REQUIREMENT TYPES (BUILD)
 - build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds: string[], quantity?: number, source?: string }
-- query_address: { type, ownerAddress: 0x…|tz…|domain.eth|domain.tez, quantity?: number }
+  • ONLY use when user explicitly provides BOTH contract address AND specific token IDs
+  • Example: "tokens 1, 2, 3 from contract 0x123"
+- query_address: { type, ownerAddress: 0x…|tz…|domain.eth|domain.tez, quantity?: number | "all" }
   • Domains (.eth/.tez) are OWNER DOMAINS. Do not ask for tokenIds. Do not treat as contracts.
   • A raw 0x…/tz… without tokenIds is an OWNER ADDRESS (query_address), not a contract.
+  • CRITICAL: Phrases like "N items from [address]", "NFTs from [address]", "tokens from [address]" → query_address
+  • Example: "30 items from 0xABC" → query_address with quantity=30
+  • When user says "all", "all tokens", "all NFTs" → use quantity="all" (string, not number)
+  • quantity="all" will fetch ALL tokens using pagination, can handle thousands of tokens
 - fetch_feed: { type, playlistName: string, quantity?: number (default 5) }
 
 DOMAIN OWNER RULES (CRITICAL)
@@ -113,11 +119,19 @@ DOMAIN OWNER RULES (CRITICAL)
 - Never treat \.eth or \.tez as a contract or collection identifier.
 - Never invent or request \`tokenIds\` for \.eth/\.tez domains. Use \`quantity\` only.
 
-EXAMPLES
+EXAMPLES (query_address - NO tokenIds needed)
 - "Pick 3 artworks from reas.eth" → \`query_address\` { ownerAddress: "reas.eth", quantity: 3 }
 - "3 from einstein-rosen.tez and play on my FF1" → \`query_address\` { ownerAddress: "einstein-rosen.tez", quantity: 3 } and set \`playlistSettings.deviceName\` accordingly
+- "create a playlist of 30 items from 0xABC" → \`query_address\` { ownerAddress: "0xABC", quantity: 30 }
+- "get 20 NFTs from 0x123" → \`query_address\` { ownerAddress: "0x123", quantity: 20 }
+- "create a playlist from all tokens in reas.eth" → \`query_address\` { ownerAddress: "reas.eth", quantity: "all" }
+- "get all NFTs from 0xABC" → \`query_address\` { ownerAddress: "0xABC", quantity: "all" }
 
+EXAMPLES (fetch_feed)
 - "Pick 3 artworks from Social Codes and 2 from a2p. Mix them up." → \`fetch_feed\` { playlistName: "Social Codes", quantity: 3 } + \`fetch_feed\` { playlistName: "a2p", quantity: 2 }, and set \`playlistSettings.preserveOrder\` = false
+
+EXAMPLES (build_playlist - requires BOTH contract AND tokenIds)
+- "tokens 5, 10, 15 from contract 0xABC on ethereum" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", tokenIds: ["5", "10", "15"] }
 
 PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
@@ -280,9 +294,9 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
                     'Playlist name in the feed (can be any playlist name) - only for fetch_feed type',
                 },
                 quantity: {
-                  type: 'number',
+                  type: ['number', 'string'],
                   description:
-                    'Number of items to fetch (default: 5 for fetch_feed, all for query_address unless specified)',
+                    'Number of items to fetch. Can be a number for specific count, or "all" to fetch all available tokens (default: 5 for fetch_feed, all for query_address unless specified)',
                 },
               },
               required: ['type'],

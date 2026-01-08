@@ -36,7 +36,7 @@ function slugify(value) {
  * @param {Object} tokenInfo - Token information from NFT indexer
  * @param {number} duration - Display duration in seconds
  * @returns {Object} DP1 playlist item
- * @throws {Error} When token data is missing
+ * @throws {Error} When token data is missing or source is a data URI
  * @example
  * const item = convertTokenToDP1ItemSingle(tokenInfo, 10);
  * // Returns: { title, source, duration, license, provenance, ... }
@@ -51,6 +51,11 @@ function convertTokenToDP1ItemSingle(tokenInfo, duration = 10) {
   // Determine the content source URL (prefer animation_url for dynamic content)
   const sourceUrl =
     token.animation_url || token.animationUrl || token.image?.url || token.image || '';
+
+  // Skip items with data URIs (base64-encoded content)
+  if (sourceUrl.startsWith('data:')) {
+    throw new Error('Item source is a data URI - excluded from playlist');
+  }
 
   // Map chain to DP1 format
   const chainMap = {
@@ -137,7 +142,14 @@ function convertTokenToDP1Item(tokenInfo, duration = 10) {
     const results = {};
     Object.entries(tokenInfo).forEach(([key, info]) => {
       if (info.success !== false && info.token) {
-        results[key] = convertTokenToDP1ItemSingle(info, duration);
+        try {
+          results[key] = convertTokenToDP1ItemSingle(info, duration);
+        } catch (error) {
+          results[key] = {
+            success: false,
+            error: error.message,
+          };
+        }
       } else {
         results[key] = {
           success: false,
@@ -149,13 +161,21 @@ function convertTokenToDP1Item(tokenInfo, duration = 10) {
   }
 
   // Handle single token (backward compatibility)
-  return convertTokenToDP1ItemSingle(tokenInfo, duration);
+  try {
+    return convertTokenToDP1ItemSingle(tokenInfo, duration);
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 }
 
 /**
  * Convert multiple tokens to DP1 playlist items
  *
  * Filters out failed tokens and converts successful ones.
+ * Excludes items with data URIs in their source field.
  *
  * @param {Array} tokensInfo - Array of token information
  * @param {number} duration - Display duration in seconds
@@ -166,7 +186,17 @@ function convertTokenToDP1Item(tokenInfo, duration = 10) {
 function convertTokensToDP1Items(tokensInfo, duration = 10) {
   return tokensInfo
     .filter((info) => info.success && info.token)
-    .map((info) => convertTokenToDP1Item(info, duration));
+    .map((info) => {
+      try {
+        return convertTokenToDP1Item(info, duration);
+      } catch (error) {
+        return {
+          success: false,
+          error: error.message,
+        };
+      }
+    })
+    .filter((item) => item.success !== false);
 }
 
 /**

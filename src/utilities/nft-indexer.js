@@ -411,11 +411,41 @@ function convertToDP1Item(tokenData, duration = 10) {
   }
   sourceUrl = String(sourceUrl || '');
 
+  // Validate source URL
   if (!sourceUrl) {
     logger.warn('[NFT Indexer] No source URL found for token:', {
       contractAddress: token.contractAddress,
       tokenId: token.tokenId,
     });
+    return {
+      success: false,
+      error: 'No source URL available',
+    };
+  }
+
+  // Skip data URIs (base64-encoded content)
+  if (sourceUrl.startsWith('data:')) {
+    logger.debug('[NFT Indexer] Skipping token with data URI:', {
+      contractAddress: token.contractAddress,
+      tokenId: token.tokenId,
+    });
+    return {
+      success: false,
+      error: 'Source is a data URI (not supported)',
+    };
+  }
+
+  // Skip URLs that exceed DP1 spec limit (1024 characters)
+  if (sourceUrl.length > 1024) {
+    logger.debug('[NFT Indexer] Skipping token with source URL too long:', {
+      contractAddress: token.contractAddress,
+      tokenId: token.tokenId,
+      urlLength: sourceUrl.length,
+    });
+    return {
+      success: false,
+      error: `Source URL too long (${sourceUrl.length} chars, max 1024)`,
+    };
   }
 
   // Map chain name to DP1 format (according to DP1 spec)
@@ -1059,28 +1089,32 @@ async function searchNFTs(params) {
  *
  * Convenience wrapper around queryTokens for owner-based queries.
  * Fetches all tokens owned by a given address from the indexer.
+ * Supports pagination for fetching large collections.
  *
  * @param {string} ownerAddress - Owner wallet address
- * @param {number} [limit=100] - Maximum number of tokens to fetch
+ * @param {number} [limit=100] - Maximum number of tokens to fetch per page
+ * @param {number} [offset=0] - Offset for pagination
  * @returns {Promise<Object>} Result with tokens array
  * @returns {boolean} returns.success - Whether query succeeded
  * @returns {Array} [returns.tokens] - Array of token data
- * @returns {number} [returns.count] - Number of tokens found
+ * @returns {number} [returns.count] - Number of tokens found in this page
  * @returns {string} [returns.error] - Error message if failed
  * @example
- * const result = await queryTokensByOwner('0x1234...', 50);
- * if (result.success) {
- *   console.log(`Found ${result.tokens.length} tokens`);
- * }
+ * // Fetch first page
+ * const result = await queryTokensByOwner('0x1234...', 100, 0);
+ * // Fetch second page
+ * const result2 = await queryTokensByOwner('0x1234...', 100, 100);
  */
-async function queryTokensByOwner(ownerAddress, limit = 100) {
+async function queryTokensByOwner(ownerAddress, limit = 100, offset = 0) {
   try {
-    logger.info(`[NFT Indexer] Querying tokens for owner: ${ownerAddress}`);
+    logger.info(
+      `[NFT Indexer] Querying tokens for owner: ${ownerAddress} (limit: ${limit}, offset: ${offset})`
+    );
 
     const tokens = await queryTokens({
       owners: [ownerAddress],
       limit,
-      offset: 0,
+      offset,
     });
 
     logger.info(`[NFT Indexer] Found ${tokens.length} token(s) for owner ${ownerAddress}`);
