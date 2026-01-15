@@ -14,6 +14,7 @@ Note: Publishing to an open registry is on the roadmap.
 npm install
 npm run dev -- config init
 npm run dev chat
+npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
 ```
 
 ## Documentation
