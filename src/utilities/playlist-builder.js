@@ -104,7 +104,7 @@ function convertTokenToDP1ItemSingle(tokenInfo, duration = 10) {
   dp1Item.display = {
     scaling: 'fit',
     background: '#111',
-    margin: '5%',
+    margin: '0',
   };
 
   // Add metadata URI if available
@@ -336,7 +336,7 @@ async function buildDP1Playlist(paramsOrItems, options = {}) {
       display: {
         scaling: 'fit',
         background: '#111',
-        margin: '5%',
+        margin: '0',
       },
       license: 'token',
       duration: 10,
@@ -494,6 +494,64 @@ function detectMimeType(url) {
   return mimeTypes[extension] || 'image/png';
 }
 
+/**
+ * Build a single DP1 playlist item from a URL
+ *
+ * @param {string} url - Media URL
+ * @param {number} duration - Duration per item in seconds
+ * @param {Object} [options] - Optional configuration
+ * @param {string} [options.title] - Optional item title override
+ * @returns {Object} DP1 playlist item
+ */
+function buildUrlItem(url, duration = 10, options = {}) {
+  const sourceUrl = String(url || '').trim();
+  if (!sourceUrl) {
+    throw new Error('URL is required to build a playlist item');
+  }
+
+  if (sourceUrl.startsWith('data:')) {
+    throw new Error('Item source is a data URI - excluded from playlist');
+  }
+
+  let title = options.title;
+  if (!title) {
+    try {
+      const parsed = new URL(sourceUrl);
+      const pathName = parsed.pathname.split('/').filter(Boolean).pop();
+      if (pathName) {
+        title = decodeURIComponent(pathName);
+      } else {
+        title = parsed.hostname || 'URL Playback';
+      }
+    } catch (_error) {
+      title = 'URL Playback';
+    }
+  }
+
+  const crypto = require('crypto');
+  const itemId = crypto.randomUUID();
+
+  const item = {
+    id: itemId,
+    title,
+    source: sourceUrl,
+    duration: duration,
+    license: 'open',
+    created: new Date().toISOString(),
+    provenance: {
+      type: 'offChainURI',
+      uri: sourceUrl,
+    },
+    display: {
+      scaling: 'fit',
+      background: '#111',
+      margin: '0',
+    },
+  };
+
+  return item;
+}
+
 module.exports = {
   convertTokenToDP1Item,
   convertTokenToDP1ItemSingle,
@@ -502,4 +560,5 @@ module.exports = {
   buildDP1Playlist,
   validateDP1Playlist,
   detectMimeType,
+  buildUrlItem,
 };

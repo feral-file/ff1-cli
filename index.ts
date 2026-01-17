@@ -283,6 +283,82 @@ program
   });
 
 program
+  .command('play')
+  .description('Play a media URL on an FF1 device')
+  .argument('<url>', 'Media URL to play')
+  .option('-d, --device <name>', 'Device name (uses first device if not specified)')
+  .option('--skip-verify', 'Skip playlist verification before sending')
+  .action(async (url: string, options: { device?: string; skipVerify?: boolean }) => {
+    try {
+      console.log(chalk.blue('\n▶️  Playing URL on FF1 device...\n'));
+
+      try {
+        new URL(url);
+      } catch (error) {
+        console.error(chalk.red('\n❌ Invalid URL:'), (error as Error).message);
+        process.exit(1);
+      }
+
+      const config = getConfig();
+      const duration = config.defaultDuration || 10;
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { buildUrlItem, buildDP1Playlist } = require('./src/utilities/playlist-builder');
+
+      const item = buildUrlItem(url, duration);
+      const playlist = await buildDP1Playlist({ items: [item], title: item.title });
+
+      if (!options.skipVerify) {
+        const verifier = await import('./src/utilities/playlist-verifier');
+        const { verifyPlaylist } = verifier;
+        const verifyResult = verifyPlaylist(playlist);
+
+        if (!verifyResult.valid) {
+          console.error(chalk.red('\n❌ Playlist verification failed:'), verifyResult.error);
+
+          if (verifyResult.details && verifyResult.details.length > 0) {
+            console.log(chalk.yellow('\n   Validation errors:'));
+            verifyResult.details.forEach((detail: { path: string; message: string }) => {
+              console.log(chalk.yellow(`     • ${detail.path}: ${detail.message}`));
+            });
+          }
+
+          console.log(chalk.yellow('\n   Use --skip-verify to send anyway (not recommended)\n'));
+          process.exit(1);
+        }
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { sendPlaylistToDevice } = require('./src/utilities/ff1-device');
+
+      const result = await sendPlaylistToDevice({
+        playlist,
+        deviceName: options.device,
+      });
+
+      if (result.success) {
+        console.log(chalk.green('✅ URL sent successfully!'));
+        if (result.deviceName) {
+          console.log(chalk.gray(`   Device: ${result.deviceName}`));
+        }
+        if (result.device) {
+          console.log(chalk.gray(`   Host: ${result.device}`));
+        }
+        console.log();
+      } else {
+        console.error(chalk.red('\n❌ Failed to send URL:'), result.error);
+        if (result.details) {
+          console.error(chalk.gray(`   Details: ${result.details}`));
+        }
+        process.exit(1);
+      }
+    } catch (error) {
+      console.error(chalk.red('\n❌ Error:'), (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('send')
   .description('Send a playlist file to an FF1 device')
   .argument('<file>', 'Path to the playlist file')

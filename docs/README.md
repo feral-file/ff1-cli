@@ -101,6 +101,7 @@ The model orchestrates; deterministic tools keep us honest and DP1‑conformant.
 4. Publish: Optional feed/registry publishing via the `publish` command.
 
 Notes:
+
 - **Deterministic by design**: Validation rejects bad or hallucinated data; we loop until it's valid or stop.
 - **OSS‑first**: `viem` and `@taquito/taquito`, with room for local caching.
 - **Relay**: Swap the example host for a local Node/Hono relay; avoid vendor lock‑in.
@@ -111,6 +112,8 @@ Notes:
   - Options: `-o, --output <file>`, `-m, --model <name>`, `-v, --verbose`
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
+- `play <url>` – Send a media URL directly to an FF1 device
+  - Options: `-d, --device <name>`, `--skip-verify`
 - `validate <file>` / `verify <file>` – Validate a DP1 playlist file
 - `sign <file>` – Sign playlist with Ed25519
   - Options: `-k, --key <base64>`, `-o, --output <file>`
@@ -140,6 +143,7 @@ npm run dev -- chat "From Ethereum contract 0xabc get tokens 1,2 and from Tezos 
 ```
 
 How it works (at a glance):
+
 - The intent parser maps your text to `requirements` (what to fetch) and `playlistSettings` (e.g., `durationPerItem`, `preserveOrder=false` for shuffle, `deviceName`, `feedServer`).
 - Deterministic tools fetch NFT metadata, build a DP‑1 playlist, and validate it.
 - If `deviceName` is present, the CLI will send the validated playlist to that FF1 device.
@@ -160,6 +164,7 @@ npm run dev -- chat "Get tokens 1,2 from 0xabc; shuffle; send to my FF1 and publ
 ```
 
 Publishing keywords: "publish", "publish to my feed", "push to feed", "send to feed". The CLI will:
+
 1. Detect the keyword and call `get_feed_servers`
 2. If multiple servers → ask which one to use
 3. Build → verify → publish automatically
@@ -185,6 +190,9 @@ npm run dev -- sign playlist.json -o signed.json
 
 # Send to device (verifies by default)
 npm run dev -- send playlist.json -d "Living Room Display"
+
+# Play a direct URL
+npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
 ```
 
 ### Publish to feed server
@@ -199,6 +207,7 @@ npm run dev -- publish playlist.json -s 1
 ```
 
 The `publish` command:
+
 - Validates the playlist against DP-1 spec
 - Shows interactive server selection if multiple are configured
 - Sends the validated playlist to the chosen feed server
@@ -241,5 +250,3 @@ See selection rules and examples in `./CONFIGURATION.md`.
 - Function calling details: `./FUNCTION_CALLING.md`
 - Examples: `./EXAMPLES.md`
 - DP1 spec: `https://github.com/display-protocol/dp1`
-
-
