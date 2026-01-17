@@ -104,7 +104,7 @@ function convertTokenToDP1ItemSingle(tokenInfo, duration = 10) {
   dp1Item.display = {
     scaling: 'fit',
     background: '#111',
-    margin: '0',
+    margin: 0,
   };
 
   // Add metadata URI if available
@@ -336,7 +336,7 @@ async function buildDP1Playlist(paramsOrItems, options = {}) {
       display: {
         scaling: 'fit',
         background: '#111',
-        margin: '0',
+        margin: 0,
       },
       license: 'token',
       duration: 10,
@@ -545,7 +545,7 @@ function buildUrlItem(url, duration = 10, options = {}) {
     display: {
       scaling: 'fit',
       background: '#111',
-      margin: '0',
+      margin: 0,
     },
   };
 
