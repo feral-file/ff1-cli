@@ -141,7 +141,18 @@ async function verifyPlaylist(params) {
   console.log(chalk.cyan('\nValidating playlist...'));
 
   // Dynamic import to avoid circular dependency
-  const { verifyPlaylist: verify } = await import('./playlist-verifier');
+  const playlistVerifier = await import('./playlist-verifier');
+  const verify =
+    playlistVerifier.verifyPlaylist ||
+    (playlistVerifier.default && playlistVerifier.default.verifyPlaylist) ||
+    playlistVerifier.default;
+
+  if (typeof verify !== 'function') {
+    return {
+      valid: false,
+      error: 'Playlist verifier is not available',
+    };
+  }
 
   const result = verify(playlist);
 
@@ -201,7 +212,19 @@ async function verifyAddresses(params) {
   }
 
   // Dynamic import to avoid circular dependency
-  const { validateAddresses } = await import('./address-validator');
+  const addressValidator = await import('./address-validator');
+  const validateAddresses =
+    addressValidator.validateAddresses ||
+    (addressValidator.default && addressValidator.default.validateAddresses) ||
+    addressValidator.default;
+
+  if (typeof validateAddresses !== 'function') {
+    return {
+      valid: false,
+      results: [],
+      errors: ['Address validator is not available'],
+    };
+  }
 
   const result = validateAddresses(addresses);
 

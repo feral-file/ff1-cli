@@ -475,6 +475,89 @@ function formatMarkdown(text: string): string {
   return formatted;
 }
 
+function printMarkdownContent(content: string): void {
+  if (!content) {
+    return;
+  }
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (line.trim()) {
+      console.log(formatMarkdown(line));
+    } else if (line === '') {
+      console.log();
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function processNonStreamingResponse(
+  response: OpenAI.Chat.ChatCompletion
+): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
+  const message = response.choices[0]?.message;
+
+  if (!message) {
+    return { message: { role: 'assistant', content: null, refusal: null } };
+  }
+
+  if (message.content) {
+    printMarkdownContent(message.content);
+    console.log();
+  }
+
+  return { message };
+}
+
+async function createChatCompletion(
+  client: OpenAI,
+  requestParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+  baseURL?: string,
+  maxRetries = 0
+): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
+  const isGoogle = Boolean(baseURL && baseURL.includes('generativelanguage.googleapis.com'));
+  const shouldStream = !isGoogle;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      if (shouldStream) {
+        const stream = await client.chat.completions.create({
+          ...requestParams,
+          stream: true,
+        });
+        return await processStreamingResponse(stream);
+      }
+
+      const response = (await client.chat.completions.create({
+        ...requestParams,
+        stream: false,
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)) as OpenAI.Chat.ChatCompletion;
+
+      return await processNonStreamingResponse(response);
+    } catch (error) {
+      const err = error as Error & {
+        status?: number;
+        response?: { status?: number; headers?: Record<string, string> };
+      };
+      const status = err.response?.status ?? err.status;
+      if (status === 429 && attempt < maxRetries) {
+        const retryAfterHeader =
+          err.response?.headers?.['retry-after'] || err.response?.headers?.['Retry-After'];
+        const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : null;
+        const backoffMs = Math.min(10000, 2000 * Math.pow(2, attempt));
+        const delayMs = retryAfterMs && !Number.isNaN(retryAfterMs) ? retryAfterMs : backoffMs;
+        await sleep(delayMs);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error('Failed to create chat completion');
+}
+
 /**
  * Process streaming response from AI
  *
@@ -655,8 +738,12 @@ export async function processIntentParserRequest(
       (requestParams as unknown as Record<string, unknown>).max_tokens = 2000;
     }
 
-    const stream = await client.chat.completions.create(requestParams);
-    const { message } = await processStreamingResponse(stream);
+    const { message } = await createChatCompletion(
+      client,
+      requestParams,
+      modelConfig.baseURL,
+      modelConfig.maxRetries
+    );
 
     // Check if AI wants to pass parsed requirements
     if (message.tool_calls && message.tool_calls.length > 0) {
@@ -696,158 +783,12 @@ export async function processIntentParserRequest(
           (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
         }
 
-        const followUpStream = await client.chat.completions.create(followUpRequest);
-        const { message: followUpMessage } = await processStreamingResponse(followUpStream);
-
-        // Check if AI now wants to parse requirements
-        if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
-          const followUpToolCall = followUpMessage.tool_calls[0];
-          if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
-
-            // Apply constraints and defaults
-            const validatedParams = applyConstraints(params, config);
-
-            return {
-              approved: true,
-              params: validatedParams as unknown as Record<string, unknown>,
-              needsMoreInfo: false,
-            };
-          } else if (followUpToolCall.function.name === 'get_feed_servers') {
-            // Handle nested get_feed_servers call
-            const { getFeedConfig } = await import('../config');
-            const feedConfig = getFeedConfig();
-            const servers = feedConfig.servers || [];
-
-            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({ servers }),
-            };
-
-            const nestedMessages = [...updatedMessages, followUpMessage, feedToolResultMessage];
-
-            // Continue conversation to handle feed server selection
-            const nestedRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
-              model: modelConfig.model,
-              messages: nestedMessages,
-              tools: intentParserFunctionSchemas,
-              tool_choice: 'auto',
-              stream: true,
-            };
-
-            if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
-              nestedRequest.temperature = modelConfig.temperature;
-            } else if (modelConfig.temperature === 1) {
-              nestedRequest.temperature = 1;
-            }
-
-            if (modelConfig.model.startsWith('gpt-')) {
-              (nestedRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
-            } else {
-              (nestedRequest as unknown as Record<string, unknown>).max_tokens = 2000;
-            }
-
-            const nestedStream = await client.chat.completions.create(nestedRequest);
-            const { message: nestedMessage } = await processStreamingResponse(nestedStream);
-
-            // Check if AI now wants to parse requirements
-            if (nestedMessage.tool_calls && nestedMessage.tool_calls.length > 0) {
-              const nestedToolCall = nestedMessage.tool_calls[0];
-              if (nestedToolCall.function.name === 'parse_requirements') {
-                const params = JSON.parse(nestedToolCall.function.arguments);
-                const validatedParams = applyConstraints(params, config);
-
-                return {
-                  approved: true,
-                  params: validatedParams as unknown as Record<string, unknown>,
-                  needsMoreInfo: false,
-                  messages: [...nestedMessages, nestedMessage],
-                };
-              }
-            }
-
-            // AI might be asking a question or needs more info
-            if (nestedMessage.content) {
-              return {
-                approved: false,
-                needsMoreInfo: true,
-                question: nestedMessage.content,
-                messages: [...nestedMessages, nestedMessage],
-              };
-            }
-
-            return {
-              approved: false,
-              needsMoreInfo: false,
-            };
-          } else if (followUpToolCall.function.name === 'confirm_send_playlist') {
-            const sendParams = JSON.parse(followUpToolCall.function.arguments);
-            return {
-              approved: true,
-              params: { ...sendParams, action: 'send_playlist' },
-              needsMoreInfo: false,
-            };
-          }
-
-          return {
-            approved: false,
-            needsMoreInfo: false,
-          };
-        }
-
-        // AI might be asking a question or needs more info
-        if (followUpMessage.content) {
-          return {
-            approved: false,
-            needsMoreInfo: true,
-            question: followUpMessage.content,
-            messages: [...updatedMessages, followUpMessage],
-          };
-        }
-
-        return {
-          approved: false,
-          needsMoreInfo: false,
-        };
-      } else if (toolCall.function.name === 'get_feed_servers') {
-        // Get the list of configured feed servers
-        const { getFeedConfig } = await import('../config');
-        const feedConfig = getFeedConfig();
-        const servers = feedConfig.servers || [];
-
-        // Add tool result to messages and continue conversation
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ servers }),
-        };
-
-        const updatedMessages = [...messages, message, toolResultMessage];
-
-        // Continue the conversation with the feed server list
-        const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
-          model: modelConfig.model,
-          messages: updatedMessages,
-          tools: intentParserFunctionSchemas,
-          tool_choice: 'auto',
-          stream: true,
-        };
-
-        if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
-          followUpRequest.temperature = modelConfig.temperature;
-        } else if (modelConfig.temperature === 1) {
-          followUpRequest.temperature = 1;
-        }
-
-        if (modelConfig.model.startsWith('gpt-')) {
-          (followUpRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
-        } else {
-          (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
-        }
-
-        const followUpStream = await client.chat.completions.create(followUpRequest);
-        const { message: followUpMessage } = await processStreamingResponse(followUpStream);
+        const { message: followUpMessage } = await createChatCompletion(
+          client,
+          followUpRequest,
+          modelConfig.baseURL,
+          modelConfig.maxRetries
+        );
 
         // Check if AI now wants to parse requirements
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
@@ -1122,8 +1063,12 @@ export async function processIntentParserRequest(
           (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
         }
 
-        const followUpStream = await client.chat.completions.create(followUpRequest);
-        const { message: followUpMessage } = await processStreamingResponse(followUpStream);
+        const { message: followUpMessage } = await createChatCompletion(
+          client,
+          followUpRequest,
+          modelConfig.baseURL,
+          modelConfig.maxRetries
+        );
 
         // Check if AI now wants to parse requirements
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
@@ -1184,7 +1129,25 @@ export async function processIntentParserRequest(
       messages: [...messages, message],
     };
   } catch (error) {
-    throw new Error(`Intent parser failed: ${(error as Error).message}`);
+    const err = error as Error & {
+      status?: number;
+      response?: { status?: number; statusText?: string; data?: unknown };
+    };
+    const status = err.response?.status ?? err.status;
+    const statusText = err.response?.statusText;
+    const responseDetails =
+      err.response?.data && typeof err.response.data === 'string'
+        ? err.response.data
+        : err.response?.data
+          ? JSON.stringify(err.response.data)
+          : null;
+    const context = `model=${modelConfig.model}, baseURL=${modelConfig.baseURL}`;
+    const detailParts = [
+      err.message,
+      status ? `status ${status}${statusText ? ` ${statusText}` : ''}` : null,
+      responseDetails ? `response ${responseDetails}` : null,
+    ].filter(Boolean);
+    throw new Error(`Intent parser failed (${context}): ${detailParts.join(' | ')}`);
   }
 }
 
