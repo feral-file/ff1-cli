@@ -45,9 +45,6 @@ export function applyConstraints(params: RequirementParams, config: Config): Req
       if (!r.contractAddress) {
         throw new Error(`Requirement ${index + 1}: contractAddress is required for build_playlist`);
       }
-      if (!r.tokenIds || (r.tokenIds as unknown[]).length === 0) {
-        throw new Error(`Requirement ${index + 1}: tokenIds are required for build_playlist`);
-      }
     } else if (r.type === 'query_address') {
       if (!r.ownerAddress) {
         throw new Error(`Requirement ${index + 1}: ownerAddress is required for query_address`);

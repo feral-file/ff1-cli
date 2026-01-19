@@ -111,16 +111,20 @@ function buildTokenCID(chain, contractAddress, tokenId) {
  * const tokens = await queryTokens({ token_cids: ['eip155:1:erc721:0xabc:123'], owners: ['0x1234...'] });
  */
 async function queryTokens(params = {}) {
-  const { token_cids = [], owners = [], limit = 50, offset = 0 } = params;
+  const { token_cids = [], owners = [], contract_addresses = [], limit = 50, offset = 0 } = params;
 
   // Build GraphQL query without variables - inline parameters
   // (API expects inline parameters, not variables)
   const ownerFilter = owners.length > 0 ? `owners: ${JSON.stringify(owners)},` : '';
   const tokenCidsFilter = token_cids.length > 0 ? `token_cids: ${JSON.stringify(token_cids)},` : '';
+  const contractFilter =
+    contract_addresses.length > 0
+      ? `contract_addresses: ${JSON.stringify(contract_addresses)},`
+      : '';
 
   const query = `
       query {
-        tokens(${ownerFilter} ${tokenCidsFilter} expands: ["enrichment_source", "metadata_media_asset", "enrichment_source_media_asset"], limit: ${limit}, offset: ${offset}) {
+        tokens(${ownerFilter} ${tokenCidsFilter} ${contractFilter} expands: ["enrichment_source", "metadata_media_asset", "enrichment_source_media_asset"], limit: ${limit}, offset: ${offset}) {
         items {
           token_cid
           chain
@@ -1107,9 +1111,7 @@ async function searchNFTs(params) {
  */
 async function queryTokensByOwner(ownerAddress, limit = 100, offset = 0) {
   try {
-    logger.info(
-      `[NFT Indexer] Querying tokens for owner: ${ownerAddress} (limit: ${limit}, offset: ${offset})`
-    );
+    logger.info(`[NFT Indexer] Querying tokens by owner: ${ownerAddress}`);
 
     const tokens = await queryTokens({
       owners: [ownerAddress],
@@ -1117,20 +1119,40 @@ async function queryTokensByOwner(ownerAddress, limit = 100, offset = 0) {
       offset,
     });
 
-    logger.info(`[NFT Indexer] Found ${tokens.length} token(s) for owner ${ownerAddress}`);
+    return {
+      success: true,
+      tokens,
+    };
+  } catch (error) {
+    logger.error(`[NFT Indexer] Failed to query tokens by owner: ${error.message}`);
+    return {
+      success: false,
+      tokens: [],
+      error: error.message,
+    };
+  }
+}
+
+async function queryTokensByContract(contractAddress, limit = 100, offset = 0) {
+  try {
+    logger.info(`[NFT Indexer] Querying tokens by contract: ${contractAddress}`);
+
+    const tokens = await queryTokens({
+      contract_addresses: [contractAddress],
+      limit,
+      offset,
+    });
 
     return {
       success: true,
       tokens,
-      count: tokens.length,
     };
   } catch (error) {
-    logger.error('[NFT Indexer] Failed to query tokens by owner:', error.message);
+    logger.error(`[NFT Indexer] Failed to query tokens by contract: ${error.message}`);
     return {
       success: false,
-      error: error.message,
       tokens: [],
-      count: 0,
+      error: error.message,
     };
   }
 }
@@ -1152,6 +1174,7 @@ module.exports = {
   convertToDP1Item,
   // Address-based functions
   queryTokensByOwner,
+  queryTokensByContract,
   // Unified GraphQL query
   queryTokens,
   // Workflow and polling functions

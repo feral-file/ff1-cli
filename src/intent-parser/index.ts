@@ -101,12 +101,14 @@ OUTPUT CONTRACT
 - Use correct types; never truncate addresses/tokenIds; tokenIds are strings; quantity is a number.
 
 REQUIREMENT TYPES (BUILD)
-- build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds: string[], quantity?: number, source?: string }
-  • ONLY use when user explicitly provides BOTH contract address AND specific token IDs
-  • Example: "tokens 1, 2, 3 from contract 0x123"
+- build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds?: string[], quantity?: number, source?: string }
+  • Use when the user explicitly mentions a contract or collection address
+  • If token IDs are provided → use them
+  • If token IDs are NOT provided → select random tokens from the contract using quantity (default 5)
+  • Example: "tokens 1, 2, 3 from contract 0x123" or "5 items from contract 0x123"
 - query_address: { type, ownerAddress: 0x…|tz…|domain.eth|domain.tez, quantity?: number | "all" }
   • Domains (.eth/.tez) are OWNER DOMAINS. Do not ask for tokenIds. Do not treat as contracts.
-  • A raw 0x…/tz… without tokenIds is an OWNER ADDRESS (query_address), not a contract.
+  • A raw 0x…/tz… without contract keywords is an OWNER ADDRESS (query_address), not a contract.
   • CRITICAL: Phrases like "N items from [address]", "NFTs from [address]", "tokens from [address]" → query_address
   • Example: "30 items from 0xABC" → query_address with quantity=30
   • When user says "all", "all tokens", "all NFTs" → use quantity="all" (string, not number)
@@ -130,8 +132,9 @@ EXAMPLES (query_address - NO tokenIds needed)
 EXAMPLES (fetch_feed)
 - "Pick 3 artworks from Social Codes and 2 from a2p. Mix them up." → \`fetch_feed\` { playlistName: "Social Codes", quantity: 3 } + \`fetch_feed\` { playlistName: "a2p", quantity: 2 }, and set \`playlistSettings.preserveOrder\` = false
 
-EXAMPLES (build_playlist - requires BOTH contract AND tokenIds)
+EXAMPLES (build_playlist - contract address)
 - "tokens 5, 10, 15 from contract 0xABC on ethereum" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", tokenIds: ["5", "10", "15"] }
+- "5 items from contract 0xABC" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", quantity: 5 }
 
 PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
