@@ -185,6 +185,58 @@ export async function buildPlaylist(
   utilities.initializeUtilities(config);
 
   try {
+    const trimmedRequest = userRequest.trim();
+    const sendMatch = trimmedRequest.match(
+      /^send(?:\s+(?:last|playlist|the playlist))?(?:\s+to\s+(.+))?$/i
+    );
+
+    if (sendMatch) {
+      const deviceName = sendMatch[1]?.trim();
+      const { confirmPlaylistForSending } = await import('./utilities/playlist-send');
+      const confirmation = await confirmPlaylistForSending(outputPath, deviceName);
+      if (!confirmation.success) {
+        if (confirmation.message) {
+          console.log(chalk.red(`\n${confirmation.message}`));
+        }
+        return {
+          success: false,
+          error: confirmation.error || 'Failed to prepare playlist for sending',
+          action: 'send_playlist',
+          playlist: null,
+        };
+      }
+
+      const sendResult = await utilities.sendToDevice(
+        confirmation.playlist as Playlist,
+        confirmation.deviceName
+      );
+
+      if (sendResult.success) {
+        console.log(chalk.green('\n✅ Playlist sent successfully!'));
+        if (sendResult.deviceName) {
+          console.log(chalk.gray(`   Device: ${sendResult.deviceName}`));
+        }
+        console.log();
+        return {
+          success: true,
+          playlist: confirmation.playlist as Playlist,
+          action: 'send_playlist',
+        };
+      }
+
+      console.log();
+      console.error(chalk.red('❌ Failed to send playlist'));
+      if (sendResult.error) {
+        console.error(chalk.red(`   ${sendResult.error}`));
+      }
+      return {
+        success: false,
+        error: sendResult.error || 'Failed to send playlist',
+        playlist: null,
+        action: 'send_playlist',
+      };
+    }
+
     // STEP 1: INTENT PARSER
     // Parse user intent into structured requirements
     const { processIntentParserRequest } = getIntentParser();
