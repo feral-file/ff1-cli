@@ -141,7 +141,18 @@ async function verifyPlaylist(params) {
   console.log(chalk.cyan('\nValidating playlist...'));
 
   // Dynamic import to avoid circular dependency
-  const { verifyPlaylist: verify } = await import('./playlist-verifier');
+  const playlistVerifier = await import('./playlist-verifier');
+  const verify =
+    playlistVerifier.verifyPlaylist ||
+    (playlistVerifier.default && playlistVerifier.default.verifyPlaylist) ||
+    playlistVerifier.default;
+
+  if (typeof verify !== 'function') {
+    return {
+      valid: false,
+      error: 'Playlist verifier is not available',
+    };
+  }
 
   const result = verify(playlist);
 

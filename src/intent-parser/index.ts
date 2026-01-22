@@ -475,19 +475,67 @@ function formatMarkdown(text: string): string {
   return formatted;
 }
 
+function printMarkdownContent(content: string): void {
+  if (!content) {
+    return;
+  }
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (line.trim()) {
+      console.log(formatMarkdown(line));
+    } else if (line === '') {
+      console.log();
+    }
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function createStreamingCompletion(
+async function processNonStreamingResponse(
+  response: OpenAI.Chat.ChatCompletion
+): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
+  const message = response.choices[0]?.message;
+
+  if (!message) {
+    return { message: { role: 'assistant', content: null, refusal: null } };
+  }
+
+  if (message.content) {
+    printMarkdownContent(message.content);
+    console.log();
+  }
+
+  return { message };
+}
+
+async function createChatCompletion(
   client: OpenAI,
   requestParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+  baseURL?: string,
   maxRetries = 0
 ): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
+  const isGoogle = Boolean(baseURL && baseURL.includes('generativelanguage.googleapis.com'));
+  const shouldStream = !isGoogle;
+
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const stream = await client.chat.completions.create(requestParams);
-      return await processStreamingResponse(stream);
+      if (shouldStream) {
+        const stream = await client.chat.completions.create({
+          ...requestParams,
+          stream: true,
+        });
+        return await processStreamingResponse(stream);
+      }
+
+      const response = (await client.chat.completions.create({
+        ...requestParams,
+        stream: false,
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)) as OpenAI.Chat.ChatCompletion;
+
+      return await processNonStreamingResponse(response);
     } catch (error) {
       const err = error as Error & {
         status?: number;
@@ -690,9 +738,10 @@ export async function processIntentParserRequest(
       (requestParams as unknown as Record<string, unknown>).max_tokens = 2000;
     }
 
-    const { message } = await createStreamingCompletion(
+    const { message } = await createChatCompletion(
       client,
       requestParams,
+      modelConfig.baseURL,
       modelConfig.maxRetries
     );
 
@@ -734,9 +783,10 @@ export async function processIntentParserRequest(
           (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
         }
 
-        const { message: followUpMessage } = await createStreamingCompletion(
+        const { message: followUpMessage } = await createChatCompletion(
           client,
           followUpRequest,
+          modelConfig.baseURL,
           modelConfig.maxRetries
         );
 
@@ -1013,9 +1063,10 @@ export async function processIntentParserRequest(
           (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
         }
 
-        const { message: followUpMessage } = await createStreamingCompletion(
+        const { message: followUpMessage } = await createChatCompletion(
           client,
           followUpRequest,
+          modelConfig.baseURL,
           modelConfig.maxRetries
         );
 
@@ -1078,13 +1129,25 @@ export async function processIntentParserRequest(
       messages: [...messages, message],
     };
   } catch (error) {
-    const err = error as Error & { status?: number; response?: { status?: number } };
+    const err = error as Error & {
+      status?: number;
+      response?: { status?: number; statusText?: string; data?: unknown };
+    };
     const status = err.response?.status ?? err.status;
-    const baseMessage = `Intent parser failed: ${err.message}`;
-    if (status === 429) {
-      throw new Error(`${baseMessage} (rate limited by model provider)`);
-    }
-    throw new Error(baseMessage);
+    const statusText = err.response?.statusText;
+    const responseDetails =
+      err.response?.data && typeof err.response.data === 'string'
+        ? err.response.data
+        : err.response?.data
+          ? JSON.stringify(err.response.data)
+          : null;
+    const context = `model=${modelConfig.model}, baseURL=${modelConfig.baseURL}`;
+    const detailParts = [
+      err.message,
+      status ? `status ${status}${statusText ? ` ${statusText}` : ''}` : null,
+      responseDetails ? `response ${responseDetails}` : null,
+    ].filter(Boolean);
+    throw new Error(`Intent parser failed (${context}): ${detailParts.join(' | ')}`);
   }
 }
 
