@@ -21,7 +21,20 @@ interface PlaylistSendConfirmation {
  */
 async function getAvailableDevices(): Promise<Array<{ name: string; host: string }>> {
   try {
-    const { getFF1DeviceConfig } = await import('../config');
+    const configModule = (await import('../config')) as typeof import('../config') & {
+      default?: {
+        getFF1DeviceConfig?: () => { devices?: Array<{ name?: string; host?: string }> };
+      };
+    };
+    const getFF1DeviceConfig =
+      configModule.getFF1DeviceConfig ||
+      (configModule.default && configModule.default.getFF1DeviceConfig) ||
+      configModule.default;
+
+    if (typeof getFF1DeviceConfig !== 'function') {
+      return [];
+    }
+
     const deviceConfig = getFF1DeviceConfig();
 
     if (deviceConfig.devices && Array.isArray(deviceConfig.devices)) {
@@ -117,6 +130,25 @@ export async function confirmPlaylistForSending(
 
     if (!verifyResult.valid) {
       console.log(chalk.red('✗ Playlist validation failed'));
+      const detailLines =
+        verifyResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n') ||
+        verifyResult.error;
+      const detailPaths = verifyResult.details?.map((d) => d.path) || [];
+      const hints: string[] = [];
+
+      if (detailPaths.some((path) => path.includes('signature'))) {
+        hints.push(
+          'Add `playlist.privateKey` (or `PLAYLIST_PRIVATE_KEY`) and rebuild the playlist to include a signature.'
+        );
+      }
+
+      if (detailPaths.some((path) => path.includes('defaults.display.margin'))) {
+        hints.push('Rebuild the playlist with the latest CLI defaults (margin must be numeric).');
+      }
+
+      const hintText =
+        hints.length > 0 ? `\n\nHint:\n${hints.map((h) => `  • ${h}`).join('\n')}` : '';
+
       return {
         success: false,
         filePath: resolvedPath,
@@ -125,7 +157,7 @@ export async function confirmPlaylistForSending(
         playlist,
         deviceName: actualDeviceName,
         error: `Playlist is invalid: ${verifyResult.error}`,
-        message: `This playlist doesn't match DP-1 specification.\n\nErrors:\n${verifyResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n') || verifyResult.error}`,
+        message: `This playlist doesn't match DP-1 specification.\n\nErrors:\n${detailLines}${hintText}`,
       };
     }
 

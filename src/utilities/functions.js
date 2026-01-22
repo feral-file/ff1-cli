@@ -279,7 +279,20 @@ async function verifyAddresses(params) {
  * }
  */
 async function getConfiguredDevices() {
-  const { getFF1DeviceConfig } = await import('../config');
+  const configModule = await import('../config');
+  const getFF1DeviceConfig =
+    configModule.getFF1DeviceConfig ||
+    (configModule.default && configModule.default.getFF1DeviceConfig) ||
+    configModule.default;
+
+  if (typeof getFF1DeviceConfig !== 'function') {
+    return {
+      success: false,
+      devices: [],
+      error: 'FF1 device configuration is not available',
+    };
+  }
+
   const deviceConfig = getFF1DeviceConfig();
 
   if (!deviceConfig.devices || deviceConfig.devices.length === 0) {

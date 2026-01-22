@@ -269,7 +269,11 @@ async function queryRequirement(requirement, duration = 10) {
     if (items.length > 0) {
       console.log(chalk.green(`✓ Got ${items.length} item(s)`));
     } else {
-      console.log(chalk.yellow(`   No items found`));
+      console.log(
+        chalk.yellow(
+          `   No items found. Check token IDs, contract address, or try querying by owner address.`
+        )
+      );
     }
 
     // Apply quantity limit
