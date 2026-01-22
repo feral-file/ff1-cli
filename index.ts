@@ -132,19 +132,39 @@ program
         console.log(chalk.gray('  (Tip) Add -v to see tool calls'));
         console.log();
 
-        // Continuous conversation loop
-        while (true) {
-          const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-          });
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+          historySize: 100,
+        });
+        let closed = false;
 
-          const userInput = await new Promise<string>((resolve) => {
+        rl.on('close', () => {
+          closed = true;
+        });
+
+        rl.on('SIGINT', () => {
+          rl.close();
+        });
+
+        const ask = async (): Promise<string> =>
+          new Promise((resolve) => {
+            if (closed) {
+              resolve('');
+              return;
+            }
             rl.question(chalk.yellow('You: '), (answer: string) => {
-              rl.close();
               resolve(answer.trim());
             });
           });
+
+        // Continuous conversation loop
+        while (!closed) {
+          const userInput = await ask();
+
+          if (closed) {
+            break;
+          }
 
           if (!userInput) {
             continue; // Skip empty input
@@ -181,6 +201,10 @@ program
             }
             console.log(); // Blank line after error
           }
+        }
+
+        if (closed) {
+          throw new Error('readline was closed');
         }
       } catch (error) {
         if ((error as Error).message !== 'readline was closed') {
