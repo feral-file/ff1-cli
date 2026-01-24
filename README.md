@@ -10,6 +10,12 @@ FF1-CLI turns a simple prompt into a DP-1–conformant playlist you can preview 
 npm i -g ff1-cli
 ```
 
+## Install (curl)
+
+```bash
+curl -fsSL https://feralfile.com/ff1-cli-install | bash
+```
+
 ## One-off Usage (npx)
 
 ```bash

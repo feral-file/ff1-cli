@@ -5,17 +5,25 @@ Build DP1 (Display Protocol 1) playlists from NFT data with either natural langu
 ## Install
 
 ```bash
-npm install
+npm i -g ff1-cli
 ```
+
+## Install (curl)
+
+```bash
+curl -fsSL https://feralfile.com/ff1-cli-install | bash
+```
+
+Note: The curl installer uses npm, so Node.js + npm must be installed.
 
 ## Configure
 
 ```bash
 # Create example config and edit API keys
-npm run dev -- config init
+ff1 config init
 
 # Validate configuration
-npm run dev -- config validate
+ff1 config validate
 ```
 
 See the full configuration reference here: `./CONFIGURATION.md`.
@@ -70,21 +78,27 @@ See `./CONFIGURATION.md` for environment variable mappings.
 ## Quick Start
 
 ```bash
-# Dev (no build required)
-npm run dev chat
+# Chat
+ff1 chat
 
 # Or natural language in one shot
-npm run dev -- chat "Get tokens 1,2,3 from Ethereum contract 0xabc" -o playlist.json
+ff1 chat "Get tokens 1,2,3 from Ethereum contract 0xabc" -o playlist.json
 
 # Deterministic (no AI)
-npm run dev -- build examples/params-example.json -o playlist.json
+ff1 build examples/params-example.json -o playlist.json
 ```
 
-For production:
+For development in this repo:
 
 ```bash
 npm run build
 node dist/index.js chat
+```
+
+If you're running from source without a build, use:
+
+```bash
+npm run dev -- chat
 ```
 
 ## Recommended Deterministic Flow (LLM + Tools)
