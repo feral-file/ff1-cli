@@ -14,7 +14,7 @@ npm i -g ff1-cli
 curl -fsSL https://feralfile.com/ff1-cli-install | bash
 ```
 
-Note: The curl installer uses npm, so Node.js + npm must be installed.
+Installs a prebuilt binary for macOS/Linux (no Node.js required).
 
 ## Configure
 
@@ -263,4 +263,5 @@ See selection rules and examples in `./CONFIGURATION.md`.
 
 - Function calling details: `./FUNCTION_CALLING.md`
 - Examples: `./EXAMPLES.md`
+- Release assets: `./RELEASING.md`
 - DP1 spec: `https://github.com/display-protocol/dp1`
