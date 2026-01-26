@@ -16,6 +16,7 @@
     "build": "tsc",
     "bundle": "node build.js",
     "bundle:dev": "node build.js --dev",
+    "release:asset": "./scripts/release/build-asset.sh",
     "start": "node dist/index.js",
     "dev": "tsx index.ts",
     "prepublishOnly": "npm run build",
