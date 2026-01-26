@@ -6,6 +6,32 @@
 const chalk = require('chalk');
 const registry = require('./registry');
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createCompletionWithRetry(client, requestParams, maxRetries = 0) {
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await client.chat.completions.create(requestParams);
+    } catch (error) {
+      const status = error?.response?.status ?? error?.status;
+      if (status === 429 && attempt < maxRetries) {
+        const retryAfterHeader =
+          error?.response?.headers?.['retry-after'] || error?.response?.headers?.['Retry-After'];
+        const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : null;
+        const backoffMs = Math.min(10000, 2000 * Math.pow(2, attempt));
+        const delayMs = retryAfterMs && !Number.isNaN(retryAfterMs) ? retryAfterMs : backoffMs;
+        await sleep(delayMs);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error('Failed to create chat completion');
+}
+
 /**
  * Function schemas for playlist building
  */
@@ -590,7 +616,30 @@ async function buildPlaylistWithAI(params, options = {}) {
       requestParams.max_tokens = 4000;
     }
 
-    const response = await client.chat.completions.create(requestParams);
+    let response;
+
+    try {
+      response = await createCompletionWithRetry(client, requestParams, modelConfig.maxRetries);
+    } catch (error) {
+      const status = error?.response?.status ?? error?.status;
+      const statusText = error?.response?.statusText;
+      const responseDetails =
+        error?.response?.data && typeof error.response.data === 'string'
+          ? error.response.data
+          : error?.response?.data
+            ? JSON.stringify(error.response.data)
+            : null;
+      const detailParts = [
+        error.message,
+        status ? `status ${status}${statusText ? ` ${statusText}` : ''}` : null,
+        responseDetails ? `response ${responseDetails}` : null,
+      ].filter(Boolean);
+      const hint = status === 429 ? 'rate limited by model provider' : null;
+      throw new Error(
+        `AI orchestrator failed (model=${modelConfig.model}, baseURL=${modelConfig.baseURL}): ${detailParts.join(' | ')}${hint ? ` | ${hint}` : ''}`
+      );
+    }
+
     const message = response.choices[0].message;
 
     // Gemini workaround: If AI finished without calling build_playlist despite having items

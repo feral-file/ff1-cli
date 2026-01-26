@@ -51,8 +51,8 @@ function loadConfig(): Config {
       gemini: {
         apiKey: process.env.GEMINI_API_KEY || '',
         baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-        model: 'gemini-2.0-flash-exp',
-        availableModels: ['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+        model: 'gemini-2.5-flash',
+        availableModels: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-lite-latest'],
         timeout: 30000,
         maxRetries: 3,
         temperature: 0.3,
@@ -265,8 +265,11 @@ export function getModelConfig(modelName?: string): ModelConfig {
     throw new Error(`Model "${selectedModel}" does not support function calling`);
   }
 
+  const normalizedBaseURL = modelConfig.baseURL?.replace(/\/+$/, '');
+
   return {
     ...modelConfig,
+    baseURL: normalizedBaseURL,
     defaultDuration: config.defaultDuration,
   };
 }
