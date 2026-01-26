@@ -147,3 +147,6 @@ config.json
 
 # Output playlist
 playlist.json
+
+# Release artifacts
+/release/

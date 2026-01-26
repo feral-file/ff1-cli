@@ -16,6 +16,8 @@ npm i -g ff1-cli
 curl -fsSL https://feralfile.com/ff1-cli-install | bash
 ```
 
+Installs a prebuilt binary for macOS/Linux (no Node.js required).
+
 ## One-off Usage (npx)
 
 ```bash
