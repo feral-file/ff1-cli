@@ -361,19 +361,30 @@ export function validateConfig(modelName?: string): ValidationResult {
 /**
  * Create a sample config.json file from config.json.example
  *
+ * Loads the bundled config.json.example template from the package directory
+ * and writes it to the user's current working directory.
+ *
  * @returns {Promise<string>} Path to the created config file
  * @throws {Error} If config.json already exists or example file is missing
  */
 export async function createSampleConfig(): Promise<string> {
   const configPath = path.join(process.cwd(), 'config.json');
-  const examplePath = path.join(process.cwd(), 'config.json.example');
 
+  // Check if config.json already exists in user's directory
   if (fs.existsSync(configPath)) {
     throw new Error('config.json already exists');
   }
 
+  // Look for config.json.example in the package directory
+  // When compiled, this file is in dist/src/config.js
+  // The template is at the package root: ../../config.json.example
+  const packageRoot = path.join(__dirname, '../..');
+  const examplePath = path.join(packageRoot, 'config.json.example');
+
   if (!fs.existsSync(examplePath)) {
-    throw new Error('config.json.example not found');
+    throw new Error(
+      `config.json.example not found at ${examplePath}. This is likely a package installation issue.`
+    );
   }
 
   const exampleConfig = fs.readFileSync(examplePath, 'utf-8');
