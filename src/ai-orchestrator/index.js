@@ -648,11 +648,11 @@ async function buildPlaylistWithAI(params, options = {}) {
     // - finish_reason includes 'MALFORMED_FUNCTION_CALL' (Gemini tried but failed)
     // - Any other case where we have items but no playlist
     if (verbose) {
-      console.log(chalk.gray(`→ finish_reason: ${response.choices[0].finish_reason}`));
-      console.log(chalk.gray(`→ has content: ${!!message.content}`));
-      console.log(chalk.gray(`→ has tool_calls: ${!!message.tool_calls}`));
+      console.log(chalk.dim(`→ finish_reason: ${response.choices[0].finish_reason}`));
+      console.log(chalk.dim(`→ has content: ${!!message.content}`));
+      console.log(chalk.dim(`→ has tool_calls: ${!!message.tool_calls}`));
       console.log(
-        chalk.gray(`→ collectedItems: ${collectedItems.length}, finalPlaylist: ${!!finalPlaylist}`)
+        chalk.dim(`→ collectedItems: ${collectedItems.length}, finalPlaylist: ${!!finalPlaylist}`)
       );
     }
 
@@ -662,9 +662,7 @@ async function buildPlaylistWithAI(params, options = {}) {
       // If Gemini keeps failing with MALFORMED_FUNCTION_CALL, call build_playlist directly
       if (finishReason.includes('MALFORMED_FUNCTION_CALL') || finishReason.includes('filter')) {
         if (verbose) {
-          console.log(
-            chalk.yellow(`⚠️  AI's function call is malformed - calling build_playlist directly...`)
-          );
+          console.log(chalk.yellow(`AI function call malformed. Calling build_playlist directly.`));
         }
 
         // Call build_playlist directly with the collected item IDs
@@ -695,7 +693,7 @@ async function buildPlaylistWithAI(params, options = {}) {
           }
         } catch (error) {
           if (verbose) {
-            console.log(chalk.red(`✗ Failed to build playlist directly: ${error.message}`));
+            console.log(chalk.red(`Failed to build playlist directly: ${error.message}`));
           }
         }
       } else if (iterationCount < maxIterations - 1) {
@@ -703,7 +701,7 @@ async function buildPlaylistWithAI(params, options = {}) {
         if (verbose) {
           console.log(
             chalk.yellow(
-              `⚠️  AI stopped without calling build_playlist (reason: ${finishReason}) - forcing it to continue...`
+              `AI stopped without calling build_playlist (reason: ${finishReason}). Forcing it to continue.`
             )
           );
         }
@@ -723,13 +721,13 @@ async function buildPlaylistWithAI(params, options = {}) {
     }
 
     if (verbose) {
-      console.log(chalk.gray(`\nIteration ${iterationCount}:`));
+      console.log(chalk.dim(`\nIteration ${iterationCount}:`));
     }
 
     // Execute function calls if any
     if (message.tool_calls && message.tool_calls.length > 0) {
       if (verbose) {
-        console.log(chalk.gray(`→ Executing ${message.tool_calls.length} function(s)...`));
+        console.log(chalk.dim(`→ Executing ${message.tool_calls.length} function(s)...`));
       }
 
       for (const toolCall of message.tool_calls) {
@@ -737,9 +735,9 @@ async function buildPlaylistWithAI(params, options = {}) {
         const args = JSON.parse(toolCall.function.arguments);
 
         if (verbose) {
-          console.log(chalk.gray(`\n  • Function: ${chalk.bold(functionName)}`));
+          console.log(chalk.dim(`\n  • Function: ${chalk.bold(functionName)}`));
           console.log(
-            chalk.gray(`    Input: ${JSON.stringify(args, null, 2).split('\n').join('\n    ')}`)
+            chalk.dim(`    Input: ${JSON.stringify(args, null, 2).split('\n').join('\n    ')}`)
           );
         }
 
@@ -748,9 +746,7 @@ async function buildPlaylistWithAI(params, options = {}) {
 
           if (verbose) {
             console.log(
-              chalk.gray(
-                `    Output: ${JSON.stringify(result, null, 2).split('\n').join('\n    ')}`
-              )
+              chalk.dim(`    Output: ${JSON.stringify(result, null, 2).split('\n').join('\n    ')}`)
             );
           }
 
@@ -804,7 +800,7 @@ async function buildPlaylistWithAI(params, options = {}) {
               if (verbose) {
                 console.log(
                   chalk.yellow(
-                    `⚠️  Playlist verification failed (attempt ${verificationFailures}/${maxVerificationRetries})`
+                    `Playlist verification failed (attempt ${verificationFailures}/${maxVerificationRetries})`
                   )
                 );
               }
@@ -812,9 +808,7 @@ async function buildPlaylistWithAI(params, options = {}) {
               if (verificationFailures >= maxVerificationRetries) {
                 if (verbose) {
                   console.log(
-                    chalk.red(
-                      `✗ Playlist validation failed after ${maxVerificationRetries} retries`
-                    )
+                    chalk.red(`Playlist validation failed after ${maxVerificationRetries} retries`)
                   );
                 }
                 return {
@@ -869,7 +863,7 @@ async function buildPlaylistWithAI(params, options = {}) {
     } else {
       // AI has finished
       if (verbose) {
-        console.log(chalk.gray('\n→ AI has finished (no more tool calls)'));
+        console.log(chalk.dim('\n→ AI has finished (no more tool calls)'));
         if (!message.content) {
           console.log(chalk.red('→ AI sent NO content and NO tool calls!'));
         }
@@ -924,21 +918,21 @@ async function buildPlaylistWithAI(params, options = {}) {
             if (publishResult.success) {
               console.log(chalk.green(`✓ Published to feed server`));
               if (publishResult.playlistId) {
-                console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+                console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
               }
               if (publishResult.feedServer) {
-                console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+                console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
               }
             } else {
-              console.error(chalk.red(`✗ Failed to publish: ${publishResult.error}`));
+              console.error(chalk.red(`Publish failed: ${publishResult.error}`));
               if (publishResult.message) {
-                console.error(chalk.gray(`   ${publishResult.message}`));
+                console.error(chalk.dim(`   ${publishResult.message}`));
               }
             }
           } catch (error) {
-            console.error(chalk.red(`✗ Failed to publish: ${error.message}`));
+            console.error(chalk.red(`Publish failed: ${error.message}`));
             if (verbose) {
-              console.error(chalk.gray(error.stack));
+              console.error(chalk.dim(error.stack));
             }
           }
         }

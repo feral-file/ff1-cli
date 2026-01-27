@@ -287,7 +287,7 @@ export function displayResolutionResults(result: BatchResolutionResult): void {
   const successful = result.resolutions.filter((r) => r.resolved);
   if (successful.length > 0) {
     successful.forEach((resolution) => {
-      console.log(chalk.gray(`  ${resolution.domain} → ${resolution.address}`));
+      console.log(chalk.dim(`  ${resolution.domain} → ${resolution.address}`));
     });
   }
 
@@ -296,7 +296,7 @@ export function displayResolutionResults(result: BatchResolutionResult): void {
   if (failed.length > 0) {
     failed.forEach((resolution) => {
       console.log(
-        chalk.yellow(`  ✗ ${resolution.domain}: ${resolution.error || 'Could not resolve'}`)
+        chalk.yellow(`  ${resolution.domain}: ${resolution.error || 'Could not resolve'}`)
       );
     });
   }

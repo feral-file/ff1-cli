@@ -32,7 +32,7 @@ async function fetchPlaylistsFromFeed(feedUrl, limit = 100) {
     const response = await fetch(`${feedUrl}/playlists?limit=${validLimit}&sort=-created`);
 
     if (!response.ok) {
-      console.log(chalk.yellow(`   ⚠️  Feed ${feedUrl} returned ${response.status}`));
+      console.log(chalk.yellow(`  Feed ${feedUrl} returned ${response.status}`));
       return [];
     }
 
@@ -45,7 +45,7 @@ async function fetchPlaylistsFromFeed(feedUrl, limit = 100) {
       feedUrl,
     }));
   } catch (error) {
-    console.log(chalk.yellow(`   ⚠️  Failed to fetch from ${feedUrl}: ${error.message}`));
+    console.log(chalk.yellow(`  Failed to fetch from ${feedUrl}: ${error.message}`));
     return [];
   }
 }

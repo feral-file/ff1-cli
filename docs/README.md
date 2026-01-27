@@ -1,6 +1,6 @@
 # FF1-CLI Documentation
 
-Build DP1 (Display Protocol 1) playlists from NFT data with either natural language (AI‑driven) or deterministic parameters. This doc covers install, config, and day‑to‑day usage.
+Build DP-1 (Display Protocol 1) playlists from NFT data with either natural language (AI‑driven) or deterministic parameters. This doc covers install, config, and day‑to‑day usage.
 
 ## Install
 

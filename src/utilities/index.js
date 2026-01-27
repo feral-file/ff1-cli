@@ -74,7 +74,7 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
         allTokens = allTokens.concat(result.tokens);
         offset += batchSize;
 
-        console.log(chalk.gray(`   → Fetched ${allTokens.length} tokens so far...`));
+        console.log(chalk.dim(`   → Fetched ${allTokens.length} tokens so far...`));
 
         // If we got fewer tokens than the batch size, we've reached the end
         if (result.tokens.length < batchSize) {
@@ -126,7 +126,7 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
       selectedTokens = shuffleArray([...selectedTokens]).slice(0, quantity);
     }
 
-    console.log(chalk.grey(`✓ Got ${selectedTokens.length} token(s)`));
+    console.log(chalk.dim(`Got ${selectedTokens.length} token(s)`));
 
     // Convert tokens to DP1 items
     const items = [];
@@ -155,7 +155,7 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
     if (skippedCount > 0) {
       console.log(
         chalk.yellow(
-          `   ⚠ Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
+          `   Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
         )
       );
     }
@@ -194,7 +194,7 @@ async function queryRequirement(requirement, duration = 10) {
       const resolution = await domainResolver.resolveDomain(ownerAddress);
 
       if (resolution.resolved && resolution.address) {
-        console.log(chalk.gray(`  ${resolution.domain} → ${resolution.address}`));
+        console.log(chalk.dim(`  ${resolution.domain} → ${resolution.address}`));
         // Use resolved address instead of domain
         return await queryTokensByAddress(resolution.address, quantity, duration);
       } else {
@@ -363,9 +363,9 @@ async function buildPlaylistDirect(params, options = {}) {
       const items = await queryRequirement(requirement, duration);
       allItems.push(...items);
     } catch (error) {
-      console.error(chalk.red(`   ✗ Failed: ${error.message}`));
+      console.error(chalk.red(`  Failed: ${error.message}`));
       if (verbose) {
-        console.error(chalk.gray(error.stack));
+        console.error(chalk.dim(error.stack));
       }
     }
   }
@@ -416,21 +416,21 @@ async function buildPlaylistDirect(params, options = {}) {
       if (publishResult.success) {
         console.log(chalk.green(`✓ Published to feed server`));
         if (publishResult.playlistId) {
-          console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+          console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
         }
         if (publishResult.feedServer) {
-          console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+          console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
         }
       } else {
-        console.error(chalk.red(`✗ Failed to publish: ${publishResult.error}`));
+        console.error(chalk.red(`Publish failed: ${publishResult.error}`));
         if (publishResult.message) {
-          console.error(chalk.gray(`   ${publishResult.message}`));
+          console.error(chalk.dim(`   ${publishResult.message}`));
         }
       }
     } catch (error) {
-      console.error(chalk.red(`✗ Failed to publish: ${error.message}`));
+      console.error(chalk.red(`Publish failed: ${error.message}`));
       if (verbose) {
-        console.error(chalk.gray(error.stack));
+        console.error(chalk.dim(error.stack));
       }
     }
   }

@@ -57,10 +57,10 @@ async function build() {
     await writeFile(outfile, filteredLines.join('\n'));
     await chmod(outfile, 0o755);
 
-    console.log('\n✅ Build complete! Single executable created at: dist/ff1.js');
+    console.log('\nBuild complete. Single executable: dist/ff1.js');
     console.log('   Run with: ./dist/ff1.js or node dist/ff1.js\n');
   } catch (error) {
-    console.error('❌ Build failed:', error);
+    console.error('Build failed:', error);
     process.exit(1);
   }
 }

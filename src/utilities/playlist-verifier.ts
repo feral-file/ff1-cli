@@ -142,30 +142,30 @@ export function printVerificationResult(
   filename?: string
 ): void {
   if (result.valid) {
-    console.log(chalk.green('\n✅ Playlist is valid!'));
+    console.log(chalk.green('\nPlaylist is valid'));
     if (filename) {
-      console.log(chalk.gray(`   File: ${filename}`));
+      console.log(chalk.dim(`  File: ${filename}`));
     }
     if (result.playlist) {
-      console.log(chalk.gray(`   Title: ${result.playlist.title}`));
-      console.log(chalk.gray(`   Items: ${result.playlist.items?.length || 0}`));
-      console.log(chalk.gray(`   DP Version: ${result.playlist.dpVersion}`));
+      console.log(chalk.dim(`  Title: ${result.playlist.title}`));
+      console.log(chalk.dim(`  Items: ${result.playlist.items?.length || 0}`));
+      console.log(chalk.dim(`  DP Version: ${result.playlist.dpVersion}`));
       if (result.playlist.signature && typeof result.playlist.signature === 'string') {
-        console.log(chalk.gray(`   Signature: ${result.playlist.signature.substring(0, 30)}...`));
+        console.log(chalk.dim(`  Signature: ${result.playlist.signature.substring(0, 30)}...`));
       }
     }
     console.log();
   } else {
-    console.log(chalk.red('\n❌ Playlist validation failed!'));
+    console.log(chalk.red('\nPlaylist validation failed'));
     if (filename) {
-      console.log(chalk.gray(`   File: ${filename}`));
+      console.log(chalk.dim(`  File: ${filename}`));
     }
-    console.log(chalk.red(`   Error: ${result.error}`));
+    console.log(chalk.red(`  Error: ${result.error}`));
 
     if (result.details && result.details.length > 0) {
-      console.log(chalk.yellow('\n   Validation errors:'));
+      console.log(chalk.yellow('\n  Validation errors:'));
       result.details.forEach((detail) => {
-        console.log(chalk.yellow(`     • ${detail.path}: ${detail.message}`));
+        console.log(chalk.yellow(`    • ${detail.path}: ${detail.message}`));
       });
     }
     console.log();

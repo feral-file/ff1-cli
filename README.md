@@ -1,6 +1,6 @@
 # FF1-CLI
 
-A small Node.js CLI for building DP1 playlists from NFT collections.
+A small Node.js CLI for building DP-1 playlists from NFT collections.
 
 FF1-CLI turns a simple prompt into a DP-1–conformant playlist you can preview on an FF1. The model orchestrates; deterministic tools do the real work (schema validation, indexing, JSON‑LD). If something comes back invalid, validation rejects it and we loop until it’s right.
 
@@ -9,14 +9,6 @@ FF1-CLI turns a simple prompt into a DP-1–conformant playlist you can preview 
 ```bash
 npm i -g ff1-cli
 ```
-
-## Install (curl)
-
-```bash
-curl -fsSL https://feralfile.com/ff1-cli-install | bash
-```
-
-Installs a prebuilt binary for macOS/Linux (no Node.js required).
 
 ## One-off Usage (npx)
 
