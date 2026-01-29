@@ -34,42 +34,6 @@ function initializeUtilities(_config) {
  * @param {number} duration - Duration per item in seconds
  * @returns {Promise<Array>} Array of DP1 playlist items
  */
-async function mapTokensToItems(tokens, duration) {
-  const items = [];
-  let skippedCount = 0;
-
-  for (const token of tokens) {
-    // Detect blockchain from contract address (support both camelCase and snake_case)
-    let chain = 'ethereum';
-    const contractAddr = token.contract_address || token.contractAddress || '';
-    if (contractAddr.startsWith('KT')) {
-      chain = 'tezos';
-    }
-
-    // Map indexer token data to standard format
-    const tokenData = nftIndexer.mapIndexerDataToStandardFormat(token, chain);
-
-    if (tokenData.success) {
-      const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
-      if (dp1Result.success && dp1Result.item) {
-        items.push(dp1Result.item);
-      } else if (!dp1Result.success) {
-        skippedCount++;
-      }
-    }
-  }
-
-  if (skippedCount > 0) {
-    console.log(
-      chalk.yellow(
-        `   ⚠ Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
-      )
-    );
-  }
-
-  return items;
-}
-
 async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
   try {
     const shouldFetchAll = quantity === 'all' || quantity === undefined || quantity === null;
@@ -77,7 +41,6 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
     let allTokens = [];
     let offset = 0;
     let hasMore = true;
-    const isContractLike = ownerAddress?.startsWith('0x') || ownerAddress?.startsWith('KT');
 
     // Fetch tokens with pagination if "all" is requested
     if (shouldFetchAll) {
@@ -111,7 +74,7 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
         allTokens = allTokens.concat(result.tokens);
         offset += batchSize;
 
-        console.log(chalk.gray(`   → Fetched ${allTokens.length} tokens so far...`));
+        console.log(chalk.dim(`   → Fetched ${allTokens.length} tokens so far...`));
 
         // If we got fewer tokens than the batch size, we've reached the end
         if (result.tokens.length < batchSize) {
@@ -120,15 +83,6 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
       }
 
       if (allTokens.length === 0 && offset === 0) {
-        if (isContractLike) {
-          console.log(
-            chalk.yellow(
-              `   No tokens found for ${ownerAddress} as an owner. Trying as a contract address...`
-            )
-          );
-          return await queryTokensByContract(ownerAddress, quantity, duration);
-        }
-
         console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
         console.log(
           chalk.cyan(
@@ -153,15 +107,6 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
       }
 
       if (result.tokens.length === 0) {
-        if (isContractLike) {
-          console.log(
-            chalk.yellow(
-              `   No tokens found for ${ownerAddress} as an owner. Trying as a contract address...`
-            )
-          );
-          return await queryTokensByContract(ownerAddress, quantity, duration);
-        }
-
         console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
         console.log(
           chalk.cyan(
@@ -181,83 +126,41 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
       selectedTokens = shuffleArray([...selectedTokens]).slice(0, quantity);
     }
 
-    console.log(chalk.grey(`✓ Got ${selectedTokens.length} token(s)`));
+    console.log(chalk.dim(`Got ${selectedTokens.length} token(s)`));
 
-    return await mapTokensToItems(selectedTokens, duration);
-  } catch (error) {
-    console.error(chalk.red(`   Error: ${error.message}\n`));
-    throw error;
-  }
-}
+    // Convert tokens to DP1 items
+    const items = [];
+    let skippedCount = 0;
+    for (const token of selectedTokens) {
+      // Detect blockchain from contract address (support both camelCase and snake_case)
+      let chain = 'ethereum';
+      const contractAddr = token.contract_address || token.contractAddress || '';
+      if (contractAddr.startsWith('KT')) {
+        chain = 'tezos';
+      }
 
-async function queryTokensByContract(contractAddress, quantity, duration = 10) {
-  try {
-    const shouldFetchAll = quantity === 'all' || quantity === undefined || quantity === null;
-    const batchSize = 100; // Fetch 100 tokens per page
-    let allTokens = [];
-    let offset = 0;
-    let hasMore = true;
+      // Map indexer token data to standard format
+      const tokenData = nftIndexer.mapIndexerDataToStandardFormat(token, chain);
 
-    if (shouldFetchAll) {
-      console.log(chalk.cyan(`   Fetching all tokens from contract ${contractAddress}...`));
-
-      while (hasMore) {
-        const result = await nftIndexer.queryTokensByContract(contractAddress, batchSize, offset);
-
-        if (!result.success) {
-          if (offset === 0) {
-            console.log(chalk.yellow(`   Could not fetch tokens for ${contractAddress}`));
-            return [];
-          }
-          hasMore = false;
-          break;
-        }
-
-        if (result.tokens.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        allTokens = allTokens.concat(result.tokens);
-        offset += batchSize;
-
-        console.log(chalk.gray(`   → Fetched ${allTokens.length} tokens so far...`));
-
-        if (result.tokens.length < batchSize) {
-          hasMore = false;
+      if (tokenData.success) {
+        const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
+        if (dp1Result.success && dp1Result.item) {
+          items.push(dp1Result.item);
+        } else if (!dp1Result.success) {
+          skippedCount++;
         }
       }
-
-      if (allTokens.length === 0 && offset === 0) {
-        console.log(chalk.yellow(`   No tokens found for ${contractAddress}`));
-        return [];
-      }
-    } else {
-      const limit = Math.min(quantity, 100); // Cap at 100 per request
-      const result = await nftIndexer.queryTokensByContract(contractAddress, limit);
-
-      if (!result.success) {
-        console.log(chalk.yellow(`   Could not fetch tokens for ${contractAddress}`));
-        return [];
-      }
-
-      if (result.tokens.length === 0) {
-        console.log(chalk.yellow(`   No tokens found for ${contractAddress}`));
-        return [];
-      }
-
-      allTokens = result.tokens;
     }
 
-    let selectedTokens = allTokens;
-
-    if (typeof quantity === 'number' && selectedTokens.length > quantity) {
-      selectedTokens = shuffleArray([...selectedTokens]).slice(0, quantity);
+    if (skippedCount > 0) {
+      console.log(
+        chalk.yellow(
+          `   Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
+        )
+      );
     }
 
-    console.log(chalk.grey(`✓ Got ${selectedTokens.length} token(s)`));
-
-    return await mapTokensToItems(selectedTokens, duration);
+    return items;
   } catch (error) {
     console.error(chalk.red(`   Error: ${error.message}\n`));
     throw error;
@@ -291,7 +194,7 @@ async function queryRequirement(requirement, duration = 10) {
       const resolution = await domainResolver.resolveDomain(ownerAddress);
 
       if (resolution.resolved && resolution.address) {
-        console.log(chalk.gray(`  ${resolution.domain} → ${resolution.address}`));
+        console.log(chalk.dim(`  ${resolution.domain} → ${resolution.address}`));
         // Use resolved address instead of domain
         return await queryTokensByAddress(resolution.address, quantity, duration);
       } else {
@@ -344,10 +247,8 @@ async function queryRequirement(requirement, duration = 10) {
           tokenId,
         }));
         items = await nftIndexer.getNFTTokenInfoBatch(tokens, duration);
-      } else if (contractAddress) {
-        items = await queryTokensByContract(contractAddress, quantity, duration);
       } else {
-        console.log(chalk.yellow('   Contract address required'));
+        console.log(chalk.yellow('   No token IDs specified'));
       }
     } else if (blockchain.toLowerCase() === 'ethereum' || blockchain.toLowerCase() === 'eth') {
       // Ethereum NFTs (including Art Blocks, Feral File, etc.)
@@ -358,10 +259,8 @@ async function queryRequirement(requirement, duration = 10) {
           tokenId,
         }));
         items = await nftIndexer.getNFTTokenInfoBatch(tokens, duration);
-      } else if (contractAddress) {
-        items = await queryTokensByContract(contractAddress, quantity, duration);
       } else {
-        console.log(chalk.yellow('   Contract address required'));
+        console.log(chalk.yellow('   Contract address and token IDs required'));
       }
     } else {
       console.log(chalk.yellow(`   Unsupported blockchain: ${blockchain}`));
@@ -464,9 +363,9 @@ async function buildPlaylistDirect(params, options = {}) {
       const items = await queryRequirement(requirement, duration);
       allItems.push(...items);
     } catch (error) {
-      console.error(chalk.red(`   ✗ Failed: ${error.message}`));
+      console.error(chalk.red(`  Failed: ${error.message}`));
       if (verbose) {
-        console.error(chalk.gray(error.stack));
+        console.error(chalk.dim(error.stack));
       }
     }
   }
@@ -517,21 +416,21 @@ async function buildPlaylistDirect(params, options = {}) {
       if (publishResult.success) {
         console.log(chalk.green(`✓ Published to feed server`));
         if (publishResult.playlistId) {
-          console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+          console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
         }
         if (publishResult.feedServer) {
-          console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+          console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
         }
       } else {
-        console.error(chalk.red(`✗ Failed to publish: ${publishResult.error}`));
+        console.error(chalk.red(`Publish failed: ${publishResult.error}`));
         if (publishResult.message) {
-          console.error(chalk.gray(`   ${publishResult.message}`));
+          console.error(chalk.dim(`   ${publishResult.message}`));
         }
       }
     } catch (error) {
-      console.error(chalk.red(`✗ Failed to publish: ${error.message}`));
+      console.error(chalk.red(`Publish failed: ${error.message}`));
       if (verbose) {
-        console.error(chalk.gray(error.stack));
+        console.error(chalk.dim(error.stack));
       }
     }
   }
@@ -547,7 +446,6 @@ module.exports = {
   initializeUtilities,
   queryRequirement,
   queryTokensByAddress,
-  queryTokensByContract,
   buildDP1Playlist,
   sendToDevice,
   resolveDomains: functions.resolveDomains,

@@ -22,15 +22,17 @@ function getFeedApiUrls() {
  * Fetch playlists from a single feed URL with pagination
  *
  * @param {string} feedUrl - Feed API base URL
- * @param {number} limit - Items per page (default: 50)
+ * @param {number} limit - Items per page (default: 50, max: 100)
  * @returns {Promise<Array>} Array of playlists
  */
-async function fetchPlaylistsFromFeed(feedUrl, limit = 500) {
+async function fetchPlaylistsFromFeed(feedUrl, limit = 100) {
   try {
-    const response = await fetch(`${feedUrl}/playlists?limit=${limit}&sort=-created`);
+    // API has a maximum limit of 100
+    const validLimit = Math.min(limit, 100);
+    const response = await fetch(`${feedUrl}/playlists?limit=${validLimit}&sort=-created`);
 
     if (!response.ok) {
-      console.log(chalk.yellow(`   ⚠️  Feed ${feedUrl} returned ${response.status}`));
+      console.log(chalk.yellow(`  Feed ${feedUrl} returned ${response.status}`));
       return [];
     }
 
@@ -43,7 +45,7 @@ async function fetchPlaylistsFromFeed(feedUrl, limit = 500) {
       feedUrl,
     }));
   } catch (error) {
-    console.log(chalk.yellow(`   ⚠️  Failed to fetch from ${feedUrl}: ${error.message}`));
+    console.log(chalk.yellow(`  Failed to fetch from ${feedUrl}: ${error.message}`));
     return [];
   }
 }
@@ -53,7 +55,7 @@ async function fetchPlaylistsFromFeed(feedUrl, limit = 500) {
  *
  * @param {string} feedUrl - Feed API base URL
  * @param {string} searchTerm - Search term for fuzzy filtering
- * @param {number} pageSize - Items per page (default: 50)
+ * @param {number} pageSize - Items per page (default: 50, max: 100)
  * @param {number} topN - Keep top N matches per page (default: 10)
  * @param {number} maxItems - Maximum total items to fetch (default: 500)
  * @returns {Promise<Array>} Array of best matching playlists
@@ -72,8 +74,9 @@ async function fetchPlaylistsWithPagination(
 
   while (hasMore && totalFetched < maxItems) {
     // Calculate limit for this page (might be less than pageSize on last page)
+    // API has a maximum limit of 100
     const remainingItems = maxItems - totalFetched;
-    const currentLimit = Math.min(pageSize, remainingItems);
+    const currentLimit = Math.min(pageSize, remainingItems, 100);
 
     try {
       const response = await fetch(

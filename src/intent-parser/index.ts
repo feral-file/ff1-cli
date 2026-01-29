@@ -6,7 +6,7 @@
 
 import OpenAI from 'openai';
 import chalk from 'chalk';
-import { getConfig, getModelConfig, getFF1DeviceConfig } from '../config';
+import { getConfig, getModelConfig, getFF1DeviceConfig, getFeedConfig } from '../config';
 import { applyConstraints } from './utils';
 import type { Stream } from 'openai/streaming';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
@@ -101,14 +101,12 @@ OUTPUT CONTRACT
 - Use correct types; never truncate addresses/tokenIds; tokenIds are strings; quantity is a number.
 
 REQUIREMENT TYPES (BUILD)
-- build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds?: string[], quantity?: number, source?: string }
-  • Use when the user explicitly mentions a contract or collection address
-  • If token IDs are provided → use them
-  • If token IDs are NOT provided → select random tokens from the contract using quantity (default 5)
-  • Example: "tokens 1, 2, 3 from contract 0x123" or "5 items from contract 0x123"
+- build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds: string[], quantity?: number, source?: string }
+  • ONLY use when user explicitly provides BOTH contract address AND specific token IDs
+  • Example: "tokens 1, 2, 3 from contract 0x123"
 - query_address: { type, ownerAddress: 0x…|tz…|domain.eth|domain.tez, quantity?: number | "all" }
   • Domains (.eth/.tez) are OWNER DOMAINS. Do not ask for tokenIds. Do not treat as contracts.
-  • A raw 0x…/tz… without contract keywords is an OWNER ADDRESS (query_address), not a contract.
+  • A raw 0x…/tz… without tokenIds is an OWNER ADDRESS (query_address), not a contract.
   • CRITICAL: Phrases like "N items from [address]", "NFTs from [address]", "tokens from [address]" → query_address
   • Example: "30 items from 0xABC" → query_address with quantity=30
   • When user says "all", "all tokens", "all NFTs" → use quantity="all" (string, not number)
@@ -132,9 +130,8 @@ EXAMPLES (query_address - NO tokenIds needed)
 EXAMPLES (fetch_feed)
 - "Pick 3 artworks from Social Codes and 2 from a2p. Mix them up." → \`fetch_feed\` { playlistName: "Social Codes", quantity: 3 } + \`fetch_feed\` { playlistName: "a2p", quantity: 2 }, and set \`playlistSettings.preserveOrder\` = false
 
-EXAMPLES (build_playlist - contract address)
+EXAMPLES (build_playlist - requires BOTH contract AND tokenIds)
 - "tokens 5, 10, 15 from contract 0xABC on ethereum" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", tokenIds: ["5", "10", "15"] }
-- "5 items from contract 0xABC" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", quantity: 5 }
 
 PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
@@ -470,7 +467,7 @@ function formatMarkdown(text: string): string {
   formatted = formatted.replace(/(?<!\w)_([^_]+)_(?!\w)/g, (_, p1) => chalk.italic(p1));
 
   // Inline code: `code` - light grey color
-  formatted = formatted.replace(/`([^`]+)`/g, (_, p1) => chalk.grey(p1));
+  formatted = formatted.replace(/`([^`]+)`/g, (_, p1) => chalk.dim(p1));
 
   // Links: [text](url) - show text in blue
   formatted = formatted.replace(/\[([^\]]+)\]\([^)]+\)/g, (_, p1) => chalk.blue(p1));
@@ -478,19 +475,67 @@ function formatMarkdown(text: string): string {
   return formatted;
 }
 
+function printMarkdownContent(content: string): void {
+  if (!content) {
+    return;
+  }
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (line.trim()) {
+      console.log(formatMarkdown(line));
+    } else if (line === '') {
+      console.log();
+    }
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function createStreamingCompletion(
+async function processNonStreamingResponse(
+  response: OpenAI.Chat.ChatCompletion
+): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
+  const message = response.choices[0]?.message;
+
+  if (!message) {
+    return { message: { role: 'assistant', content: null, refusal: null } };
+  }
+
+  if (message.content) {
+    printMarkdownContent(message.content);
+    console.log();
+  }
+
+  return { message };
+}
+
+async function createChatCompletion(
   client: OpenAI,
   requestParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+  baseURL?: string,
   maxRetries = 0
 ): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
+  const isGoogle = Boolean(baseURL && baseURL.includes('generativelanguage.googleapis.com'));
+  const shouldStream = !isGoogle;
+
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const stream = await client.chat.completions.create(requestParams);
-      return await processStreamingResponse(stream);
+      if (shouldStream) {
+        const stream = await client.chat.completions.create({
+          ...requestParams,
+          stream: true,
+        });
+        return await processStreamingResponse(stream);
+      }
+
+      const response = (await client.chat.completions.create({
+        ...requestParams,
+        stream: false,
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)) as OpenAI.Chat.ChatCompletion;
+
+      return await processNonStreamingResponse(response);
     } catch (error) {
       const err = error as Error & {
         status?: number;
@@ -693,9 +738,10 @@ export async function processIntentParserRequest(
       (requestParams as unknown as Record<string, unknown>).max_tokens = 2000;
     }
 
-    const { message } = await createStreamingCompletion(
+    const { message } = await createChatCompletion(
       client,
       requestParams,
+      modelConfig.baseURL,
       modelConfig.maxRetries
     );
 
@@ -737,9 +783,10 @@ export async function processIntentParserRequest(
           (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
         }
 
-        const { message: followUpMessage } = await createStreamingCompletion(
+        const { message: followUpMessage } = await createChatCompletion(
           client,
           followUpRequest,
+          modelConfig.baseURL,
           modelConfig.maxRetries
         );
 
@@ -757,6 +804,135 @@ export async function processIntentParserRequest(
               params: validatedParams as unknown as Record<string, unknown>,
               needsMoreInfo: false,
             };
+          } else if (followUpToolCall.function.name === 'get_feed_servers') {
+            // Get the list of configured feed servers
+            const feedConfig = getFeedConfig();
+
+            // Build the server list for the AI
+            const serverList =
+              feedConfig.servers?.map((server) => ({
+                baseUrl: server.baseUrl,
+                apiKey: server.apiKey,
+              })) ||
+              feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
+
+            // Add tool result to messages and continue conversation
+            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+              role: 'tool',
+              tool_call_id: followUpToolCall.id,
+              content: JSON.stringify({ servers: serverList }),
+            };
+
+            const feedUpdatedMessages = [
+              ...updatedMessages,
+              followUpMessage,
+              feedToolResultMessage,
+            ];
+
+            // Continue the conversation with the feed server list
+            const feedFollowUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+              model: modelConfig.model,
+              messages: feedUpdatedMessages,
+              tools: intentParserFunctionSchemas,
+              tool_choice: 'auto',
+              stream: true,
+            };
+
+            if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+              feedFollowUpRequest.temperature = modelConfig.temperature;
+            } else if (modelConfig.temperature === 1) {
+              feedFollowUpRequest.temperature = 1;
+            }
+
+            if (modelConfig.model.startsWith('gpt-')) {
+              (feedFollowUpRequest as unknown as Record<string, unknown>).max_completion_tokens =
+                2000;
+            } else {
+              (feedFollowUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+            }
+
+            const { message: feedFollowUpMessage } = await createChatCompletion(
+              client,
+              feedFollowUpRequest,
+              modelConfig.baseURL,
+              modelConfig.maxRetries
+            );
+
+            // Check if AI now wants to parse requirements or publish
+            if (feedFollowUpMessage.tool_calls && feedFollowUpMessage.tool_calls.length > 0) {
+              const feedToolCall = feedFollowUpMessage.tool_calls[0];
+              if (feedToolCall.function.name === 'parse_requirements') {
+                const params = JSON.parse(feedToolCall.function.arguments);
+
+                // Apply constraints and defaults
+                const validatedParams = applyConstraints(params, config);
+
+                return {
+                  approved: true,
+                  params: validatedParams as unknown as Record<string, unknown>,
+                  needsMoreInfo: false,
+                };
+              } else if (feedToolCall.function.name === 'confirm_publish_playlist') {
+                const args = JSON.parse(feedToolCall.function.arguments);
+                const { publishPlaylist } = await import('../utilities/playlist-publisher');
+
+                console.log();
+                console.log(chalk.cyan('Publishing to feed server...'));
+
+                const publishResult = await publishPlaylist(
+                  args.filePath,
+                  args.feedServer.baseUrl,
+                  args.feedServer.apiKey
+                );
+
+                if (publishResult.success) {
+                  console.log(chalk.green('Published to feed server'));
+                  if (publishResult.playlistId) {
+                    console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
+                  }
+                  if (publishResult.feedServer) {
+                    console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
+                  }
+                  console.log();
+
+                  return {
+                    approved: true,
+                    params: {
+                      action: 'publish_playlist',
+                      filePath: args.filePath,
+                      feedServer: args.feedServer,
+                      playlistId: publishResult.playlistId,
+                      success: true,
+                    } as unknown as Record<string, unknown>,
+                    needsMoreInfo: false,
+                  };
+                } else {
+                  console.error(chalk.red('Publish failed: ' + publishResult.error));
+                  if (publishResult.message) {
+                    console.error(chalk.dim(`   ${publishResult.message}`));
+                  }
+                  console.log();
+
+                  return {
+                    approved: false,
+                    needsMoreInfo: false,
+                    params: {
+                      action: 'publish_playlist',
+                      success: false,
+                      error: publishResult.error,
+                    } as unknown as Record<string, unknown>,
+                  };
+                }
+              }
+            }
+
+            // AI might be asking a question or needs more info
+            return {
+              approved: false,
+              needsMoreInfo: true,
+              question: feedFollowUpMessage.content || undefined,
+              messages: [...feedUpdatedMessages, feedFollowUpMessage],
+            };
           } else if (followUpToolCall.function.name === 'confirm_publish_playlist') {
             // Handle publish after feed server selection
             const args = JSON.parse(followUpToolCall.function.arguments);
@@ -772,12 +948,12 @@ export async function processIntentParserRequest(
             );
 
             if (publishResult.success) {
-              console.log(chalk.green('✓ Published to feed server'));
+              console.log(chalk.green('Published to feed server'));
               if (publishResult.playlistId) {
-                console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+                console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
               }
               if (publishResult.feedServer) {
-                console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+                console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
               }
               console.log();
 
@@ -793,9 +969,9 @@ export async function processIntentParserRequest(
                 needsMoreInfo: false,
               };
             } else {
-              console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+              console.error(chalk.red('Publish failed: ' + publishResult.error));
               if (publishResult.message) {
-                console.error(chalk.gray(`   ${publishResult.message}`));
+                console.error(chalk.dim(`   ${publishResult.message}`));
               }
               console.log();
 
@@ -833,6 +1009,129 @@ export async function processIntentParserRequest(
         }
 
         // AI is still asking for more information
+        return {
+          approved: false,
+          needsMoreInfo: true,
+          question: followUpMessage.content || undefined,
+          messages: [...updatedMessages, followUpMessage],
+        };
+      } else if (toolCall.function.name === 'get_feed_servers') {
+        // Get the list of configured feed servers
+        const feedConfig = getFeedConfig();
+
+        // Build the server list for the AI
+        const serverList =
+          feedConfig.servers?.map((server) => ({
+            baseUrl: server.baseUrl,
+            apiKey: server.apiKey,
+          })) || feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
+
+        // Add tool result to messages and continue conversation
+        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ servers: serverList }),
+        };
+
+        const updatedMessages = [...messages, message, toolResultMessage];
+
+        // Continue the conversation with the feed server list
+        const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+          model: modelConfig.model,
+          messages: updatedMessages,
+          tools: intentParserFunctionSchemas,
+          tool_choice: 'auto',
+          stream: true,
+        };
+
+        if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+          followUpRequest.temperature = modelConfig.temperature;
+        } else if (modelConfig.temperature === 1) {
+          followUpRequest.temperature = 1;
+        }
+
+        if (modelConfig.model.startsWith('gpt-')) {
+          (followUpRequest as unknown as Record<string, unknown>).max_completion_tokens = 2000;
+        } else {
+          (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+        }
+
+        const { message: followUpMessage } = await createChatCompletion(
+          client,
+          followUpRequest,
+          modelConfig.baseURL,
+          modelConfig.maxRetries
+        );
+
+        // Check if AI now wants to parse requirements or publish
+        if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
+          const followUpToolCall = followUpMessage.tool_calls[0];
+          if (followUpToolCall.function.name === 'parse_requirements') {
+            const params = JSON.parse(followUpToolCall.function.arguments);
+
+            // Apply constraints and defaults
+            const validatedParams = applyConstraints(params, config);
+
+            return {
+              approved: true,
+              params: validatedParams as unknown as Record<string, unknown>,
+              needsMoreInfo: false,
+            };
+          } else if (followUpToolCall.function.name === 'confirm_publish_playlist') {
+            const args = JSON.parse(followUpToolCall.function.arguments);
+            const { publishPlaylist } = await import('../utilities/playlist-publisher');
+
+            console.log();
+            console.log(chalk.cyan('Publishing to feed server...'));
+
+            const publishResult = await publishPlaylist(
+              args.filePath,
+              args.feedServer.baseUrl,
+              args.feedServer.apiKey
+            );
+
+            if (publishResult.success) {
+              console.log(chalk.green('Published to feed server'));
+              if (publishResult.playlistId) {
+                console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
+              }
+              if (publishResult.feedServer) {
+                console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
+              }
+              console.log();
+
+              return {
+                approved: true,
+                params: {
+                  action: 'publish_playlist',
+                  filePath: args.filePath,
+                  feedServer: args.feedServer,
+                  playlistId: publishResult.playlistId,
+                  success: true,
+                } as unknown as Record<string, unknown>,
+                needsMoreInfo: false,
+              };
+            } else {
+              console.error(chalk.red('Publish failed: ' + publishResult.error));
+              if (publishResult.message) {
+                console.error(chalk.dim(`   ${publishResult.message}`));
+              }
+              console.log();
+
+              return {
+                approved: false,
+                needsMoreInfo: false,
+                params: {
+                  action: 'publish_playlist',
+                  success: false,
+                  error: publishResult.error,
+                } as unknown as Record<string, unknown>,
+              };
+            }
+          }
+        }
+
+        // AI might be asking a question or needs more info
         return {
           approved: false,
           needsMoreInfo: true,
@@ -919,12 +1218,12 @@ export async function processIntentParserRequest(
         );
 
         if (publishResult.success) {
-          console.log(chalk.green('✓ Published to feed server'));
+          console.log(chalk.green('Published to feed server'));
           if (publishResult.playlistId) {
-            console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+            console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
           }
           if (publishResult.feedServer) {
-            console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+            console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
           }
           console.log();
 
@@ -940,9 +1239,9 @@ export async function processIntentParserRequest(
             needsMoreInfo: false,
           };
         } else {
-          console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+          console.error(chalk.red('Publish failed: ' + publishResult.error));
           if (publishResult.message) {
-            console.error(chalk.gray(`   ${publishResult.message}`));
+            console.error(chalk.dim(`   ${publishResult.message}`));
           }
           console.log();
 
@@ -1016,13 +1315,14 @@ export async function processIntentParserRequest(
           (followUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
         }
 
-        const { message: followUpMessage } = await createStreamingCompletion(
+        const { message: followUpMessage } = await createChatCompletion(
           client,
           followUpRequest,
+          modelConfig.baseURL,
           modelConfig.maxRetries
         );
 
-        // Check if AI now wants to parse requirements
+        // Check if AI now wants to parse requirements or get feed servers
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
@@ -1035,6 +1335,131 @@ export async function processIntentParserRequest(
               approved: true,
               params: validatedParams as unknown as Record<string, unknown>,
               needsMoreInfo: false,
+            };
+          } else if (followUpToolCall.function.name === 'get_feed_servers') {
+            // Get the list of configured feed servers
+            const feedConfig = getFeedConfig();
+
+            // Build the server list for the AI
+            const serverList =
+              feedConfig.servers?.map((server) => ({
+                baseUrl: server.baseUrl,
+                apiKey: server.apiKey,
+              })) ||
+              feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
+
+            // Add tool result to messages and continue conversation
+            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
+              role: 'tool',
+              tool_call_id: followUpToolCall.id,
+              content: JSON.stringify({ servers: serverList }),
+            };
+
+            const feedUpdatedMessages = [...validMessages, followUpMessage, feedToolResultMessage];
+
+            // Continue the conversation with the feed server list
+            const feedFollowUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+              model: modelConfig.model,
+              messages: feedUpdatedMessages,
+              tools: intentParserFunctionSchemas,
+              tool_choice: 'auto',
+              stream: true,
+            };
+
+            if (modelConfig.temperature !== undefined && modelConfig.temperature !== 1) {
+              feedFollowUpRequest.temperature = modelConfig.temperature;
+            } else if (modelConfig.temperature === 1) {
+              feedFollowUpRequest.temperature = 1;
+            }
+
+            if (modelConfig.model.startsWith('gpt-')) {
+              (feedFollowUpRequest as unknown as Record<string, unknown>).max_completion_tokens =
+                2000;
+            } else {
+              (feedFollowUpRequest as unknown as Record<string, unknown>).max_tokens = 2000;
+            }
+
+            const { message: feedFollowUpMessage } = await createChatCompletion(
+              client,
+              feedFollowUpRequest,
+              modelConfig.baseURL,
+              modelConfig.maxRetries
+            );
+
+            // Check if AI now wants to parse requirements or publish
+            if (feedFollowUpMessage.tool_calls && feedFollowUpMessage.tool_calls.length > 0) {
+              const feedToolCall = feedFollowUpMessage.tool_calls[0];
+              if (feedToolCall.function.name === 'parse_requirements') {
+                const params = JSON.parse(feedToolCall.function.arguments);
+
+                // Apply constraints and defaults
+                const validatedParams = applyConstraints(params, config);
+
+                return {
+                  approved: true,
+                  params: validatedParams as unknown as Record<string, unknown>,
+                  needsMoreInfo: false,
+                };
+              } else if (feedToolCall.function.name === 'confirm_publish_playlist') {
+                const args = JSON.parse(feedToolCall.function.arguments);
+                const { publishPlaylist } = await import('../utilities/playlist-publisher');
+
+                console.log();
+                console.log(chalk.cyan('Publishing to feed server...'));
+
+                const publishResult = await publishPlaylist(
+                  args.filePath,
+                  args.feedServer.baseUrl,
+                  args.feedServer.apiKey
+                );
+
+                if (publishResult.success) {
+                  console.log(chalk.green('Published to feed server'));
+                  if (publishResult.playlistId) {
+                    console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
+                  }
+                  if (publishResult.feedServer) {
+                    console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
+                  }
+                  console.log();
+
+                  return {
+                    approved: true,
+                    params: {
+                      action: 'publish_playlist',
+                      filePath: args.filePath,
+                      feedServer: args.feedServer,
+                      playlistId: publishResult.playlistId,
+                      success: true,
+                    } as unknown as Record<string, unknown>,
+                    needsMoreInfo: false,
+                  };
+                } else {
+                  console.error(chalk.red('Publish failed: ' + publishResult.error));
+                  if (publishResult.message) {
+                    console.error(chalk.dim(`   ${publishResult.message}`));
+                  }
+                  console.log();
+
+                  return {
+                    approved: false,
+                    needsMoreInfo: false,
+                    params: {
+                      action: 'publish_playlist',
+                      success: false,
+                      error: publishResult.error,
+                    } as unknown as Record<string, unknown>,
+                  };
+                }
+              }
+            }
+
+            // AI might be asking a question or needs more info
+            return {
+              approved: false,
+              needsMoreInfo: true,
+              question: feedFollowUpMessage.content || undefined,
+              messages: [...feedUpdatedMessages, feedFollowUpMessage],
             };
           }
         }
@@ -1081,13 +1506,25 @@ export async function processIntentParserRequest(
       messages: [...messages, message],
     };
   } catch (error) {
-    const err = error as Error & { status?: number; response?: { status?: number } };
+    const err = error as Error & {
+      status?: number;
+      response?: { status?: number; statusText?: string; data?: unknown };
+    };
     const status = err.response?.status ?? err.status;
-    const baseMessage = `Intent parser failed: ${err.message}`;
-    if (status === 429) {
-      throw new Error(`${baseMessage} (rate limited by model provider)`);
-    }
-    throw new Error(baseMessage);
+    const statusText = err.response?.statusText;
+    const responseDetails =
+      err.response?.data && typeof err.response.data === 'string'
+        ? err.response.data
+        : err.response?.data
+          ? JSON.stringify(err.response.data)
+          : null;
+    const context = `model=${modelConfig.model}, baseURL=${modelConfig.baseURL}`;
+    const detailParts = [
+      err.message,
+      status ? `status ${status}${statusText ? ` ${statusText}` : ''}` : null,
+      responseDetails ? `response ${responseDetails}` : null,
+    ].filter(Boolean);
+    throw new Error(`Intent parser failed (${context}): ${detailParts.join(' | ')}`);
   }
 }
 

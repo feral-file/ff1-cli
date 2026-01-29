@@ -21,7 +21,7 @@ export function setVerbose(verbose: boolean): void {
  */
 export function debug(...args: unknown[]): void {
   if (isVerbose) {
-    console.log(chalk.gray('[DEBUG]'), ...args);
+    console.log(chalk.dim('[DEBUG]'), ...args);
   }
 }
 

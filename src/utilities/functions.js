@@ -52,12 +52,12 @@ async function sendPlaylistToDevice(params) {
   });
 
   if (result.success) {
-    console.log(chalk.green('\n✓ Sent to device'));
+    console.log(chalk.green('\nSent to device'));
     if (result.deviceName) {
-      console.log(chalk.gray(`  ${result.deviceName}`));
+      console.log(chalk.dim(`  ${result.deviceName}`));
     }
   } else {
-    console.error(chalk.red('\n✗ Could not send to device'));
+    console.error(chalk.red('\nSend failed'));
     if (result.error) {
       console.error(chalk.red(`  ${result.error}`));
     }
@@ -89,7 +89,7 @@ async function resolveDomains(params) {
 
   if (!domains || !Array.isArray(domains) || domains.length === 0) {
     const error = 'No domains provided for resolution';
-    console.error(chalk.red(`\n✗ ${error}`));
+    console.error(chalk.red(`\n${error}`));
     return {
       success: false,
       domainMap: {},
@@ -138,7 +138,7 @@ async function verifyPlaylist(params) {
     };
   }
 
-  console.log(chalk.cyan('\nValidating playlist...'));
+  console.log(chalk.cyan('\nValidate playlist'));
 
   // Dynamic import to avoid circular dependency
   const playlistVerifier = await import('./playlist-verifier');
@@ -157,16 +157,16 @@ async function verifyPlaylist(params) {
   const result = verify(playlist);
 
   if (result.valid) {
-    console.log(chalk.green('✓ Playlist looks good'));
+    console.log(chalk.green('Playlist looks good'));
     if (playlist.title) {
-      console.log(chalk.gray(`  Title: ${playlist.title}`));
+      console.log(chalk.dim(`  Title: ${playlist.title}`));
     }
     if (playlist.items) {
-      console.log(chalk.gray(`  Items: ${playlist.items.length}`));
+      console.log(chalk.dim(`  Items: ${playlist.items.length}`));
     }
     console.log();
   } else {
-    console.error(chalk.red('✗ Playlist has issues'));
+    console.error(chalk.red('Playlist has issues'));
     console.error(chalk.red(`  ${result.error}`));
     if (result.details && result.details.length > 0) {
       console.log(chalk.yellow('\n  Missing or invalid fields:'));
@@ -242,14 +242,14 @@ async function verifyAddresses(params) {
               : r.type === 'contract'
                 ? 'Tezos Contract'
                 : 'Tezos User';
-      console.log(chalk.gray(`  • ${r.address} (${typeLabel})`));
+      console.log(chalk.dim(`  • ${r.address} (${typeLabel})`));
       if (r.normalized) {
-        console.log(chalk.gray(`    Checksummed: ${r.normalized}`));
+        console.log(chalk.dim(`    Checksummed: ${r.normalized}`));
       }
     });
     console.log();
   } else {
-    console.error(chalk.red('\n✗ Address validation failed'));
+    console.error(chalk.red('\nAddress validation failed'));
     result.errors.forEach((err) => {
       console.error(chalk.red(`  • ${err}`));
     });

@@ -1,21 +1,29 @@
 # FF1-CLI Documentation
 
-Build DP1 (Display Protocol 1) playlists from NFT data with either natural language (AI‑driven) or deterministic parameters. This doc covers install, config, and day‑to‑day usage.
+Build DP-1 (Display Protocol 1) playlists from NFT data with either natural language (AI‑driven) or deterministic parameters. This doc covers install, config, and day‑to‑day usage.
 
 ## Install
 
 ```bash
-npm install
+npm i -g ff1-cli
 ```
+
+## Install (curl)
+
+```bash
+curl -fsSL https://feralfile.com/ff1-cli-install | bash
+```
+
+Installs a prebuilt binary for macOS/Linux (no Node.js required).
 
 ## Configure
 
 ```bash
 # Create example config and edit API keys
-npm run dev -- config init
+ff1 config init
 
 # Validate configuration
-npm run dev -- config validate
+ff1 config validate
 ```
 
 See the full configuration reference here: `./CONFIGURATION.md`.
@@ -70,21 +78,27 @@ See `./CONFIGURATION.md` for environment variable mappings.
 ## Quick Start
 
 ```bash
-# Dev (no build required)
-npm run dev chat
+# Chat
+ff1 chat
 
 # Or natural language in one shot
-npm run dev -- chat "Get tokens 1,2,3 from Ethereum contract 0xabc" -o playlist.json
+ff1 chat "Get tokens 1,2,3 from Ethereum contract 0xabc" -o playlist.json
 
 # Deterministic (no AI)
-npm run dev -- build examples/params-example.json -o playlist.json
+ff1 build examples/params-example.json -o playlist.json
 ```
 
-For production:
+For development in this repo:
 
 ```bash
 npm run build
 node dist/index.js chat
+```
+
+If you're running from source without a build, use:
+
+```bash
+npm run dev -- chat
 ```
 
 ## Recommended Deterministic Flow (LLM + Tools)
@@ -249,4 +263,5 @@ See selection rules and examples in `./CONFIGURATION.md`.
 
 - Function calling details: `./FUNCTION_CALLING.md`
 - Examples: `./EXAMPLES.md`
+- Release assets: `./RELEASING.md`
 - DP1 spec: `https://github.com/display-protocol/dp1`

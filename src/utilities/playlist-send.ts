@@ -47,7 +47,7 @@ async function getAvailableDevices(): Promise<Array<{ name: string; host: string
     }
   } catch (error) {
     if (process.env.DEBUG) {
-      console.log(chalk.gray(`[DEBUG] Error loading devices: ${(error as Error).message}`));
+      console.log(chalk.dim(`[DEBUG] Error loading devices: ${(error as Error).message}`));
     }
     // Silently fail if config can't be loaded
   }
@@ -77,7 +77,7 @@ export async function confirmPlaylistForSending(
 
   if (process.env.DEBUG) {
     console.error(
-      chalk.gray(
+      chalk.dim(
         `[DEBUG] confirmPlaylistForSending called with: filePath="${filePath}", deviceName="${deviceName}" -> "${actualDeviceName}"`
       )
     );
@@ -85,7 +85,7 @@ export async function confirmPlaylistForSending(
 
   try {
     // Check if file exists
-    console.log(chalk.cyan(`Checking playlist file: ${resolvedPath}...`));
+    console.log(chalk.cyan(`Playlist file: ${resolvedPath}`));
 
     let _fileExists = false;
     let playlist: Record<string, unknown> | undefined;
@@ -94,11 +94,11 @@ export async function confirmPlaylistForSending(
       const content = await fs.readFile(resolvedPath, 'utf-8');
       playlist = JSON.parse(content);
       _fileExists = true;
-      console.log(chalk.green('✓ File found'));
+      console.log(chalk.green('File loaded'));
     } catch (error) {
       const errorMsg = (error as Error).message;
       if (errorMsg.includes('ENOENT') || errorMsg.includes('no such file')) {
-        console.log(chalk.red(`✗ File not found: ${resolvedPath}`));
+        console.log(chalk.red(`File not found: ${resolvedPath}`));
         return {
           success: false,
           filePath: resolvedPath,
@@ -122,14 +122,14 @@ export async function confirmPlaylistForSending(
     }
 
     // Validate playlist structure
-    console.log(chalk.cyan('Validating playlist...'));
+    console.log(chalk.cyan('Validation'));
 
     // Dynamic import to avoid circular dependency
     const { verifyPlaylist } = await import('./playlist-verifier');
     const verifyResult = verifyPlaylist(playlist);
 
     if (!verifyResult.valid) {
-      console.log(chalk.red('✗ Playlist validation failed'));
+      console.log(chalk.red('Playlist validation failed'));
       const detailLines =
         verifyResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n') ||
         verifyResult.error;
@@ -161,7 +161,7 @@ export async function confirmPlaylistForSending(
       };
     }
 
-    console.log(chalk.green('✓ Playlist is valid'));
+    console.log(chalk.green('Valid DP-1 playlist'));
 
     // Display confirmation details
     const itemCount = (playlist.items as unknown[])?.length || 0;
@@ -177,10 +177,10 @@ export async function confirmPlaylistForSending(
       availableDevices = await getAvailableDevices();
 
       if (process.env.DEBUG) {
-        console.error(chalk.gray(`[DEBUG] selectedDevice is null/undefined`));
-        console.error(chalk.gray(`[DEBUG] Available devices found: ${availableDevices.length}`));
+        console.error(chalk.dim(`[DEBUG] selectedDevice is null/undefined`));
+        console.error(chalk.dim(`[DEBUG] Available devices found: ${availableDevices.length}`));
         availableDevices.forEach((d) => {
-          console.error(chalk.gray(`[DEBUG] Device: ${d.name} (${d.host})`));
+          console.error(chalk.dim(`[DEBUG] Device: ${d.name} (${d.host})`));
         });
       }
 
@@ -197,7 +197,7 @@ export async function confirmPlaylistForSending(
       } else if (availableDevices.length === 1) {
         // Auto-select single device
         selectedDevice = availableDevices[0].name || availableDevices[0].host;
-        console.log(chalk.cyan(`Auto-selecting device: ${selectedDevice}`));
+        console.log(chalk.cyan(`Device: ${selectedDevice} (auto)`));
       } else {
         // Multiple devices - need user to choose
         needsDeviceSelection = true;
@@ -205,13 +205,13 @@ export async function confirmPlaylistForSending(
     }
 
     console.log();
-    console.log(chalk.bold('Playlist Summary:'));
-    console.log(chalk.gray(`  Title: ${title}`));
-    console.log(chalk.gray(`  Items: ${itemCount}`));
+    console.log(chalk.bold('Send Summary'));
+    console.log(chalk.dim(`  Title: ${title}`));
+    console.log(chalk.dim(`  Items: ${itemCount}`));
     if (selectedDevice) {
-      console.log(chalk.gray(`  Device: ${selectedDevice}`));
+      console.log(chalk.dim(`  Device: ${selectedDevice}`));
     } else if (availableDevices.length > 1) {
-      console.log(chalk.gray(`  Device: (to be selected)`));
+      console.log(chalk.dim('  Device: select one'));
     }
     console.log();
 
@@ -241,7 +241,7 @@ export async function confirmPlaylistForSending(
     };
   } catch (error) {
     const errorMsg = (error as Error).message;
-    console.log(chalk.red(`✗ Error: ${errorMsg}`));
+    console.log(chalk.red(`Error: ${errorMsg}`));
 
     return {
       success: false,

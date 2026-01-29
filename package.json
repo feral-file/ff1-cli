@@ -6,17 +6,32 @@
   "bin": {
     "ff1": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "docs",
+    "config.json.example",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "bundle": "node build.js",
     "bundle:dev": "node build.js --dev",
+    "release:asset": "./scripts/release/build-asset.sh",
     "start": "node dist/index.js",
     "dev": "tsx index.ts",
+    "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,ts}\"",
     "format:check": "prettier --check \"**/*.{js,ts}\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "nft",

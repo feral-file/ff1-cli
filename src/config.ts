@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import type {
   Config,
   ModelConfig,
@@ -9,6 +10,13 @@ import type {
   FF1DeviceConfig,
   ValidationResult,
 } from './types';
+
+export function getConfigPaths(): { localPath: string; userPath: string } {
+  const localPath = path.join(process.cwd(), 'config.json');
+  const configBase = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  const userPath = path.join(configBase, 'ff1', 'config.json');
+  return { localPath, userPath };
+}
 
 /**
  * Load configuration from config.json or environment variables
@@ -20,7 +28,7 @@ import type {
  * @returns {number} returns.defaultDuration - Default duration per item in seconds
  */
 function loadConfig(): Config {
-  const configPath = path.join(process.cwd(), 'config.json');
+  const { localPath, userPath } = getConfigPaths();
 
   // Default configuration supporting Grok as default
   const defaultConfig: Config = {
@@ -51,8 +59,8 @@ function loadConfig(): Config {
       gemini: {
         apiKey: process.env.GEMINI_API_KEY || '',
         baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-        model: 'gemini-2.0-flash-exp',
-        availableModels: ['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+        model: 'gemini-2.5-flash',
+        availableModels: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-lite-latest'],
         timeout: 30000,
         maxRetries: 3,
         temperature: 0.3,
@@ -73,6 +81,7 @@ function loadConfig(): Config {
   };
 
   // Try to load config.json if it exists
+  const configPath = fs.existsSync(localPath) ? localPath : userPath;
   if (fs.existsSync(configPath)) {
     try {
       const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Partial<Config>;
@@ -265,8 +274,11 @@ export function getModelConfig(modelName?: string): ModelConfig {
     throw new Error(`Model "${selectedModel}" does not support function calling`);
   }
 
+  const normalizedBaseURL = modelConfig.baseURL?.replace(/\/+$/, '');
+
   return {
     ...modelConfig,
+    baseURL: normalizedBaseURL,
     defaultDuration: config.defaultDuration,
   };
 }
@@ -358,22 +370,36 @@ export function validateConfig(modelName?: string): ValidationResult {
 /**
  * Create a sample config.json file from config.json.example
  *
+ * Loads the bundled config.json.example template from the package directory
+ * and writes it to the user's current working directory.
+ *
  * @returns {Promise<string>} Path to the created config file
  * @throws {Error} If config.json already exists or example file is missing
  */
-export async function createSampleConfig(): Promise<string> {
-  const configPath = path.join(process.cwd(), 'config.json');
-  const examplePath = path.join(process.cwd(), 'config.json.example');
+export async function createSampleConfig(targetPath?: string): Promise<string> {
+  const { userPath } = getConfigPaths();
+  const configPath = targetPath || userPath;
 
+  // Check if config.json already exists in user's directory
   if (fs.existsSync(configPath)) {
     throw new Error('config.json already exists');
   }
 
-  if (!fs.existsSync(examplePath)) {
-    throw new Error('config.json.example not found');
+  // Look for config.json.example in the package directory
+  // When compiled, this file is in dist/src/config.js
+  // The template is at the package root: ../../config.json.example
+  const exampleCandidates = [
+    path.join(process.cwd(), 'config.json.example'),
+    path.join(__dirname, '../..', 'config.json.example'),
+  ];
+  const examplePath = exampleCandidates.find((candidate) => fs.existsSync(candidate));
+
+  if (!examplePath) {
+    throw new Error('config.json.example not found. This is likely a package installation issue.');
   }
 
   const exampleConfig = fs.readFileSync(examplePath, 'utf-8');
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, exampleConfig, 'utf-8');
 
   return configPath;
