@@ -1,15 +1,15 @@
 # Function Calling Architecture
 
-How FF1‑CLI uses AI function calling to build playlists deterministically. The model orchestrates function calls; tools enforce schema and assemble the DP1 envelope.
+How FF1‑CLI uses AI function calling to build playlists deterministically. The model orchestrates function calls; tools enforce schema and assemble the DP-1 envelope.
 
 ## Overview
 
-Natural language requests become structured parameters. An AI orchestrator then calls functions to fetch items, build a DP1 playlist, verify it, optionally sign, and send to a device.
+Natural language requests become structured parameters. An AI orchestrator then calls functions to fetch items, build a DP-1 playlist, verify it, optionally sign, and send to a device.
 
 Pipeline:
 
 ```
-Intent Parser → Orchestrator (function calls) → Utilities → DP1 Playlist
+Intent Parser → Orchestrator (function calls) → Utilities → DP-1 Playlist
 ```
 
 Key files:
@@ -31,8 +31,8 @@ Defined in `src/ai-orchestrator/index.js` as tool schemas for OpenAI‑compatibl
 
 - `search_feed_playlist(playlistName)` → fuzzy-match across configured feeds
 - `fetch_feed_playlist_items(playlistName, quantity, duration)`
-- `build_playlist(items, title?, slug?, shuffle?)` → returns DP1 playlist
-- `verify_playlist(playlist)` → validates DP1 compliance (must precede send)
+- `build_playlist(items, title?, slug?, shuffle?)` → returns DP-1 playlist
+- `verify_playlist(playlist)` → validates DP-1 compliance (must precede send)
 - `verify_addresses(addresses[])` → validates Ethereum (0x...) and Tezos (tz.../KT1) address formats
 - `send_to_device(playlist, deviceName?)`
 - `resolve_domains(domains[], displayResults?)` → ENS/TNS resolution
@@ -85,7 +85,7 @@ This path bypasses the intent parser/orchestrator and calls utilities directly. 
 
 ## Validation & Constraints
 
-- Verify via `dp1-js` for DP1 conformance (canonical JSON + Ed25519 signing supported)
+- Verify via `dp1-js` for DP-1 conformance (canonical JSON + Ed25519 signing supported)
 - Enforce max item counts and ordering/shuffle rules during build
 - Batch domain resolution; report failures without crashing the flow
 

@@ -27,6 +27,12 @@
     "format": "prettier --write \"**/*.{js,ts}\"",
     "format:check": "prettier --check \"**/*.{js,ts}\""
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "nft",
     "playlist",

@@ -93,13 +93,13 @@ export function applyConstraints(params: RequirementParams, config: Config): Req
   if (hasAllQuantity) {
     console.log(
       chalk.yellow(
-        `\n⚠️  Requesting all tokens from one or more addresses. This may take a while to fetch and process...\n`
+        `\nRequesting all tokens from one or more addresses. This may take a while to fetch and process.\n`
       )
     );
   } else if (totalRequested > 100) {
     console.log(
       chalk.yellow(
-        `\n⚠️  Requesting ${totalRequested} items. This may take a while to fetch and process...\n`
+        `\nRequesting ${totalRequested} items. This may take a while to fetch and process.\n`
       )
     );
   }

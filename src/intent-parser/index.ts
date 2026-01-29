@@ -467,7 +467,7 @@ function formatMarkdown(text: string): string {
   formatted = formatted.replace(/(?<!\w)_([^_]+)_(?!\w)/g, (_, p1) => chalk.italic(p1));
 
   // Inline code: `code` - light grey color
-  formatted = formatted.replace(/`([^`]+)`/g, (_, p1) => chalk.grey(p1));
+  formatted = formatted.replace(/`([^`]+)`/g, (_, p1) => chalk.dim(p1));
 
   // Links: [text](url) - show text in blue
   formatted = formatted.replace(/\[([^\]]+)\]\([^)]+\)/g, (_, p1) => chalk.blue(p1));
@@ -886,12 +886,12 @@ export async function processIntentParserRequest(
                 );
 
                 if (publishResult.success) {
-                  console.log(chalk.green('✓ Published to feed server'));
+                  console.log(chalk.green('Published to feed server'));
                   if (publishResult.playlistId) {
-                    console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+                    console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
                   }
                   if (publishResult.feedServer) {
-                    console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+                    console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
                   }
                   console.log();
 
@@ -907,9 +907,9 @@ export async function processIntentParserRequest(
                     needsMoreInfo: false,
                   };
                 } else {
-                  console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+                  console.error(chalk.red('Publish failed: ' + publishResult.error));
                   if (publishResult.message) {
-                    console.error(chalk.gray(`   ${publishResult.message}`));
+                    console.error(chalk.dim(`   ${publishResult.message}`));
                   }
                   console.log();
 
@@ -948,12 +948,12 @@ export async function processIntentParserRequest(
             );
 
             if (publishResult.success) {
-              console.log(chalk.green('✓ Published to feed server'));
+              console.log(chalk.green('Published to feed server'));
               if (publishResult.playlistId) {
-                console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+                console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
               }
               if (publishResult.feedServer) {
-                console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+                console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
               }
               console.log();
 
@@ -969,9 +969,9 @@ export async function processIntentParserRequest(
                 needsMoreInfo: false,
               };
             } else {
-              console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+              console.error(chalk.red('Publish failed: ' + publishResult.error));
               if (publishResult.message) {
-                console.error(chalk.gray(`   ${publishResult.message}`));
+                console.error(chalk.dim(`   ${publishResult.message}`));
               }
               console.log();
 
@@ -1091,12 +1091,12 @@ export async function processIntentParserRequest(
             );
 
             if (publishResult.success) {
-              console.log(chalk.green('✓ Published to feed server'));
+              console.log(chalk.green('Published to feed server'));
               if (publishResult.playlistId) {
-                console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+                console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
               }
               if (publishResult.feedServer) {
-                console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+                console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
               }
               console.log();
 
@@ -1112,9 +1112,9 @@ export async function processIntentParserRequest(
                 needsMoreInfo: false,
               };
             } else {
-              console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+              console.error(chalk.red('Publish failed: ' + publishResult.error));
               if (publishResult.message) {
-                console.error(chalk.gray(`   ${publishResult.message}`));
+                console.error(chalk.dim(`   ${publishResult.message}`));
               }
               console.log();
 
@@ -1218,12 +1218,12 @@ export async function processIntentParserRequest(
         );
 
         if (publishResult.success) {
-          console.log(chalk.green('✓ Published to feed server'));
+          console.log(chalk.green('Published to feed server'));
           if (publishResult.playlistId) {
-            console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+            console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
           }
           if (publishResult.feedServer) {
-            console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+            console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
           }
           console.log();
 
@@ -1239,9 +1239,9 @@ export async function processIntentParserRequest(
             needsMoreInfo: false,
           };
         } else {
-          console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+          console.error(chalk.red('Publish failed: ' + publishResult.error));
           if (publishResult.message) {
-            console.error(chalk.gray(`   ${publishResult.message}`));
+            console.error(chalk.dim(`   ${publishResult.message}`));
           }
           console.log();
 
@@ -1414,12 +1414,12 @@ export async function processIntentParserRequest(
                 );
 
                 if (publishResult.success) {
-                  console.log(chalk.green('✓ Published to feed server'));
+                  console.log(chalk.green('Published to feed server'));
                   if (publishResult.playlistId) {
-                    console.log(chalk.gray(`   Playlist ID: ${publishResult.playlistId}`));
+                    console.log(chalk.dim(`   Playlist ID: ${publishResult.playlistId}`));
                   }
                   if (publishResult.feedServer) {
-                    console.log(chalk.gray(`   Server: ${publishResult.feedServer}`));
+                    console.log(chalk.dim(`   Server: ${publishResult.feedServer}`));
                   }
                   console.log();
 
@@ -1435,9 +1435,9 @@ export async function processIntentParserRequest(
                     needsMoreInfo: false,
                   };
                 } else {
-                  console.error(chalk.red('✗ Failed to publish: ' + publishResult.error));
+                  console.error(chalk.red('Publish failed: ' + publishResult.error));
                   if (publishResult.message) {
-                    console.error(chalk.gray(`   ${publishResult.message}`));
+                    console.error(chalk.dim(`   ${publishResult.message}`));
                   }
                   console.log();
 

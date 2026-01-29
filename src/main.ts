@@ -212,9 +212,9 @@ export async function buildPlaylist(
       );
 
       if (sendResult.success) {
-        console.log(chalk.green('\n✅ Playlist sent successfully!'));
+        console.log(chalk.green('\nPlaylist sent'));
         if (sendResult.deviceName) {
-          console.log(chalk.gray(`   Device: ${sendResult.deviceName}`));
+          console.log(chalk.dim(`  Device: ${sendResult.deviceName}`));
         }
         console.log();
         return {
@@ -225,9 +225,9 @@ export async function buildPlaylist(
       }
 
       console.log();
-      console.error(chalk.red('❌ Failed to send playlist'));
+      console.error(chalk.red('Send failed'));
       if (sendResult.error) {
-        console.error(chalk.red(`   ${sendResult.error}`));
+        console.error(chalk.red(`  ${sendResult.error}`));
       }
       return {
         success: false,
@@ -251,11 +251,11 @@ export async function buildPlaylist(
         // Non-interactive mode: cannot ask for clarification
         console.error(
           chalk.red(
-            '\n❌ More information needed but running in non-interactive mode. Please provide a complete request.'
+            '\nNeed more information, but running in non-interactive mode. Provide a complete request.'
           )
         );
         if (intentParserResult.question) {
-          console.error(chalk.yellow('\nAI asked: ') + intentParserResult.question);
+          console.error(chalk.yellow('\nQuestion: ') + intentParserResult.question);
         }
         process.exit(1);
       }
@@ -268,7 +268,7 @@ export async function buildPlaylist(
 
       // Display the AI's question before asking for input
       if (intentParserResult.question) {
-        console.log(chalk.cyan('\n🤖 ') + intentParserResult.question);
+        console.log(chalk.cyan('\n') + intentParserResult.question);
       }
 
       const userResponse = await new Promise<string>((resolve) => {
@@ -279,7 +279,7 @@ export async function buildPlaylist(
       });
 
       if (!userResponse) {
-        console.error(chalk.red('\n❌ No response provided. Exiting.'));
+        console.error(chalk.red('\nNo response provided. Exiting.'));
         process.exit(1);
       }
 
@@ -295,7 +295,7 @@ export async function buildPlaylist(
     }
 
     if (!intentParserResult.approved) {
-      console.error(chalk.red('\n❌ Request not approved by intent parser'));
+      console.error(chalk.red('\nRequest not approved by intent parser'));
       return null;
     }
 
@@ -308,7 +308,7 @@ export async function buildPlaylist(
       const utilities = getUtilities();
 
       console.log();
-      console.log(chalk.cyan('Sending to device...'));
+      console.log(chalk.cyan('Sending to device'));
 
       const sendResult = await utilities.sendToDevice(
         sendParams.playlist as Playlist,
@@ -316,9 +316,9 @@ export async function buildPlaylist(
       );
 
       if (sendResult.success) {
-        console.log(chalk.green('\n✅ Playlist sent successfully!'));
+        console.log(chalk.green('\nPlaylist sent'));
         if (sendResult.deviceName) {
-          console.log(chalk.gray(`   Device: ${sendResult.deviceName}`));
+          console.log(chalk.dim(`  Device: ${sendResult.deviceName}`));
         }
         console.log();
         return {
@@ -329,9 +329,9 @@ export async function buildPlaylist(
       } else {
         // Send failed - return error without showing the playlist summary
         console.log();
-        console.error(chalk.red('❌ Failed to send playlist'));
+        console.error(chalk.red('Send failed'));
         if (sendResult.error) {
-          console.error(chalk.red(`   ${sendResult.error}`));
+          console.error(chalk.red(`  ${sendResult.error}`));
         }
         return {
           success: false,
@@ -392,7 +392,7 @@ export async function buildPlaylist(
       });
 
       if (!userResponse) {
-        console.error(chalk.red('\n❌ No response provided. Canceling.'));
+        console.error(chalk.red('\nNo response provided. Canceling.'));
         return null;
       }
 
@@ -413,14 +413,14 @@ export async function buildPlaylist(
 
     // If no playlist was built, display the AI's message
     if (!result.playlist && result.message) {
-      console.log(chalk.yellow('\n⚠️  ' + result.message));
+      console.log(chalk.yellow('\n' + result.message));
     }
 
     return result;
   } catch (error) {
-    console.error(chalk.red('\n❌ Error:'), (error as Error).message);
+    console.error(chalk.red('\nError:'), (error as Error).message);
     if (verbose) {
-      console.error(chalk.gray((error as Error).stack));
+      console.error(chalk.dim((error as Error).stack));
     }
     throw error;
   }
