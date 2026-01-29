@@ -242,9 +242,17 @@ program
       const existingDevice = config.ff1Devices?.devices?.[0];
       {
         const existingHost = existingDevice?.host || '';
-        const rawDefaultDeviceId = existingHost
-          ? existingHost.replace(/^https?:\/\//, '').split('.')[0] || ''
-          : '';
+        let rawDefaultDeviceId = '';
+        if (existingHost) {
+          // If host is a .local device, extract just the device ID segment.
+          // Otherwise keep the full host (IP address or multi-label domain).
+          const hostWithoutScheme = existingHost.replace(/^https?:\/\//, '');
+          if (hostWithoutScheme.includes('.local')) {
+            rawDefaultDeviceId = hostWithoutScheme.split('.')[0] || '';
+          } else {
+            rawDefaultDeviceId = hostWithoutScheme;
+          }
+        }
         const defaultDeviceId = isMissingConfigValue(rawDefaultDeviceId) ? '' : rawDefaultDeviceId;
         const idPrompt = defaultDeviceId
           ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
