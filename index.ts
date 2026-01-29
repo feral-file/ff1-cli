@@ -14,7 +14,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import crypto from 'crypto';
-import path from 'path';
 import * as readline from 'readline';
 import {
   getConfig,
@@ -70,7 +69,7 @@ async function resolveExistingConfigPath(): Promise<string | null> {
 }
 
 async function ensureConfigFile(): Promise<{ path: string; created: boolean }> {
-  const { localPath, userPath } = getConfigPaths();
+  const { userPath } = getConfigPaths();
   const existingPath = await resolveExistingConfigPath();
   if (existingPath) {
     return { path: existingPath, created: false };
