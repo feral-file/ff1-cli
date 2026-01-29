@@ -91,19 +91,31 @@ export function validateRequirements(requirements: Requirement[]): Requirement[]
         throw new Error(`Requirement ${index + 1}: blockchain is required for build_playlist`);
       }
 
-      if (!req.tokenIds || req.tokenIds.length === 0) {
-        throw new Error(`Requirement ${index + 1}: at least one token ID is required`);
+      if (!req.contractAddress) {
+        throw new Error(`Requirement ${index + 1}: contractAddress is required for build_playlist`);
       }
 
-      const quantity =
-        typeof req.quantity === 'number'
-          ? Math.min(req.quantity, 20)
-          : Math.min(req.tokenIds.length, 20);
-      return {
-        ...req,
-        quantity,
-        tokenIds: req.tokenIds || [],
-      };
+      // tokenIds is now optional - if not provided, query random tokens from contract
+      if (req.tokenIds && req.tokenIds.length > 0) {
+        // Specific token IDs provided
+        const quantity =
+          typeof req.quantity === 'number'
+            ? Math.min(req.quantity, 20)
+            : Math.min(req.tokenIds.length, 20);
+        return {
+          ...req,
+          quantity,
+          tokenIds: req.tokenIds,
+        };
+      } else {
+        // No token IDs - query random tokens from contract
+        const quantity = typeof req.quantity === 'number' ? Math.min(req.quantity, 100) : 100;
+        return {
+          ...req,
+          quantity,
+          tokenIds: undefined, // Explicitly set to undefined
+        };
+      }
     }
 
     throw new Error(`Requirement ${index + 1}: invalid type "${(req as { type?: string }).type}"`);

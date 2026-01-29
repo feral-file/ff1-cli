@@ -37,7 +37,7 @@ function initializeUtilities(_config) {
 async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
   try {
     const shouldFetchAll = quantity === 'all' || quantity === undefined || quantity === null;
-    const batchSize = 100; // Fetch 100 tokens per page
+    const batchSize = 50; // Fetch 50 tokens per page
     let allTokens = [];
     let offset = 0;
     let hasMore = true;
@@ -237,7 +237,78 @@ async function queryRequirement(requirement, duration = 10) {
   let items = [];
 
   try {
-    // Handle different blockchain types
+    // Check if we're querying by contract (no specific token IDs) or by specific token IDs
+    const isContractQuery = contractAddress && (!tokenIds || tokenIds.length === 0);
+
+    if (isContractQuery) {
+      // Query random tokens from the contract
+      console.log(
+        chalk.cyan(
+          `   Fetching ${quantity || 100} random token(s) from contract ${contractAddress.substring(0, 10)}...`
+        )
+      );
+
+      const limit = Math.min(quantity || 100, 100);
+      const result = await nftIndexer.queryTokensByContract(contractAddress, limit);
+
+      if (!result.success) {
+        console.log(chalk.yellow(`   Could not fetch tokens from contract`));
+        console.log(chalk.cyan(`   → Trying as owner address instead...`));
+        return await queryTokensByAddress(contractAddress, quantity, duration);
+      }
+
+      if (result.tokens.length === 0) {
+        console.log(chalk.yellow(`   No tokens found in contract ${contractAddress}`));
+        console.log(chalk.cyan(`   → Trying as owner address instead...`));
+        return await queryTokensByAddress(contractAddress, quantity, duration);
+      }
+
+      // Convert tokens to DP1 items (similar to queryTokensByAddress logic)
+      let allTokens = result.tokens;
+
+      // Apply quantity limit with random selection if needed
+      if (quantity && allTokens.length > quantity) {
+        allTokens = shuffleArray([...allTokens]).slice(0, quantity);
+      }
+
+      console.log(chalk.dim(`   Got ${allTokens.length} token(s)`));
+
+      // Convert tokens to DP1 items
+      const dp1Items = [];
+      let skippedCount = 0;
+      for (const token of allTokens) {
+        // Detect blockchain from contract address
+        let chain = 'ethereum';
+        const contractAddr = token.contract_address || token.contractAddress || '';
+        if (contractAddr.startsWith('KT')) {
+          chain = 'tezos';
+        }
+
+        // Map indexer token data to standard format
+        const tokenData = nftIndexer.mapIndexerDataToStandardFormat(token, chain);
+
+        if (tokenData.success) {
+          const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
+          if (dp1Result.success && dp1Result.item) {
+            dp1Items.push(dp1Result.item);
+          } else if (!dp1Result.success) {
+            skippedCount++;
+          }
+        }
+      }
+
+      if (skippedCount > 0) {
+        console.log(
+          chalk.yellow(
+            `   Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
+          )
+        );
+      }
+
+      return dp1Items;
+    }
+
+    // Handle specific token IDs (original logic)
     if (blockchain.toLowerCase() === 'tezos') {
       // Tezos NFTs
       if (tokenIds && tokenIds.length > 0) {

@@ -101,17 +101,25 @@ OUTPUT CONTRACT
 - Use correct types; never truncate addresses/tokenIds; tokenIds are strings; quantity is a number.
 
 REQUIREMENT TYPES (BUILD)
-- build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds: string[], quantity?: number, source?: string }
-  • ONLY use when user explicitly provides BOTH contract address AND specific token IDs
-  • Example: "tokens 1, 2, 3 from contract 0x123"
+- build_playlist: { type, blockchain: "ethereum"|"tezos", contractAddress, tokenIds?: string[], quantity?: number, source?: string }
+  • USE THIS when user mentions "contract" with a quantity: "N items from [blockchain] contract [address]"
+  • tokenIds is OPTIONAL - omit it when user wants random tokens from a contract
+  • Examples:
+    - "tokens 1, 2, 3 from contract 0x123" → build_playlist with tokenIds: ["1", "2", "3"]
+    - "100 items from ethereum contract 0xABC" → build_playlist with quantity: 100, NO tokenIds
+    - "50 random tokens from tezos contract KT1..." → build_playlist with quantity: 50, NO tokenIds
 - query_address: { type, ownerAddress: 0x…|tz…|domain.eth|domain.tez, quantity?: number | "all" }
-  • Domains (.eth/.tez) are OWNER DOMAINS. Do not ask for tokenIds. Do not treat as contracts.
-  • A raw 0x…/tz… without tokenIds is an OWNER ADDRESS (query_address), not a contract.
-  • CRITICAL: Phrases like "N items from [address]", "NFTs from [address]", "tokens from [address]" → query_address
-  • Example: "30 items from 0xABC" → query_address with quantity=30
+  • USE THIS for owner/wallet addresses WITHOUT the word "contract"
+  • Patterns: "N items from [address]", "NFTs from [address]", "tokens owned by [address]"
+  • Domains (.eth/.tez) are ALWAYS owner addresses
+  • Example: "100 items from 0xABC" (without mentioning "contract") → query_address
   • When user says "all", "all tokens", "all NFTs" → use quantity="all" (string, not number)
-  • quantity="all" will fetch ALL tokens using pagination, can handle thousands of tokens
 - fetch_feed: { type, playlistName: string, quantity?: number (default 5) }
+
+CRITICAL DISTINCTION:
+- User says "contract" + address → build_playlist (queries tokens FROM that contract)
+- User says just address (no "contract" word) → query_address (queries tokens OWNED by that address)
+- User says ".eth" or ".tez" domain → ALWAYS query_address (owner domain)
 
 DOMAIN OWNER RULES (CRITICAL)
 - Interpret \`*.eth\` as an Ethereum OWNER DOMAIN → produce \`query_address\` with \`ownerAddress\` set to the domain string (e.g., \`reas.eth\`).
@@ -119,19 +127,21 @@ DOMAIN OWNER RULES (CRITICAL)
 - Never treat \.eth or \.tez as a contract or collection identifier.
 - Never invent or request \`tokenIds\` for \.eth/\.tez domains. Use \`quantity\` only.
 
-EXAMPLES (query_address - NO tokenIds needed)
+EXAMPLES (query_address - owner/wallet addresses)
 - "Pick 3 artworks from reas.eth" → \`query_address\` { ownerAddress: "reas.eth", quantity: 3 }
-- "3 from einstein-rosen.tez and play on my FF1" → \`query_address\` { ownerAddress: "einstein-rosen.tez", quantity: 3 } and set \`playlistSettings.deviceName\` accordingly
+- "3 from einstein-rosen.tez and play on my FF1" → \`query_address\` { ownerAddress: "einstein-rosen.tez", quantity: 3 } and set \`playlistSettings.deviceName\`
 - "create a playlist of 30 items from 0xABC" → \`query_address\` { ownerAddress: "0xABC", quantity: 30 }
 - "get 20 NFTs from 0x123" → \`query_address\` { ownerAddress: "0x123", quantity: 20 }
-- "create a playlist from all tokens in reas.eth" → \`query_address\` { ownerAddress: "reas.eth", quantity: "all" }
 - "get all NFTs from 0xABC" → \`query_address\` { ownerAddress: "0xABC", quantity: "all" }
+
+EXAMPLES (build_playlist - contract addresses)
+- "tokens 5, 10, 15 from contract 0xABC on ethereum" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", tokenIds: ["5", "10", "15"] }
+- "create a playlist of 100 items from ethereum contract 0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270", quantity: 100 }
+- "100 random tokens from tezos contract KT1abc" → \`build_playlist\` { blockchain: "tezos", contractAddress: "KT1abc", quantity: 100 }
+- "get 50 from contract 0xDEF" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xDEF", quantity: 50 }
 
 EXAMPLES (fetch_feed)
 - "Pick 3 artworks from Social Codes and 2 from a2p. Mix them up." → \`fetch_feed\` { playlistName: "Social Codes", quantity: 3 } + \`fetch_feed\` { playlistName: "a2p", quantity: 2 }, and set \`playlistSettings.preserveOrder\` = false
-
-EXAMPLES (build_playlist - requires BOTH contract AND tokenIds)
-- "tokens 5, 10, 15 from contract 0xABC on ethereum" → \`build_playlist\` { blockchain: "ethereum", contractAddress: "0xABC", tokenIds: ["5", "10", "15"] }
 
 PLAYLIST SETTINGS EXTRACTION
 - durationPerItem: parse phrases (e.g., "6 seconds each" → 6)
@@ -155,11 +165,12 @@ MISSING INFO POLICY (ASK AT MOST ONE QUESTION)
 - send: ask for device name only if user specifies a device by name and it's ambiguous; for generic references, always use get_configured_devices
 
 ADDRESS VALIDATION (CRITICAL)
-- When user enters any Ethereum (0x...) or Tezos (tz.../KT1) addresses, IMMEDIATELY call verify_addresses() BEFORE parsing requirements
+- When user enters any Ethereum (0x...) or Tezos (tz.../KT1/KT...) addresses, IMMEDIATELY call verify_addresses() BEFORE parsing requirements
 - This includes: contract addresses in build_playlist, owner addresses in query_address, or any wallet/contract address mentioned
 - Example: user says "get tokens from 0xABC" → first call verify_addresses(['0xABC']) → get validation result → then parse_requirements
 - If verify_addresses returns valid=false, show user the error and ask them to provide the correct address
-- If valid=true, proceed to parse_requirements with the verified addresses
+- If valid=true, the validation result shows the blockchain type (ethereum or tezos) - use this information when parsing requirements
+- IMPORTANT: When user explicitly mentions blockchain (e.g., "ethereum contract" or "tezos contract"), you already know the blockchain type - DO NOT ask for it again
 
 FREE‑FORM COLLECTION NAMES
 - Treat as fetch_feed; do not guess contracts. If user says "some", default quantity = 5.
@@ -274,7 +285,8 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
                 },
                 tokenIds: {
                   type: 'array',
-                  description: 'Array of token IDs to fetch - only for build_playlist type',
+                  description:
+                    'Array of specific token IDs to fetch - only for build_playlist type. OPTIONAL: omit this field when user wants random tokens from the contract (e.g., "100 items from contract"). Only include when user specifies exact token IDs (e.g., "tokens 1, 2, 3").',
                   items: {
                     type: 'string',
                   },
