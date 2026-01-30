@@ -23,7 +23,7 @@ npm run dev -- chat "Get 3 items from Social Codes and 2 from 0xdef" -v
 
 # Switch model
 npm run dev -- chat "your request" --model grok
-npm run dev -- chat "your request" --model chatgpt
+npm run dev -- chat "your request" --model gpt
 npm run dev -- chat "your request" --model gemini
 ```
 
@@ -44,7 +44,7 @@ cat examples/params-example.json | npm run dev -- build -o playlist.json
 npm run dev -- chat "Build a playlist of my Tezos works from address tz1... plus 3 from Social Codes" -v -o playlist.json
 
 # Switch model if desired
-npm run dev -- chat "Build playlist from Ethereum address 0x... and 2 from Social Codes" --model chatgpt -v
+npm run dev -- chat "Build playlist from Ethereum address 0x... and 2 from Social Codes" --model gpt -v
 ```
 
 ### One‑shot complex prompt
@@ -92,18 +92,21 @@ npm run dev -- chat "Get 5 from Social Codes, shuffle, display on 'Living Room',
 ### How It Works
 
 **Mode 1: Build and Publish** (when sources are mentioned)
+
 1. Intent parser detects "publish" keywords with sources/requirements
 2. Calls `get_feed_servers` to retrieve configured servers
 3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
 4. Builds playlist → verifies → publishes automatically
 
 **Mode 2: Publish Existing File** (e.g., "publish playlist")
+
 1. Intent parser detects "publish playlist" or similar phrases
 2. Calls `get_feed_servers` to retrieve configured servers
 3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
 4. Publishes the playlist from `./playlist.json` (or specified path)
 
 Output shows:
+
 - Playlist build progress (Mode 1 only)
 - Device sending (if requested): `✓ Sent to device: Living Room`
 - Publishing status: `✓ Published to feed server`
@@ -187,18 +190,21 @@ Select server (0-based index): 0
 ### Error Handling
 
 **Validation failed:**
+
 ```
 ❌ Failed to publish playlist
    Playlist validation failed: dpVersion: Required; id: Required
 ```
 
 **File not found:**
+
 ```
 ❌ Failed to publish playlist
    Playlist file not found: /path/to/playlist.json
 ```
 
 **API error:**
+
 ```
 ❌ Failed to publish playlist
    Failed to publish: {"error":"unauthorized","message":"Invalid API key"}
@@ -232,7 +238,6 @@ npm run dev -- config show
 # Reinitialize config
 npm run dev -- config init
 ```
-
 
 ### Natural‑language one‑shot examples (proven)
 

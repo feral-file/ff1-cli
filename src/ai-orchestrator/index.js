@@ -507,7 +507,8 @@ KEY RULES
 
 OUTPUT RULES
 - Before each function call, print exactly one sentence: "→ I'm …" describing the action.
-- Then call exactly one function with JSON arguments.
+- Do NOT include JSON, tool names, or arguments in assistant content.
+- Call the function ONLY via tool calls (no JSON in text).
 - No chain‑of‑thought or extra narration; keep public output minimal.
 
 STOPPING CONDITIONS

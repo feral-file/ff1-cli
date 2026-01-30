@@ -45,7 +45,7 @@ function loadConfig(): Config {
         maxTokens: parseInt(process.env.MAX_TOKENS || '4000', 10),
         supportsFunctionCalling: true,
       },
-      chatgpt: {
+      gpt: {
         apiKey: process.env.OPENAI_API_KEY || '',
         baseURL: 'https://api.openai.com/v1',
         model: 'gpt-4o',
@@ -258,9 +258,27 @@ export function getFF1DeviceConfig(): FF1DeviceConfig {
  * @returns {boolean} returns.supportsFunctionCalling - Whether model supports function calling
  * @throws {Error} If model is not configured or doesn't support function calling
  */
+function resolveModelName(config: Config, modelName?: string): string {
+  const selectedModel = modelName || config.defaultModel;
+  if (config.models[selectedModel]) {
+    return selectedModel;
+  }
+
+  const aliasMap: Record<string, string> = {
+    gpt: 'chatgpt',
+    chatgpt: 'gpt',
+  };
+  const alias = aliasMap[selectedModel];
+  if (alias && config.models[alias]) {
+    return alias;
+  }
+
+  return selectedModel;
+}
+
 export function getModelConfig(modelName?: string): ModelConfig {
   const config = getConfig();
-  const selectedModel = modelName || config.defaultModel;
+  const selectedModel = resolveModelName(config, modelName);
 
   if (!config.models[selectedModel]) {
     throw new Error(
@@ -296,7 +314,7 @@ export function validateConfig(modelName?: string): ValidationResult {
 
   try {
     const config = getConfig();
-    const selectedModel = modelName || config.defaultModel;
+    const selectedModel = resolveModelName(config, modelName);
 
     if (!config.models[selectedModel]) {
       errors.push(
@@ -412,5 +430,12 @@ export async function createSampleConfig(targetPath?: string): Promise<string> {
  */
 export function listAvailableModels(): string[] {
   const config = getConfig();
-  return Object.keys(config.models);
+  const modelNames = new Set(Object.keys(config.models));
+  if (modelNames.has('gpt')) {
+    modelNames.add('chatgpt');
+  }
+  if (modelNames.has('chatgpt')) {
+    modelNames.add('gpt');
+  }
+  return Array.from(modelNames);
 }

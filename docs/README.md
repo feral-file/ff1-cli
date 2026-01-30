@@ -40,7 +40,7 @@ See the full configuration reference here: `./CONFIGURATION.md`.
       "model": "grok-beta",
       "supportsFunctionCalling": true
     },
-    "chatgpt": {
+    "gpt": {
       "apiKey": "sk-your-openai-key-here",
       "baseURL": "https://api.openai.com/v1",
       "model": "gpt-4o",
@@ -163,7 +163,7 @@ How it works (at a glance):
 - If `deviceName` is present, the CLI will send the validated playlist to that FF1 device.
 - If `feedServer` is present (via "publish to my feed"), the CLI will publish the playlist to the selected feed server.
 
-Use `--model grok|chatgpt|gemini` to switch models, or set `defaultModel` in `config.json`.
+Use `--model grok|gpt|gemini` to switch models, or set `defaultModel` in `config.json`.
 
 ### Natural language publishing
 

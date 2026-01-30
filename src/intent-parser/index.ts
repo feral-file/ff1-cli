@@ -506,6 +506,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function buildToolResponseMessages(
+  toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[],
+  responses: Record<string, unknown>
+): OpenAI.Chat.ChatCompletionToolMessageParam[] {
+  return toolCalls
+    .filter((toolCall) => toolCall.id)
+    .map((toolCall) => {
+      const content =
+        toolCall.id && Object.prototype.hasOwnProperty.call(responses, toolCall.id)
+          ? responses[toolCall.id]
+          : { error: `Unknown function: ${toolCall.function.name}` };
+      return {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(content),
+      };
+    });
+}
+
 async function processNonStreamingResponse(
   response: OpenAI.Chat.ChatCompletion
 ): Promise<{ message: OpenAI.Chat.ChatCompletionMessage }> {
@@ -765,14 +784,11 @@ export async function processIntentParserRequest(
         const { getConfiguredDevices } = await import('../utilities/functions');
         const result = await getConfiguredDevices();
 
-        // Add tool result to messages and continue conversation
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        };
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+          [toolCall.id]: result,
+        });
 
-        const updatedMessages = [...messages, message, toolResultMessage];
+        const updatedMessages = [...messages, message, ...toolResultMessages];
 
         // Continue the conversation with the device list
         const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -828,17 +844,14 @@ export async function processIntentParserRequest(
               })) ||
               feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
 
-            // Add tool result to messages and continue conversation
-            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({ servers: serverList }),
-            };
+            const feedToolResultMessages = buildToolResponseMessages(followUpMessage.tool_calls, {
+              [followUpToolCall.id]: { servers: serverList },
+            });
 
             const feedUpdatedMessages = [
               ...updatedMessages,
               followUpMessage,
-              feedToolResultMessage,
+              ...feedToolResultMessages,
             ];
 
             // Continue the conversation with the feed server list
@@ -998,15 +1011,8 @@ export async function processIntentParserRequest(
               };
             }
           } else {
-            // Unhandled tool call - add assistant message and tool response to messages
-            const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({
-                error: `Unknown function: ${followUpToolCall.function.name}`,
-              }),
-            };
-            const validMessages = [...updatedMessages, followUpMessage, toolResultMessage];
+            const toolResultMessages = buildToolResponseMessages(followUpMessage.tool_calls, {});
+            const validMessages = [...updatedMessages, followUpMessage, ...toolResultMessages];
 
             // AI is still asking for more information after the error
             return {
@@ -1038,14 +1044,11 @@ export async function processIntentParserRequest(
             apiKey: server.apiKey,
           })) || feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
 
-        // Add tool result to messages and continue conversation
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ servers: serverList }),
-        };
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+          [toolCall.id]: { servers: serverList },
+        });
 
-        const updatedMessages = [...messages, message, toolResultMessage];
+        const updatedMessages = [...messages, message, ...toolResultMessages];
 
         // Continue the conversation with the feed server list
         const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -1169,17 +1172,14 @@ export async function processIntentParserRequest(
         const confirmation = await confirmPlaylistForSending(args.filePath, args.deviceName);
 
         if (!confirmation.success) {
-          // Add tool response message to make conversation valid
-          const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify({
+          const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+            [toolCall.id]: {
               success: false,
               error: confirmation.error,
               message: confirmation.message,
-            }),
-          };
-          const validMessages = [...messages, message, toolResultMessage];
+            },
+          });
+          const validMessages = [...messages, message, ...toolResultMessages];
 
           // Check if this is a device selection needed case
           if (confirmation.needsDeviceSelection) {
@@ -1274,17 +1274,14 @@ export async function processIntentParserRequest(
         const verificationResult = await verifyAddresses({ addresses: args.addresses });
 
         if (!verificationResult.valid) {
-          // Add tool response message for invalid addresses
-          const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify({
+          const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+            [toolCall.id]: {
               valid: false,
               errors: verificationResult.errors,
               results: verificationResult.results,
-            }),
-          };
-          const validMessages = [...messages, message, toolResultMessage];
+            },
+          });
+          const validMessages = [...messages, message, ...toolResultMessages];
 
           // Ask user to correct the addresses
           return {
@@ -1295,16 +1292,13 @@ export async function processIntentParserRequest(
           };
         }
 
-        // All addresses are valid - continue to next step
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+          [toolCall.id]: {
             valid: true,
             results: verificationResult.results,
-          }),
-        };
-        const validMessages = [...messages, message, toolResultMessage];
+          },
+        });
+        const validMessages = [...messages, message, ...toolResultMessages];
 
         // Continue conversation after validation
         const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -1361,13 +1355,15 @@ export async function processIntentParserRequest(
               feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
 
             // Add tool result to messages and continue conversation
-            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({ servers: serverList }),
-            };
+            const feedToolResultMessages = buildToolResponseMessages(followUpMessage.tool_calls, {
+              [followUpToolCall.id]: { servers: serverList },
+            });
 
-            const feedUpdatedMessages = [...validMessages, followUpMessage, feedToolResultMessage];
+            const feedUpdatedMessages = [
+              ...validMessages,
+              followUpMessage,
+              ...feedToolResultMessages,
+            ];
 
             // Continue the conversation with the feed server list
             const feedFollowUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -1491,15 +1487,8 @@ export async function processIntentParserRequest(
           needsMoreInfo: false,
         };
       } else {
-        // Unhandled tool call at top level
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({
-            error: `Unknown function: ${toolCall.function.name}`,
-          }),
-        };
-        const validMessages = [...messages, message, toolResultMessage];
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {});
+        const validMessages = [...messages, message, ...toolResultMessages];
 
         return {
           approved: false,
