@@ -15,6 +15,7 @@ import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import crypto from 'crypto';
 import * as readline from 'readline';
+import { version as packageVersion } from './package.json';
 import {
   getConfig,
   validateConfig,
@@ -113,7 +114,7 @@ program
   .description(
     'CLI to fetch NFT information and build DP1 playlists using AI (Grok, ChatGPT, Gemini)'
   )
-  .version('1.0.0')
+  .version(packageVersion)
   .addHelpText(
     'after',
     `\nQuick start:\n  1) ff1 setup\n  2) ff1 chat\n\nDocs: https://github.com/feralfile/ff1-cli\n`
@@ -398,10 +399,7 @@ program
   .description('Start an interactive chat to build playlists using natural language')
   .argument('[content]', 'Optional: Direct chat content (non-interactive mode)')
   .option('-o, --output <filename>', 'Output filename for the playlist', 'playlist.json')
-  .option(
-    '-m, --model <name>',
-    'AI model to use (grok, chatgpt, gemini) - defaults to config setting'
-  )
+  .option('-m, --model <name>', 'AI model to use (grok, gpt, gemini) - defaults to config setting')
   .option('-v, --verbose', 'Show detailed technical output of function calls', false)
   .action(
     async (
