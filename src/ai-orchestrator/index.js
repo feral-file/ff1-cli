@@ -10,6 +10,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+
+  const keys = Object.keys(value).sort();
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`;
+}
+
 async function createCompletionWithRetry(client, requestParams, maxRetries = 0) {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
@@ -593,6 +608,7 @@ async function buildPlaylistWithAI(params, options = {}) {
   let collectedItems = [];
   let verificationFailures = 0;
   let sentToDevice = false;
+  const queryRequirementCache = new Map();
   const maxIterations = 20;
   const maxVerificationRetries = 3;
 
@@ -714,11 +730,63 @@ async function buildPlaylistWithAI(params, options = {}) {
       }
     }
 
+    const contentText = message.content || '';
+    const looksLikeToolAttempt =
+      !message.tool_calls &&
+      contentText &&
+      (contentText.includes("→ I'm") ||
+        contentText.includes('"requirement"') ||
+        contentText.trim().startsWith('{'));
+
+    if (looksLikeToolAttempt && iterationCount < maxIterations - 1) {
+      if (verbose) {
+        console.log(
+          chalk.yellow(
+            'AI returned tool arguments in text. Forcing function call with a system reminder.'
+          )
+        );
+      }
+      messages.push(message);
+      messages.push({
+        role: 'system',
+        content:
+          'CRITICAL: You MUST call the required function via tool_calls. Do not output JSON or arguments in plain text. Call the function now.',
+      });
+      continue;
+    }
+
     messages.push(message);
 
-    // Always print AI content when present
+    // Print AI content when present (suppress tool args/JSON noise)
     if (message.content) {
-      console.log(chalk.cyan(message.content));
+      const lines = message.content.split('\n');
+      const filteredLines = lines
+        .map((line) => line.trimEnd())
+        .filter((line) => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) {
+            return false;
+          }
+          const normalizedLine = trimmedLine.toLowerCase();
+          if (normalizedLine.startsWith('the playlist has been successfully built and verified')) {
+            return false;
+          }
+          return (
+            !trimmedLine.startsWith('```') &&
+            !trimmedLine.startsWith('{') &&
+            !trimmedLine.startsWith('[')
+          );
+        });
+
+      const lineToPrint = filteredLines[0];
+
+      if (lineToPrint) {
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          console.log(chalk.cyan(lineToPrint));
+        } else if (!lineToPrint.includes("→ I'm")) {
+          console.log(chalk.cyan(lineToPrint));
+        }
+      }
     }
 
     if (verbose) {
@@ -743,7 +811,27 @@ async function buildPlaylistWithAI(params, options = {}) {
         }
 
         try {
-          const result = await executeFunction(functionName, args);
+          let result;
+          let usedCache = false;
+
+          if (functionName === 'query_requirement') {
+            const cacheKey = stableStringify({
+              requirement: args.requirement,
+              duration: args.duration,
+            });
+            if (queryRequirementCache.has(cacheKey)) {
+              result = queryRequirementCache.get(cacheKey);
+              usedCache = true;
+              if (verbose) {
+                console.log(chalk.dim('    ↺ Using cached result for duplicate query_requirement'));
+              }
+            } else {
+              result = await executeFunction(functionName, args);
+              queryRequirementCache.set(cacheKey, result);
+            }
+          } else {
+            result = await executeFunction(functionName, args);
+          }
 
           if (verbose) {
             console.log(
@@ -752,7 +840,7 @@ async function buildPlaylistWithAI(params, options = {}) {
           }
 
           // Track collected item IDs from query_requirement
-          if (functionName === 'query_requirement' && Array.isArray(result)) {
+          if (functionName === 'query_requirement' && Array.isArray(result) && !usedCache) {
             // Result now contains minimal item objects with id field
             const itemIds = result.map((item) => item.id).filter((id) => id);
             collectedItems = collectedItems.concat(itemIds); // Now storing IDs, not full items

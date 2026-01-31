@@ -8,6 +8,8 @@ import OpenAI from 'openai';
 import chalk from 'chalk';
 import { getConfig, getModelConfig, getFF1DeviceConfig, getFeedConfig } from '../config';
 import { applyConstraints } from './utils';
+import * as logger from '../logger';
+import type { Requirement, PlaylistSettings } from '../types';
 import type { Stream } from 'openai/streaming';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
@@ -29,6 +31,11 @@ interface IntentParserResult {
   needsMoreInfo: boolean;
   question?: string;
   messages?: OpenAI.Chat.ChatCompletionMessageParam[];
+}
+
+interface RequirementParams {
+  requirements: Requirement[];
+  playlistSettings?: Partial<PlaylistSettings>;
 }
 
 /**
@@ -495,15 +502,62 @@ function printMarkdownContent(content: string): void {
   const lines = content.split('\n');
   for (const line of lines) {
     if (line.trim()) {
-      console.log(formatMarkdown(line));
+      logger.verbose(formatMarkdown(line));
     } else if (line === '') {
-      console.log();
+      logger.verbose();
     }
   }
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractDomains(text: string): string[] {
+  if (!text) {
+    return [];
+  }
+  const matches = text.match(/[a-z0-9-]+\.(eth|tez)/gi);
+  return matches ? matches.map((match) => match.toLowerCase()) : [];
+}
+
+function normalizeDomainInput(address: string, userDomains: string[]): string {
+  if (!address || userDomains.length === 0) {
+    return address;
+  }
+
+  const lower = address.toLowerCase();
+  if (!lower.endsWith('.eth') && !lower.endsWith('.tez')) {
+    return address;
+  }
+
+  const baseName = lower.replace(/\.(eth|tez)$/i, '');
+  const match = userDomains.find((domain) => domain.replace(/\.(eth|tez)$/i, '') === baseName);
+  return match || address;
+}
+
+function normalizeRequirementDomains(
+  params: RequirementParams,
+  userDomains: string[]
+): RequirementParams {
+  if (userDomains.length === 0) {
+    return params;
+  }
+
+  const normalized = params.requirements.map((req) => {
+    if (req.type !== 'query_address' || typeof req.ownerAddress !== 'string') {
+      return req;
+    }
+    return {
+      ...req,
+      ownerAddress: normalizeDomainInput(req.ownerAddress, userDomains),
+    };
+  });
+
+  return {
+    ...params,
+    requirements: normalized,
+  };
 }
 
 function buildToolResponseMessages(
@@ -536,7 +590,7 @@ async function processNonStreamingResponse(
 
   if (message.content) {
     printMarkdownContent(message.content);
-    console.log();
+    logger.verbose();
   }
 
   return { message };
@@ -639,9 +693,9 @@ async function processStreamingResponse(
           for (const line of lines) {
             if (line.trim()) {
               const formatted = formatMarkdown(line);
-              console.log(formatted);
+              logger.verbose(formatted);
             } else if (line === '') {
-              console.log();
+              logger.verbose();
             }
           }
           printedUpTo = lastNewlineIndex + 1;
@@ -691,12 +745,12 @@ async function processStreamingResponse(
     const remainingText = contentBuffer.substring(printedUpTo);
     if (remainingText.trim()) {
       const formatted = formatMarkdown(remainingText);
-      console.log(formatted);
+      logger.verbose(formatted);
     }
   }
 
   if (contentBuffer.length > 0) {
-    console.log(); // Extra newline after AI response
+    logger.verbose(); // Extra newline after AI response
   }
 
   // Convert toolCallsMap to array
@@ -731,6 +785,7 @@ export async function processIntentParserRequest(
   options: IntentParserOptions = {}
 ): Promise<IntentParserResult> {
   const { modelName, conversationContext } = options;
+  const userDomains = extractDomains(userRequest);
   const client = createIntentParserClient(modelName);
   const modelConfig = getModelConfig(modelName);
   const config = getConfig();
@@ -822,7 +877,10 @@ export async function processIntentParserRequest(
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
+            const params = normalizeRequirementDomains(
+              JSON.parse(followUpToolCall.function.arguments),
+              userDomains
+            );
 
             // Apply constraints and defaults
             const validatedParams = applyConstraints(params, config);
@@ -887,7 +945,10 @@ export async function processIntentParserRequest(
             if (feedFollowUpMessage.tool_calls && feedFollowUpMessage.tool_calls.length > 0) {
               const feedToolCall = feedFollowUpMessage.tool_calls[0];
               if (feedToolCall.function.name === 'parse_requirements') {
-                const params = JSON.parse(feedToolCall.function.arguments);
+                const params = normalizeRequirementDomains(
+                  JSON.parse(feedToolCall.function.arguments),
+                  userDomains
+                );
 
                 // Apply constraints and defaults
                 const validatedParams = applyConstraints(params, config);
@@ -1082,7 +1143,10 @@ export async function processIntentParserRequest(
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
+            const params = normalizeRequirementDomains(
+              JSON.parse(followUpToolCall.function.arguments),
+              userDomains
+            );
 
             // Apply constraints and defaults
             const validatedParams = applyConstraints(params, config);
@@ -1154,7 +1218,10 @@ export async function processIntentParserRequest(
           messages: [...updatedMessages, followUpMessage],
         };
       } else if (toolCall.function.name === 'parse_requirements') {
-        const params = JSON.parse(toolCall.function.arguments);
+        const params = normalizeRequirementDomains(
+          JSON.parse(toolCall.function.arguments),
+          userDomains
+        );
 
         // Apply constraints and defaults
         const validatedParams = applyConstraints(params, config);
@@ -1269,6 +1336,11 @@ export async function processIntentParserRequest(
         }
       } else if (toolCall.function.name === 'verify_addresses') {
         const args = JSON.parse(toolCall.function.arguments);
+        if (Array.isArray(args.addresses) && userDomains.length > 0) {
+          args.addresses = args.addresses.map((address: string) =>
+            normalizeDomainInput(address, userDomains)
+          );
+        }
         const { verifyAddresses } = await import('../utilities/functions');
 
         const verificationResult = await verifyAddresses({ addresses: args.addresses });
@@ -1332,7 +1404,10 @@ export async function processIntentParserRequest(
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
+            const params = normalizeRequirementDomains(
+              JSON.parse(followUpToolCall.function.arguments),
+              userDomains
+            );
 
             // Apply constraints and defaults
             const validatedParams = applyConstraints(params, config);
@@ -1398,7 +1473,10 @@ export async function processIntentParserRequest(
             if (feedFollowUpMessage.tool_calls && feedFollowUpMessage.tool_calls.length > 0) {
               const feedToolCall = feedFollowUpMessage.tool_calls[0];
               if (feedToolCall.function.name === 'parse_requirements') {
-                const params = JSON.parse(feedToolCall.function.arguments);
+                const params = normalizeRequirementDomains(
+                  JSON.parse(feedToolCall.function.arguments),
+                  userDomains
+                );
 
                 // Apply constraints and defaults
                 const validatedParams = applyConstraints(params, config);
