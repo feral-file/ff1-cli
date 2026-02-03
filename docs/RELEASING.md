@@ -15,6 +15,16 @@ This produces:
 
 The exact filename depends on the OS/arch you build on. Run the script on each target platform (macOS + Linux, x64/arm64) and upload each pair to the GitHub release.
 
+## Installer Redirect
+
+`https://feralfile.com/ff1-cli-install` should redirect to:
+
+```
+https://raw.githubusercontent.com/feral-file/ff1-cli/main/scripts/install.sh
+```
+
+The installer script then fetches the release assets from GitHub Releases.
+
 ## Environment Overrides
 
 - `FF1_CLI_VERSION`: overrides the version label in logs
