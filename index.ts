@@ -15,7 +15,8 @@ import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import crypto from 'crypto';
 import * as readline from 'readline';
-import { version as packageVersion } from './package.json';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
 import {
   getConfig,
   validateConfig,
@@ -25,6 +26,18 @@ import {
 } from './src/config';
 import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
+
+// Load version from package.json
+// Try built location first (dist/index.js -> ../package.json)
+// Fall back to dev location (index.ts -> ./package.json)
+let packageJsonPath = resolve(dirname(__filename), '..', 'package.json');
+try {
+  readFileSync(packageJsonPath, 'utf8');
+} catch {
+  // Dev mode: tsx runs from project root
+  packageJsonPath = resolve(dirname(__filename), 'package.json');
+}
+const { version: packageVersion } = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 
 const program = new Command();
 const placeholderPattern = /YOUR_|your_/;
