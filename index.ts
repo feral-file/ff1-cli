@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Suppress punycode deprecation warning from jsdom dependency
+// Suppress punycode deprecation warnings from dependencies
 process.removeAllListeners('warning');
 process.on('warning', (warning) => {
   if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
