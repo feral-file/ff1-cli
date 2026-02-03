@@ -24,14 +24,7 @@ async function build() {
       },
       minify: !isDev,
       sourcemap: isDev ? 'inline' : false,
-      external: [
-        // These packages have native bindings or dynamic requires
-        'puppeteer',
-        '@lancedb/lancedb',
-        '@xenova/transformers',
-        'onnxruntime-node',
-        'sharp',
-      ],
+      external: [],
       logLevel: 'info',
       // Remove shebangs from source files during bundling
       loader: {
