@@ -1,0 +1,38 @@
+# On release publish: run build workflow, then upload artifacts to the existing release.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.event.release.tag_name }}
+    secrets: inherit
+
+  upload-release-assets:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Flatten release files
+        run: |
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' \) -exec cp {} . \;
+          ls -la
+
+      - name: Upload assets to release
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            *.tar.gz *.tar.gz.sha256 *.zip *.zip.sha256 \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

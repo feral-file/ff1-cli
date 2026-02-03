@@ -1,0 +1,50 @@
+# Build binaries for macOS, Linux, and Windows. Trigger manually, on pull request, or via workflow_call (e.g. from release.yml).
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label for built binaries'
+        required: true
+        type: string
+  pull_request:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version label for built binaries (e.g. release tag)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: bash ./scripts/release/build-asset.sh
+          - os: ubuntu-latest
+            script: bash ./scripts/release/build-asset.sh
+          - os: windows-latest
+            script: powershell -ExecutionPolicy Bypass -File ./scripts/release/build-asset-windows.ps1
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Build asset
+        run: ${{ matrix.script }}
+        env:
+          FF1_CLI_VERSION: ${{ github.event_name == 'pull_request' && '0.1' || inputs.version }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: release/
