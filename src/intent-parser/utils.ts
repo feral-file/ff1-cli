@@ -60,8 +60,10 @@ export function applyConstraints(params: RequirementParams, config: Config): Req
     // Set default quantity if not provided
     // Allow "all" as a string value for query_address type
     let quantity: number | string;
-    if (r.quantity === 'all' || r.quantity === null || r.quantity === undefined) {
-      quantity = r.type === 'query_address' ? 'all' : 5;
+    if (r.quantity === 'all') {
+      quantity = 'all';
+    } else if (r.quantity === null || r.quantity === undefined) {
+      quantity = 5;
     } else if (typeof r.quantity === 'string') {
       // Try to parse string numbers
       const parsed = parseInt(r.quantity as string, 10);

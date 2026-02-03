@@ -9,6 +9,9 @@ const feedFetcher = require('./feed-fetcher');
 const playlistBuilder = require('./playlist-builder');
 const functions = require('./functions');
 const domainResolver = require('./domain-resolver');
+const logger = require('../logger');
+
+const printedTokenCountKeys = new Set();
 
 /**
  * Initialize utilities with configuration
@@ -126,7 +129,11 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
       selectedTokens = shuffleArray([...selectedTokens]).slice(0, quantity);
     }
 
-    console.log(chalk.dim(`Got ${selectedTokens.length} token(s)`));
+    const tokenCountKey = `${ownerAddress}|${quantity ?? 'all'}|${duration}`;
+    if (!printedTokenCountKeys.has(tokenCountKey)) {
+      console.log(chalk.dim(`Got ${selectedTokens.length} token(s)`));
+      printedTokenCountKeys.add(tokenCountKey);
+    }
 
     // Convert tokens to DP1 items
     const items = [];
@@ -189,12 +196,12 @@ async function queryRequirement(requirement, duration = 10) {
   if (type === 'query_address') {
     // Check if ownerAddress is a domain name (.eth or .tez)
     if (ownerAddress && (ownerAddress.endsWith('.eth') || ownerAddress.endsWith('.tez'))) {
-      console.log(chalk.cyan(`\nResolving domain ${ownerAddress}...`));
+      logger.verbose(chalk.cyan(`\nResolving domain ${ownerAddress}...`));
 
       const resolution = await domainResolver.resolveDomain(ownerAddress);
 
       if (resolution.resolved && resolution.address) {
-        console.log(chalk.dim(`  ${resolution.domain} → ${resolution.address}`));
+        console.log(chalk.green(`${resolution.domain} → ${resolution.address}`));
         // Use resolved address instead of domain
         return await queryTokensByAddress(resolution.address, quantity, duration);
       } else {

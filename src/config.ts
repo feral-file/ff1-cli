@@ -45,11 +45,11 @@ function loadConfig(): Config {
         maxTokens: parseInt(process.env.MAX_TOKENS || '4000', 10),
         supportsFunctionCalling: true,
       },
-      chatgpt: {
+      gpt: {
         apiKey: process.env.OPENAI_API_KEY || '',
         baseURL: 'https://api.openai.com/v1',
-        model: 'gpt-4o',
-        availableModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+        model: 'gpt-4.1',
+        availableModels: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
         timeout: 30000,
         maxRetries: 3,
         temperature: 0.3,

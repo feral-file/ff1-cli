@@ -49,7 +49,7 @@ const placeholderPattern = /YOUR_|your_/;
  * @param {string} outputPath - Path where the playlist was saved
  */
 function displayPlaylistSummary(playlist: Playlist, outputPath: string) {
-  console.log(chalk.green('\nPlaylist created'));
+  console.log(chalk.green('\nPlaylist saved'));
   console.log(chalk.dim(`  Output: ./${outputPath}`));
   console.log(chalk.dim('  Next: send last | publish playlist'));
   console.log();
@@ -203,7 +203,6 @@ program
       const keyHelpUrls: Record<string, string> = {
         grok: 'https://console.x.ai/',
         gpt: 'https://platform.openai.com/api-keys',
-        chatgpt: 'https://platform.openai.com/api-keys',
         gemini: 'https://aistudio.google.com/app/apikey',
       };
       if (!hasApiKeyForModel) {
@@ -460,7 +459,7 @@ program
 
             // Print final summary
             if (result && result.playlist) {
-              console.log(chalk.green('\nPlaylist created'));
+              console.log(chalk.green('\nPlaylist saved'));
               console.log(chalk.dim(`  Title: ${result.playlist.title}`));
               console.log(chalk.dim(`  Items: ${result.playlist.items?.length || 0}`));
               console.log(chalk.dim(`  Output: ${options.output}\n`));
@@ -964,7 +963,7 @@ program
       });
 
       if (result && result.playlist) {
-        console.log(chalk.green('\nPlaylist created'));
+        console.log(chalk.green('\nPlaylist saved'));
         console.log(chalk.dim(`  Title: ${result.playlist.title}`));
         console.log(chalk.dim(`  Items: ${result.playlist.items?.length || 0}`));
         console.log(chalk.dim(`  Output: ${options.output}\n`));

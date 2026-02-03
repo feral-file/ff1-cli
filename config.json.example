@@ -19,8 +19,10 @@
     "gpt": {
       "apiKey": "YOUR_OPENAI_API_KEY_FROM_PLATFORM_OPENAI_COM",
       "baseURL": "https://api.openai.com/v1",
-      "model": "gpt-4o-mini",
+      "model": "gpt-4.1",
       "availableModels": [
+        "gpt-4.1",
+        "gpt-4.1-mini",
         "gpt-4o",
         "gpt-4o-mini",
         "gpt-4-turbo"
