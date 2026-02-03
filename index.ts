@@ -189,7 +189,6 @@ program
       const keyHelpUrls: Record<string, string> = {
         grok: 'https://console.x.ai/',
         gpt: 'https://platform.openai.com/api-keys',
-        chatgpt: 'https://platform.openai.com/api-keys',
         gemini: 'https://aistudio.google.com/app/apikey',
       };
       if (!hasApiKeyForModel) {
