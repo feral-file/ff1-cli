@@ -198,7 +198,7 @@ PUBLISH INTENT (CRITICAL)
     2. If only 1 server → use it directly in playlistSettings.feedServer
     3. If 2+ servers → ask user "Which feed server?" with numbered list (e.g., "1) https://feed.feralfile.com 2) http://localhost:8787")
     4. After selection, set playlistSettings.feedServer = { baseUrl, apiKey } from selected server
-    5. Acknowledge in Settings bullets (e.g., "publish to: https://feed.feralfile.com/api/v1")
+    5. Acknowledge in Settings bullets (e.g., "publish to: https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1")
   - User can request both device display AND publishing (e.g., "send to FF1 and publish to feed") → set both deviceName and feedServer
   - Publishing happens automatically after playlist verification passes
   

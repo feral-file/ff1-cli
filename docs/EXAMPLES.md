@@ -67,7 +67,7 @@ The CLI recognizes publishing keywords like "publish", "publish to my feed", "pu
 npm run dev -- chat "Build playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; publish to my feed" -o playlist.json -v
 
 # With feed selection (if multiple servers configured)
-# The CLI will ask: "Which feed server? 1) https://feed.feralfile.com/api/v1 2) http://localhost:8787"
+# The CLI will ask: "Which feed server? 1) https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1 2) http://localhost:8787"
 npm run dev -- chat "Get 3 from Social Codes and publish to feed" -v
 
 # Publish existing playlist (defaults to ./playlist.json)
