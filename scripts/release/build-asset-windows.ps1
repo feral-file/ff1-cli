@@ -2,6 +2,61 @@
 # Run from repo root or scripts/release. Uses env: FF1_CLI_OUTPUT_DIR, FF1_CLI_NODE_VERSION, FF1_CLI_VERSION.
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function New-ZipArchiveWithProgress {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDirectory,
+        [Parameter(Mandatory = $true)][string]$ArchivePath,
+        [Parameter(Mandatory = $true)][string]$RootFolderName
+    )
+
+    if (Test-Path $ArchivePath) {
+        Remove-Item -Path $ArchivePath -Force
+    }
+
+    $files = Get-ChildItem -Path $SourceDirectory -Recurse -File
+    $totalFiles = $files.Count
+    $index = 0
+
+    $fileStream = [System.IO.File]::Open($ArchivePath, [System.IO.FileMode]::CreateNew)
+    try {
+        $zipArchive = New-Object System.IO.Compression.ZipArchive(
+            $fileStream,
+            [System.IO.Compression.ZipArchiveMode]::Create,
+            $false
+        )
+        try {
+            foreach ($file in $files) {
+                $relativePath = [System.IO.Path]::GetRelativePath($SourceDirectory, $file.FullName)
+                $entryName = [System.IO.Path]::Combine($RootFolderName, $relativePath) -replace "\\", "/"
+                $entry = $zipArchive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Fastest)
+
+                $entryStream = $entry.Open()
+                $sourceStream = [System.IO.File]::OpenRead($file.FullName)
+                try {
+                    $sourceStream.CopyTo($entryStream)
+                }
+                finally {
+                    $sourceStream.Dispose()
+                    $entryStream.Dispose()
+                }
+
+                $index++
+                if (($index % 250 -eq 0) -or ($index -eq $totalFiles)) {
+                    Write-Host "Zipping files: $index/$totalFiles"
+                }
+            }
+        }
+        finally {
+            $zipArchive.Dispose()
+        }
+    }
+    finally {
+        $fileStream.Dispose()
+    }
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT_DIR = (Resolve-Path (Join-Path $ScriptDir "../..")).Path
@@ -24,7 +79,6 @@ try {
     Set-Location $ROOT_DIR
     npm ci
     npm run bundle
-    npm prune --omit=dev
 
     $NODE_ARCHIVE = "node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH.zip"
     $NODE_URL = "https://nodejs.org/dist/v$NODE_VERSION/$NODE_ARCHIVE"
@@ -39,11 +93,9 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $PACKAGE_DIR "node") -Force | Out-Null
 
     Copy-Item (Join-Path $ROOT_DIR "dist\ff1.js") (Join-Path $PACKAGE_DIR "lib\ff1.js")
-    Copy-Item -Path (Join-Path $ROOT_DIR "node_modules") -Destination (Join-Path $PACKAGE_DIR "lib\node_modules") -Recurse -Force
     Copy-Item (Join-Path $NODE_DIR.FullName "node.exe") (Join-Path $PACKAGE_DIR "node\node.exe")
     Copy-Item (Join-Path $ROOT_DIR "package.json") (Join-Path $PACKAGE_DIR "package.json")
     Copy-Item (Join-Path $ROOT_DIR "LICENSE") (Join-Path $PACKAGE_DIR "LICENSE")
-    Copy-Item (Join-Path $ROOT_DIR "README.md") (Join-Path $PACKAGE_DIR "README.md")
 
     $ff1Cmd = @"
 @echo off
@@ -56,7 +108,8 @@ set "APP=%BASE_DIR%\lib\ff1.js"
 
     New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
     $zipPath = Join-Path $OUTPUT_DIR $ARCHIVE_NAME
-    Compress-Archive -Path $PACKAGE_DIR -DestinationPath $zipPath -Force
+    Write-Host "Creating zip archive..."
+    New-ZipArchiveWithProgress -SourceDirectory $PACKAGE_DIR -ArchivePath $zipPath -RootFolderName $ASSET_NAME
 
     $hash = Get-FileHash -Path $zipPath -Algorithm SHA256
     $hash.Hash.ToLower() + "  " + (Split-Path -Leaf $zipPath) | Out-File -FilePath "$zipPath.sha256" -Encoding ASCII
