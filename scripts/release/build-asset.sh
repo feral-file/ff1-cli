@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 OUTPUT_DIR="${FF1_CLI_OUTPUT_DIR:-$ROOT_DIR/release}"
-NODE_VERSION="${FF1_CLI_NODE_VERSION:-20.12.2}"
+NODE_VERSION="${FF1_CLI_NODE_VERSION:-22.20.0}"
 VERSION="${FF1_CLI_VERSION:-$(node -p "require('$ROOT_DIR/package.json').version")}"
 
 OS_RAW="$(uname -s)"

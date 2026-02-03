@@ -16,6 +16,11 @@ function New-ZipArchiveWithProgress {
         Remove-Item -Path $ArchivePath -Force
     }
 
+    $sourceRoot = [System.IO.Path]::GetFullPath($SourceDirectory)
+    if (-not $sourceRoot.EndsWith("\")) {
+        $sourceRoot = "$sourceRoot\"
+    }
+
     $files = Get-ChildItem -Path $SourceDirectory -Recurse -File
     $totalFiles = $files.Count
     $index = 0
@@ -29,7 +34,11 @@ function New-ZipArchiveWithProgress {
         )
         try {
             foreach ($file in $files) {
-                $relativePath = [System.IO.Path]::GetRelativePath($SourceDirectory, $file.FullName)
+                $filePath = [System.IO.Path]::GetFullPath($file.FullName)
+                if (-not $filePath.StartsWith($sourceRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Cannot compute relative path for $filePath"
+                }
+                $relativePath = $filePath.Substring($sourceRoot.Length)
                 $entryName = [System.IO.Path]::Combine($RootFolderName, $relativePath) -replace "\\", "/"
                 $entry = $zipArchive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Fastest)
 
@@ -61,7 +70,7 @@ function New-ZipArchiveWithProgress {
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT_DIR = (Resolve-Path (Join-Path $ScriptDir "../..")).Path
 $OUTPUT_DIR = if ($env:FF1_CLI_OUTPUT_DIR) { $env:FF1_CLI_OUTPUT_DIR } else { Join-Path $ROOT_DIR "release" }
-$NODE_VERSION = if ($env:FF1_CLI_NODE_VERSION) { $env:FF1_CLI_NODE_VERSION } else { "20.12.2" }
+$NODE_VERSION = if ($env:FF1_CLI_NODE_VERSION) { $env:FF1_CLI_NODE_VERSION } else { "22.20.0" }
 $VERSION = if ($env:FF1_CLI_VERSION) { $env:FF1_CLI_VERSION } else {
     (Get-Content (Join-Path $ROOT_DIR "package.json") | ConvertFrom-Json).version
 }
