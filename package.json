@@ -1,10 +1,10 @@
 {
   "name": "ff1-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CLI to fetch NFT information and build DP1 playlists using Grok API",
   "main": "dist/index.js",
   "bin": {
-    "ff1": "./dist/index.js"
+    "ff1": "dist/index.js"
   },
   "files": [
     "dist",

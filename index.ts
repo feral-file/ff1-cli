@@ -15,6 +15,8 @@ import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import crypto from 'crypto';
 import * as readline from 'readline';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
 import {
   getConfig,
   validateConfig,
@@ -24,6 +26,18 @@ import {
 } from './src/config';
 import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
+
+// Load version from package.json
+// Try built location first (dist/index.js -> ../package.json)
+// Fall back to dev location (index.ts -> ./package.json)
+let packageJsonPath = resolve(dirname(__filename), '..', 'package.json');
+try {
+  readFileSync(packageJsonPath, 'utf8');
+} catch {
+  // Dev mode: tsx runs from project root
+  packageJsonPath = resolve(dirname(__filename), 'package.json');
+}
+const { version: packageVersion } = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 
 const program = new Command();
 const placeholderPattern = /YOUR_|your_/;
@@ -113,7 +127,7 @@ program
   .description(
     'CLI to fetch NFT information and build DP1 playlists using AI (Grok, ChatGPT, Gemini)'
   )
-  .version('1.0.0')
+  .version(packageVersion)
   .addHelpText(
     'after',
     `\nQuick start:\n  1) ff1 setup\n  2) ff1 chat\n\nDocs: https://github.com/feralfile/ff1-cli\n`
@@ -398,10 +412,7 @@ program
   .description('Start an interactive chat to build playlists using natural language')
   .argument('[content]', 'Optional: Direct chat content (non-interactive mode)')
   .option('-o, --output <filename>', 'Output filename for the playlist', 'playlist.json')
-  .option(
-    '-m, --model <name>',
-    'AI model to use (grok, chatgpt, gemini) - defaults to config setting'
-  )
+  .option('-m, --model <name>', 'AI model to use (grok, gpt, gemini) - defaults to config setting')
   .option('-v, --verbose', 'Show detailed technical output of function calls', false)
   .action(
     async (
