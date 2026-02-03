@@ -4,16 +4,30 @@ The curl installer downloads prebuilt binaries from GitHub Releases. Build one a
 
 ## Build a Release Asset (local)
 
+**macOS / Linux:**
+
 ```bash
 ./scripts/release/build-asset.sh
 ```
 
-This produces:
+**Windows (PowerShell):**
 
-- `release/ff1-cli-darwin-x64.tar.gz`
-- `release/ff1-cli-darwin-x64.tar.gz.sha256`
+```powershell
+.\scripts\release\build-asset-windows.ps1
+```
 
-The exact filename depends on the OS/arch you build on. Run the script on each target platform (macOS + Linux, x64/arm64) and upload each pair to the GitHub release.
+This produces (names vary by OS/arch):
+
+- `release/ff1-cli-darwin-arm64.tar.gz` (and `.sha256`) on macOS
+- `release/ff1-cli-linux-x64.tar.gz` (and `.sha256`) on Linux
+- `release/ff1-cli-windows-x64.zip` (and `.sha256`) on Windows
+
+Run the appropriate script on each target platform and upload each pair to the GitHub release.
+
+## GitHub Actions
+
+- **Build** (`build.yml`): Trigger manually (Actions → Build → Run workflow) or on pull requests. Builds binaries on macOS, Linux, and Windows and uploads them as workflow artifacts for download.
+- **Release** (`release.yml`): Triggered when you **publish a release** (create a release from the repo Releases page, or publish an existing draft). Builds the same binaries, then uploads them to that release. Pushing a tag alone does not run this; only creating/publishing a release does.
 
 ## Installer Redirect
 

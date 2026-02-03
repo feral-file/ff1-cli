@@ -67,6 +67,7 @@ mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/lib" "$PACKAGE_DIR/node/bin"
 cp "$ROOT_DIR/dist/ff1.js" "$PACKAGE_DIR/lib/ff1.js"
 cp -R "$ROOT_DIR/node_modules" "$PACKAGE_DIR/lib/node_modules"
 cp "$WORKDIR/node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH/bin/node" "$PACKAGE_DIR/node/bin/node"
+cp "$ROOT_DIR/package.json" "$PACKAGE_DIR/package.json"
 cp "$ROOT_DIR/LICENSE" "$PACKAGE_DIR/LICENSE"
 cp "$ROOT_DIR/README.md" "$PACKAGE_DIR/README.md"
 
