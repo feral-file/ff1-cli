@@ -5,7 +5,7 @@ Instructions for AI coding agents working on FF1-CLI. This repo is a Node.js CLI
 ## Project overview
 
 - **What:** FF1-CLI — CLI for computational art on FF1 (playlists, DP-1 envelopes, validation).
-- **Docs:** Only these files in `/docs`: `README.md`, `FUNCTION_CALLING.md`, `EXAMPLES.md`, `CONFIGURATION.md`. Root README is minimal with links to `/docs`. Do not add CHANGELOG, SETUP, or other new doc files.
+- **Docs:** Only these files in `/docs`: `README.md`, `FUNCTION_CALLING.md`, `EXAMPLES.md`, `CONFIGURATION.md`, `RELEASING.md`. Root README is minimal with links to `/docs`. Do not add CHANGELOG, SETUP, or other new doc files.
 - **Docs updates:** Only when user-facing behavior changes. No docs for migrations, legacy cleanups, or internal refactors.
 
 ## Setup and commands
@@ -13,12 +13,13 @@ Instructions for AI coding agents working on FF1-CLI. This repo is a Node.js CLI
 - Install deps: `npm install`
 - Lint (required after code changes): `npm run lint:fix` — no warnings or errors before completing tasks.
 - Smoke tests before completing a task:
-  - `node index.js validate examples/sample-playlist.json`
-  - `node index.js config validate`
+  - `npm run build`
+  - `node dist/index.js validate examples/sample-playlist.json`
+  - `node dist/index.js config validate`
 
 ## Code style
 
-- **Always use TypeScript** for source code (`.ts`). Do not add or convert to plain JavaScript.
+- **Use TypeScript** for new or updated source code (`.ts`). Legacy `.js` files remain until we migrate.
 - ESLint + Prettier (see `eslint.config.js`, `.prettierrc`): single quotes, 2-space indent, semicolons, 100 char width.
 - `const` by default; `let` only when reassigning. Strict equality (`===`, `!==`). Curly braces in control flow.
 - Prefix unused variables with `_` (e.g. `_error`).
@@ -29,7 +30,7 @@ Instructions for AI coding agents working on FF1-CLI. This repo is a Node.js CLI
 - Pragmatic, clear, direct: short sentences; no corporate jargon; honest about limits. Use “we”; concrete next steps.
 - Use precise terms: FF1, DP-1 envelope, DP-1 conformance, computational art playlists, channel endorsements, etc. Use `backticks` for files, dirs, functions.
 - **Docs:** Start with why, then what/how, then examples. Skimmable headings; lists and short paragraphs.
-- **CLI/logs:** One idea per line. Success = one sentence past tense. Errors = cause + minimal context + next action. No stack traces unless `DEBUG`. No emojis; specific nouns (e.g. “DP-1 envelope” not “it”). If recovery exists, include it (e.g. “Re-run `node index.js config validate`”).
+- **CLI/logs:** One idea per line. Success = one sentence past tense. Errors = cause + minimal context + next action. No stack traces unless `DEBUG`. No emojis; specific nouns (e.g. “DP-1 envelope” not “it”). If recovery exists, include it (e.g. “Re-run `node dist/index.js config validate`”).
 
 ## Code philosophy and refactoring
 

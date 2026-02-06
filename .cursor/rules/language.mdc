@@ -101,7 +101,7 @@ Micro‑format rules:
 - Avoid exclamation marks and filler. One idea per line.
 - Avoid emojis and emoticons; use clear, neutral wording.
 - Prefer specific nouns over pronouns (“DP‑1 envelope”, not “it”).
-- If recovery exists, always include it (“Re‑run `node index.js config validate`”).
+- If recovery exists, always include it (“Re‑run `node dist/index.js config validate`”).
 
 ---
 
