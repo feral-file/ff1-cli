@@ -1,72 +1,53 @@
 {
-  "version": "DP1",
+  "dpVersion": "1.0.0",
+  "id": "d2d4f9b0-7f01-4c26-9c10-1c4d7477f5de",
   "title": "Sample NFT Collection",
-  "description": "Example DP1 playlist showing NFT structure",
-  "creator": {
-    "name": "FF1 CLI",
-    "address": "0x0000000000000000000000000000000000000000"
-  },
+  "created": "2026-02-06T00:00:00.000Z",
   "items": [
     {
-      "type": "nft",
-      "title": "Cool NFT #1",
-      "description": "An amazing digital artwork",
-      "media": {
-        "url": "https://example.com/nft1.png",
-        "mimeType": "image/png"
-      },
+      "id": "ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b",
+      "source": "https://example.com/nft1.png",
       "duration": 10,
-      "nft": {
-        "chain": "ethereum",
-        "contract": "0x1234567890123456789012345678901234567890",
-        "tokenId": "1"
-      },
-      "metadata": {
-        "attributes": [
-          {
-            "trait_type": "Background",
-            "value": "Blue"
-          },
-          {
-            "trait_type": "Style",
-            "value": "Abstract"
-          }
-        ]
+      "license": "open",
+      "created": "2026-02-06T00:00:00.000Z",
+      "title": "Cool NFT #1",
+      "provenance": {
+        "type": "onChain",
+        "contract": {
+          "chain": "evm",
+          "standard": "other",
+          "address": "0x1234567890123456789012345678901234567890",
+          "tokenId": "1"
+        }
       }
     },
     {
-      "type": "nft",
-      "title": "Cool NFT #2",
-      "description": "Another stunning piece",
-      "media": {
-        "url": "https://example.com/nft2.png",
-        "mimeType": "image/png"
-      },
+      "id": "5f741f4c-8a2a-489f-8b0c-d6a2e3b7c5f9",
+      "source": "https://example.com/nft2.png",
       "duration": 10,
-      "nft": {
-        "chain": "ethereum",
-        "contract": "0x1234567890123456789012345678901234567890",
-        "tokenId": "2"
-      },
-      "metadata": {
-        "attributes": [
-          {
-            "trait_type": "Background",
-            "value": "Red"
-          },
-          {
-            "trait_type": "Style",
-            "value": "Minimal"
-          }
-        ]
+      "license": "open",
+      "created": "2026-02-06T00:00:00.000Z",
+      "title": "Cool NFT #2",
+      "provenance": {
+        "type": "onChain",
+        "contract": {
+          "chain": "evm",
+          "standard": "other",
+          "address": "0x1234567890123456789012345678901234567890",
+          "tokenId": "2"
+        }
       }
     }
   ],
-  "generatedAt": "2025-10-01T00:00:00.000Z",
-  "generator": {
-    "name": "ff1-cli",
-    "version": "1.0.0",
-    "model": "grok-beta"
-  }
+  "defaults": {
+    "display": {
+      "scaling": "fit",
+      "background": "#111",
+      "margin": 0
+    },
+    "license": "token",
+    "duration": 10
+  },
+  "slug": "sample-nft-collection",
+  "signature": "ed25519:0x34dca6d76ad9a8a43d8d5221dd0850a812832bf0ef6390c645f559be7ad96ed4894f99fe1660176f13de071493812a6ec07a68085eee8ea07d04bcd1f2c41105"
 }
-
