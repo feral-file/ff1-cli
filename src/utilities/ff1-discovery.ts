@@ -9,6 +9,11 @@ export interface FF1DiscoveredDevice {
   txt?: Record<string, string>;
 }
 
+export interface FF1DiscoveryResult {
+  devices: FF1DiscoveredDevice[];
+  error?: string;
+}
+
 interface DiscoveryOptions {
   timeoutMs?: number;
 }
@@ -87,24 +92,24 @@ function getHostnameId(host: string): string {
  *
  * @param {Object} [options] - Discovery options
  * @param {number} [options.timeoutMs] - How long to browse before returning results
- * @returns {Promise<FF1DiscoveredDevice[]>} Discovered FF1 devices
+ * @returns {Promise<FF1DiscoveryResult>} Discovered FF1 devices and optional error
  * @throws {Error} Never throws; returns empty list on errors
  * @example
- * const devices = await discoverFF1Devices({ timeoutMs: 2000 });
+ * const result = await discoverFF1Devices({ timeoutMs: 2000 });
  */
 export async function discoverFF1Devices(
   options: DiscoveryOptions = {}
-): Promise<FF1DiscoveredDevice[]> {
+): Promise<FF1DiscoveryResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return new Promise((resolve) => {
     let resolved = false;
-    const finish = (result: FF1DiscoveredDevice[]) => {
+    const finish = (result: FF1DiscoveredDevice[], error?: string) => {
       if (resolved) {
         return;
       }
       resolved = true;
-      resolve(result);
+      resolve({ devices: result, error });
     };
 
     try {
@@ -112,21 +117,21 @@ export async function discoverFF1Devices(
       const devices = new Map<string, FF1DiscoveredDevice>();
       const browser = bonjour.find({ type: 'ff1', protocol: 'tcp' });
 
-      const finalize = () => {
+      const finalize = (error?: string) => {
         try {
           browser.stop();
           bonjour.destroy();
         } catch (_error) {
-          finish([]);
+          finish([], error || 'failed while stopping the browser');
           return;
         }
         const result = Array.from(devices.values()).sort((left, right) =>
           left.name.localeCompare(right.name)
         );
-        finish(result);
+        finish(result, error);
       };
 
-      const timeoutHandle = setTimeout(finalize, timeoutMs);
+      const timeoutHandle = setTimeout(() => finalize(), timeoutMs);
 
       browser.on('up', (service) => {
         const host = normalizeMdnsHost(service.host || service.fqdn || '');
@@ -150,19 +155,21 @@ export async function discoverFF1Devices(
         });
       });
 
-      browser.on('error', () => {
+      browser.on('error', (error) => {
         clearTimeout(timeoutHandle);
+        const message = error instanceof Error ? error.message : String(error);
         try {
           browser.stop();
           bonjour.destroy();
         } catch (_error) {
-          finish([]);
+          finish([], message || 'failed to stop browser after error');
           return;
         }
-        finish([]);
+        finalize(message || 'discovery error');
       });
-    } catch (_error) {
-      finish([]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      finish([], message || 'discovery error');
     }
   });
 }

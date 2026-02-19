@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 // Suppress punycode deprecation warnings from dependencies
-process.removeAllListeners('warning');
 process.on('warning', (warning) => {
   if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
     return; // Ignore punycode deprecation warnings from dependencies
@@ -254,8 +253,20 @@ program
       }
 
       const existingDevice = config.ff1Devices?.devices?.[0];
-      const discoveredDevices = await discoverFF1Devices({ timeoutMs: 2000 });
+      const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
+      const discoveredDevices = discoveryResult.devices;
       let selectedDeviceIndex: number | null = null;
+      if (discoveryResult.error && discoveredDevices.length === 0) {
+        const errorMessage = discoveryResult.error.endsWith('.')
+          ? discoveryResult.error
+          : `${discoveryResult.error}.`;
+        console.log(
+          chalk.dim(`mDNS discovery failed: ${errorMessage} Continuing with manual entry.`)
+        );
+      } else if (discoveryResult.error) {
+        console.log(chalk.dim(`mDNS discovery warning: ${discoveryResult.error}`));
+      }
+
       if (discoveredDevices.length > 0) {
         console.log(chalk.green('\nFF1 devices on your network:'));
         discoveredDevices.forEach((device, index) => {
@@ -278,7 +289,7 @@ program
             selectedDeviceIndex = parsedIndex - 1;
           }
         }
-      } else {
+      } else if (!discoveryResult.error) {
         console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
       }
 
