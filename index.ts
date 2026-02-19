@@ -278,6 +278,8 @@ program
             selectedDeviceIndex = parsedIndex - 1;
           }
         }
+      } else {
+        console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
       }
 
       const selectedDevice =
