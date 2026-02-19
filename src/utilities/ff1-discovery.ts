@@ -122,7 +122,7 @@ export async function discoverFF1Devices(
           browser.stop();
           bonjour.destroy();
         } catch (_error) {
-          finish([], error || 'failed while stopping the browser');
+          finish([], error || 'mDNS discovery failed while stopping the browser');
           return;
         }
         const result = Array.from(devices.values()).sort((left, right) =>
@@ -162,14 +162,14 @@ export async function discoverFF1Devices(
           browser.stop();
           bonjour.destroy();
         } catch (_error) {
-          finish([], message || 'failed to stop browser after error');
+          finish([], `mDNS discovery failed: ${message || 'failed to stop browser after error'}`);
           return;
         }
-        finalize(message || 'discovery error');
+        finalize(`mDNS discovery failed: ${message || 'discovery error'}`);
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      finish([], message || 'discovery error');
+      finish([], `mDNS discovery failed: ${message || 'discovery error'}`);
     }
   });
 }
