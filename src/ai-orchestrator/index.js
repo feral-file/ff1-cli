@@ -506,8 +506,9 @@ KEY RULES
 - The registry system handles full objects internally
 
 OUTPUT RULES
-- Before each function call, print exactly one sentence: "→ I'm …" describing the action.
-- Then call exactly one function with JSON arguments.
+- Do NOT print JSON arguments.
+- If you print a status sentence, keep it to one line: "→ I'm …" describing the action.
+- Then call exactly one function.
 - No chain‑of‑thought or extra narration; keep public output minimal.
 
 STOPPING CONDITIONS
@@ -715,9 +716,12 @@ async function buildPlaylistWithAI(params, options = {}) {
 
     messages.push(message);
 
-    // Always print AI content when present
+    // Only show tool-call chatter in verbose mode
     if (message.content) {
-      console.log(chalk.cyan(message.content));
+      const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
+      if (verbose || !hasToolCalls) {
+        console.log(chalk.cyan(message.content));
+      }
     }
 
     if (verbose) {
