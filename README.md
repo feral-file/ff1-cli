@@ -42,13 +42,14 @@ ff1 play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
 ```bash
 npm install
 npm run dev -- config init
-npm run dev chat
+npm run dev -- chat
 npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
 ```
 
 ## Documentation
 
-- Getting started, config, and usage: `./docs/README.md`
+- Getting started and usage: `./docs/README.md`
+- Configuration: `./docs/CONFIGURATION.md`
 - Function calling architecture: `./docs/FUNCTION_CALLING.md`
 - Examples: `./docs/EXAMPLES.md`
 
