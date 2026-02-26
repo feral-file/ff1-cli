@@ -46,6 +46,16 @@ export function warn(...args: unknown[]): void {
 }
 
 /**
+ * Log message only in verbose mode (no prefix)
+ * @param {...any} args - Arguments to log
+ */
+export function verbose(...args: unknown[]): void {
+  if (isVerbose) {
+    console.log(...args);
+  }
+}
+
+/**
  * Log error message (always shown, but with more details in verbose mode)
  * @param {...any} args - Arguments to log
  */
