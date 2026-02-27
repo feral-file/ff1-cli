@@ -14,11 +14,12 @@ npm run lint:fix
 ```
 No warnings or errors should remain before completing tasks.
 
-**Documentation structure - ONLY 3 files in `/docs`:**
+**Documentation structure - ONLY these files in `/docs`:**
 - `/docs/README.md` - Installation, usage
 - `/docs/FUNCTION_CALLING.md` - Function calling architecture
 - `/docs/EXAMPLES.md` - Usage examples
 - `/docs/CONFIGURATION.md` - Configuration
+- `/docs/RELEASING.md` - Release process
 
 Never create additional docs (no CHANGELOG.md, SETUP.md, etc.). Root README is minimal with links to `/docs`.
 
@@ -144,8 +145,9 @@ ESLint + Prettier enforced (see `eslint.config.js`, `.prettierrc`):
 
 Before completing any task:
 1. Run `npm run lint:fix`
-2. Test: `node index.js validate examples/sample-playlist.json`
-3. Test: `node index.js config validate`
+2. Run `npm run build`
+3. Test: `node dist/index.js validate examples/sample-playlist.json`
+4. Test: `node dist/index.js config validate`
 4. Verify all functions work as expected
 
 ## Git Practices

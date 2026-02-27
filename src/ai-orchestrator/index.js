@@ -10,6 +10,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+
+  const keys = Object.keys(value).sort();
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`;
+}
+
 async function createCompletionWithRetry(client, requestParams, maxRetries = 0) {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
@@ -507,8 +522,8 @@ KEY RULES
 
 OUTPUT RULES
 - Do NOT print JSON arguments.
-- If you print a status sentence, keep it to one line: "→ I'm …" describing the action.
-- Then call exactly one function.
+- Before each function call, print exactly one sentence: "→ I'm …" describing the action.
+- Call the function ONLY via tool calls and do not include tool names, JSON, or arguments in assistant content.
 - No chain‑of‑thought or extra narration; keep public output minimal.
 
 STOPPING CONDITIONS
@@ -593,6 +608,7 @@ async function buildPlaylistWithAI(params, options = {}) {
   let collectedItems = [];
   let verificationFailures = 0;
   let sentToDevice = false;
+  const queryRequirementCache = new Map();
   const maxIterations = 20;
   const maxVerificationRetries = 3;
 
@@ -714,16 +730,43 @@ async function buildPlaylistWithAI(params, options = {}) {
       }
     }
 
-    messages.push(message);
+    const contentText = message.content || '';
+    const looksLikeToolAttempt =
+      !message.tool_calls &&
+      contentText &&
+      (contentText.includes("→ I'm") ||
+        contentText.includes('"requirement"') ||
+        contentText.trim().startsWith('{'));
 
-    // Only show tool-call chatter in verbose mode
-    if (message.content) {
-      const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
-      if (verbose || !hasToolCalls) {
-        console.log(chalk.cyan(message.content));
+    if (looksLikeToolAttempt && iterationCount < maxIterations - 1) {
+      if (verbose) {
+        console.log(
+          chalk.yellow(
+            'AI returned tool arguments in text. Forcing function call with a system reminder.'
+          )
+        );
       }
+      messages.push(message);
+      messages.push({
+        role: 'system',
+        content:
+          'CRITICAL: You MUST call the required function via tool_calls. Do not output JSON or arguments in plain text. Call the function now.',
+      });
+      continue;
     }
 
+    messages.push(message);
+
+    // Only print non-json assistant content while keeping function-call noise low.
+    if (message.content) {
+      const trimmed = message.content.trim();
+      const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
+      const isJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+
+      if (!isJson && (verbose || !hasToolCalls)) {
+        console.log(chalk.cyan(trimmed));
+      }
+    }
     if (verbose) {
       console.log(chalk.dim(`\nIteration ${iterationCount}:`));
     }
@@ -746,7 +789,27 @@ async function buildPlaylistWithAI(params, options = {}) {
         }
 
         try {
-          const result = await executeFunction(functionName, args);
+          let result;
+          let usedCache = false;
+
+          if (functionName === 'query_requirement') {
+            const cacheKey = stableStringify({
+              requirement: args.requirement,
+              duration: args.duration,
+            });
+            if (queryRequirementCache.has(cacheKey)) {
+              result = queryRequirementCache.get(cacheKey);
+              usedCache = true;
+              if (verbose) {
+                console.log(chalk.dim('    ↺ Using cached result for duplicate query_requirement'));
+              }
+            } else {
+              result = await executeFunction(functionName, args);
+              queryRequirementCache.set(cacheKey, result);
+            }
+          } else {
+            result = await executeFunction(functionName, args);
+          }
 
           if (verbose) {
             console.log(
@@ -755,7 +818,7 @@ async function buildPlaylistWithAI(params, options = {}) {
           }
 
           // Track collected item IDs from query_requirement
-          if (functionName === 'query_requirement' && Array.isArray(result)) {
+          if (functionName === 'query_requirement' && Array.isArray(result) && !usedCache) {
             // Result now contains minimal item objects with id field
             const itemIds = result.map((item) => item.id).filter((id) => id);
             collectedItems = collectedItems.concat(itemIds); // Now storing IDs, not full items

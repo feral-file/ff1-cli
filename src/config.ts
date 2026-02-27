@@ -45,11 +45,11 @@ function loadConfig(): Config {
         maxTokens: parseInt(process.env.MAX_TOKENS || '4000', 10),
         supportsFunctionCalling: true,
       },
-      chatgpt: {
+      gpt: {
         apiKey: process.env.OPENAI_API_KEY || '',
         baseURL: 'https://api.openai.com/v1',
-        model: 'gpt-4o',
-        availableModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+        model: 'gpt-4.1',
+        availableModels: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
         timeout: 30000,
         maxRetries: 3,
         temperature: 0.3,
@@ -103,8 +103,9 @@ function loadConfig(): Config {
         ...fileConfig,
         models: mergedModels,
       };
-    } catch (_error) {
-      console.warn('Warning: Failed to parse config.json, using defaults');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Warning: Failed to parse config at ${configPath}. ${message}. Using defaults.`);
       return defaultConfig;
     }
   }
@@ -167,7 +168,7 @@ export function getBrowserConfig(): { timeout: number; sanitizationLevel: number
  * Get playlist configuration including private key for signing
  *
  * @returns {Object} Playlist configuration
- * @returns {string|null} returns.privateKey - Ed25519 private key in base64 format (null if not configured)
+ * @returns {string|null} returns.privateKey - Ed25519 private key in base64 or hex format (null if not configured)
  */
 export function getPlaylistConfig(): PlaylistConfig {
   const config = getConfig();
@@ -344,15 +345,14 @@ export function validateConfig(modelName?: string): ValidationResult {
     // Validate playlist configuration (optional, but warn if configured incorrectly)
     if (config.playlist && config.playlist.privateKey) {
       const key = config.playlist.privateKey;
-      if (
-        key !== 'your_ed25519_private_key_base64_here' &&
-        typeof key === 'string' &&
-        key.length > 0
-      ) {
-        // Check if it looks like valid base64
+      const placeholderPattern = /your_ed25519_private_key/i;
+      if (!placeholderPattern.test(key) && typeof key === 'string' && key.length > 0) {
         const base64Regex = /^[A-Za-z0-9+/]+=*$/;
-        if (!base64Regex.test(key)) {
-          errors.push('playlist.privateKey must be a valid base64-encoded ed25519 private key');
+        const hexRegex = /^(0x)?[0-9a-fA-F]+$/;
+        if (!base64Regex.test(key) && !hexRegex.test(key)) {
+          errors.push(
+            'playlist.privateKey must be a valid base64- or hex-encoded ed25519 private key'
+          );
         }
       }
     }

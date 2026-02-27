@@ -8,6 +8,8 @@ import OpenAI from 'openai';
 import chalk from 'chalk';
 import { getConfig, getModelConfig, getFF1DeviceConfig, getFeedConfig } from '../config';
 import { applyConstraints } from './utils';
+import * as logger from '../logger';
+import type { Requirement, PlaylistSettings } from '../types';
 import type { Stream } from 'openai/streaming';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
@@ -29,6 +31,11 @@ interface IntentParserResult {
   needsMoreInfo: boolean;
   question?: string;
   messages?: OpenAI.Chat.ChatCompletionMessageParam[];
+}
+
+interface RequirementParams {
+  requirements: Requirement[];
+  playlistSettings?: Partial<PlaylistSettings>;
 }
 
 /**
@@ -495,15 +502,81 @@ function printMarkdownContent(content: string): void {
   const lines = content.split('\n');
   for (const line of lines) {
     if (line.trim()) {
-      console.log(formatMarkdown(line));
+      logger.verbose(formatMarkdown(line));
     } else if (line === '') {
-      console.log();
+      logger.verbose();
     }
   }
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractDomains(text: string): string[] {
+  if (!text) {
+    return [];
+  }
+  const matches = text.match(/[a-z0-9-]+\.(eth|tez)/gi);
+  return matches ? matches.map((match) => match.toLowerCase()) : [];
+}
+
+function normalizeDomainInput(address: string, userDomains: string[]): string {
+  if (!address || userDomains.length === 0) {
+    return address;
+  }
+
+  const lower = address.toLowerCase();
+  if (!lower.endsWith('.eth') && !lower.endsWith('.tez')) {
+    return address;
+  }
+
+  const baseName = lower.replace(/\.(eth|tez)$/i, '');
+  const match = userDomains.find((domain) => domain.replace(/\.(eth|tez)$/i, '') === baseName);
+  return match || address;
+}
+
+function normalizeRequirementDomains(
+  params: RequirementParams,
+  userDomains: string[]
+): RequirementParams {
+  if (userDomains.length === 0) {
+    return params;
+  }
+
+  const normalized = params.requirements.map((req) => {
+    if (req.type !== 'query_address' || typeof req.ownerAddress !== 'string') {
+      return req;
+    }
+    return {
+      ...req,
+      ownerAddress: normalizeDomainInput(req.ownerAddress, userDomains),
+    };
+  });
+
+  return {
+    ...params,
+    requirements: normalized,
+  };
+}
+
+function buildToolResponseMessages(
+  toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[],
+  responses: Record<string, unknown>
+): OpenAI.Chat.ChatCompletionToolMessageParam[] {
+  return toolCalls
+    .filter((toolCall) => toolCall.id)
+    .map((toolCall) => {
+      const content =
+        toolCall.id && Object.prototype.hasOwnProperty.call(responses, toolCall.id)
+          ? responses[toolCall.id]
+          : { error: `Unknown function: ${toolCall.function.name}` };
+      return {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(content),
+      };
+    });
 }
 
 async function processNonStreamingResponse(
@@ -517,7 +590,7 @@ async function processNonStreamingResponse(
 
   if (message.content) {
     printMarkdownContent(message.content);
-    console.log();
+    logger.verbose();
   }
 
   return { message };
@@ -620,9 +693,9 @@ async function processStreamingResponse(
           for (const line of lines) {
             if (line.trim()) {
               const formatted = formatMarkdown(line);
-              console.log(formatted);
+              logger.verbose(formatted);
             } else if (line === '') {
-              console.log();
+              logger.verbose();
             }
           }
           printedUpTo = lastNewlineIndex + 1;
@@ -672,12 +745,12 @@ async function processStreamingResponse(
     const remainingText = contentBuffer.substring(printedUpTo);
     if (remainingText.trim()) {
       const formatted = formatMarkdown(remainingText);
-      console.log(formatted);
+      logger.verbose(formatted);
     }
   }
 
   if (contentBuffer.length > 0) {
-    console.log(); // Extra newline after AI response
+    logger.verbose(); // Extra newline after AI response
   }
 
   // Convert toolCallsMap to array
@@ -712,6 +785,7 @@ export async function processIntentParserRequest(
   options: IntentParserOptions = {}
 ): Promise<IntentParserResult> {
   const { modelName, conversationContext } = options;
+  const userDomains = extractDomains(userRequest);
   const client = createIntentParserClient(modelName);
   const modelConfig = getModelConfig(modelName);
   const config = getConfig();
@@ -765,14 +839,11 @@ export async function processIntentParserRequest(
         const { getConfiguredDevices } = await import('../utilities/functions');
         const result = await getConfiguredDevices();
 
-        // Add tool result to messages and continue conversation
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        };
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+          [toolCall.id]: result,
+        });
 
-        const updatedMessages = [...messages, message, toolResultMessage];
+        const updatedMessages = [...messages, message, ...toolResultMessages];
 
         // Continue the conversation with the device list
         const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -806,7 +877,10 @@ export async function processIntentParserRequest(
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
+            const params = normalizeRequirementDomains(
+              JSON.parse(followUpToolCall.function.arguments),
+              userDomains
+            );
 
             // Apply constraints and defaults
             const validatedParams = applyConstraints(params, config);
@@ -828,17 +902,14 @@ export async function processIntentParserRequest(
               })) ||
               feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
 
-            // Add tool result to messages and continue conversation
-            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({ servers: serverList }),
-            };
+            const feedToolResultMessages = buildToolResponseMessages(followUpMessage.tool_calls, {
+              [followUpToolCall.id]: { servers: serverList },
+            });
 
             const feedUpdatedMessages = [
               ...updatedMessages,
               followUpMessage,
-              feedToolResultMessage,
+              ...feedToolResultMessages,
             ];
 
             // Continue the conversation with the feed server list
@@ -874,7 +945,10 @@ export async function processIntentParserRequest(
             if (feedFollowUpMessage.tool_calls && feedFollowUpMessage.tool_calls.length > 0) {
               const feedToolCall = feedFollowUpMessage.tool_calls[0];
               if (feedToolCall.function.name === 'parse_requirements') {
-                const params = JSON.parse(feedToolCall.function.arguments);
+                const params = normalizeRequirementDomains(
+                  JSON.parse(feedToolCall.function.arguments),
+                  userDomains
+                );
 
                 // Apply constraints and defaults
                 const validatedParams = applyConstraints(params, config);
@@ -998,15 +1072,8 @@ export async function processIntentParserRequest(
               };
             }
           } else {
-            // Unhandled tool call - add assistant message and tool response to messages
-            const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({
-                error: `Unknown function: ${followUpToolCall.function.name}`,
-              }),
-            };
-            const validMessages = [...updatedMessages, followUpMessage, toolResultMessage];
+            const toolResultMessages = buildToolResponseMessages(followUpMessage.tool_calls, {});
+            const validMessages = [...updatedMessages, followUpMessage, ...toolResultMessages];
 
             // AI is still asking for more information after the error
             return {
@@ -1038,14 +1105,11 @@ export async function processIntentParserRequest(
             apiKey: server.apiKey,
           })) || feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
 
-        // Add tool result to messages and continue conversation
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ servers: serverList }),
-        };
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+          [toolCall.id]: { servers: serverList },
+        });
 
-        const updatedMessages = [...messages, message, toolResultMessage];
+        const updatedMessages = [...messages, message, ...toolResultMessages];
 
         // Continue the conversation with the feed server list
         const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -1079,7 +1143,10 @@ export async function processIntentParserRequest(
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
+            const params = normalizeRequirementDomains(
+              JSON.parse(followUpToolCall.function.arguments),
+              userDomains
+            );
 
             // Apply constraints and defaults
             const validatedParams = applyConstraints(params, config);
@@ -1151,7 +1218,10 @@ export async function processIntentParserRequest(
           messages: [...updatedMessages, followUpMessage],
         };
       } else if (toolCall.function.name === 'parse_requirements') {
-        const params = JSON.parse(toolCall.function.arguments);
+        const params = normalizeRequirementDomains(
+          JSON.parse(toolCall.function.arguments),
+          userDomains
+        );
 
         // Apply constraints and defaults
         const validatedParams = applyConstraints(params, config);
@@ -1169,17 +1239,14 @@ export async function processIntentParserRequest(
         const confirmation = await confirmPlaylistForSending(args.filePath, args.deviceName);
 
         if (!confirmation.success) {
-          // Add tool response message to make conversation valid
-          const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify({
+          const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+            [toolCall.id]: {
               success: false,
               error: confirmation.error,
               message: confirmation.message,
-            }),
-          };
-          const validMessages = [...messages, message, toolResultMessage];
+            },
+          });
+          const validMessages = [...messages, message, ...toolResultMessages];
 
           // Check if this is a device selection needed case
           if (confirmation.needsDeviceSelection) {
@@ -1269,22 +1336,24 @@ export async function processIntentParserRequest(
         }
       } else if (toolCall.function.name === 'verify_addresses') {
         const args = JSON.parse(toolCall.function.arguments);
+        if (Array.isArray(args.addresses) && userDomains.length > 0) {
+          args.addresses = args.addresses.map((address: string) =>
+            normalizeDomainInput(address, userDomains)
+          );
+        }
         const { verifyAddresses } = await import('../utilities/functions');
 
         const verificationResult = await verifyAddresses({ addresses: args.addresses });
 
         if (!verificationResult.valid) {
-          // Add tool response message for invalid addresses
-          const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify({
+          const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+            [toolCall.id]: {
               valid: false,
               errors: verificationResult.errors,
               results: verificationResult.results,
-            }),
-          };
-          const validMessages = [...messages, message, toolResultMessage];
+            },
+          });
+          const validMessages = [...messages, message, ...toolResultMessages];
 
           // Ask user to correct the addresses
           return {
@@ -1295,16 +1364,13 @@ export async function processIntentParserRequest(
           };
         }
 
-        // All addresses are valid - continue to next step
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {
+          [toolCall.id]: {
             valid: true,
             results: verificationResult.results,
-          }),
-        };
-        const validMessages = [...messages, message, toolResultMessage];
+          },
+        });
+        const validMessages = [...messages, message, ...toolResultMessages];
 
         // Continue conversation after validation
         const followUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -1338,7 +1404,10 @@ export async function processIntentParserRequest(
         if (followUpMessage.tool_calls && followUpMessage.tool_calls.length > 0) {
           const followUpToolCall = followUpMessage.tool_calls[0];
           if (followUpToolCall.function.name === 'parse_requirements') {
-            const params = JSON.parse(followUpToolCall.function.arguments);
+            const params = normalizeRequirementDomains(
+              JSON.parse(followUpToolCall.function.arguments),
+              userDomains
+            );
 
             // Apply constraints and defaults
             const validatedParams = applyConstraints(params, config);
@@ -1361,13 +1430,15 @@ export async function processIntentParserRequest(
               feedConfig.baseURLs.map((url) => ({ baseUrl: url, apiKey: feedConfig.apiKey }));
 
             // Add tool result to messages and continue conversation
-            const feedToolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-              role: 'tool',
-              tool_call_id: followUpToolCall.id,
-              content: JSON.stringify({ servers: serverList }),
-            };
+            const feedToolResultMessages = buildToolResponseMessages(followUpMessage.tool_calls, {
+              [followUpToolCall.id]: { servers: serverList },
+            });
 
-            const feedUpdatedMessages = [...validMessages, followUpMessage, feedToolResultMessage];
+            const feedUpdatedMessages = [
+              ...validMessages,
+              followUpMessage,
+              ...feedToolResultMessages,
+            ];
 
             // Continue the conversation with the feed server list
             const feedFollowUpRequest: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
@@ -1402,7 +1473,10 @@ export async function processIntentParserRequest(
             if (feedFollowUpMessage.tool_calls && feedFollowUpMessage.tool_calls.length > 0) {
               const feedToolCall = feedFollowUpMessage.tool_calls[0];
               if (feedToolCall.function.name === 'parse_requirements') {
-                const params = JSON.parse(feedToolCall.function.arguments);
+                const params = normalizeRequirementDomains(
+                  JSON.parse(feedToolCall.function.arguments),
+                  userDomains
+                );
 
                 // Apply constraints and defaults
                 const validatedParams = applyConstraints(params, config);
@@ -1491,15 +1565,8 @@ export async function processIntentParserRequest(
           needsMoreInfo: false,
         };
       } else {
-        // Unhandled tool call at top level
-        const toolResultMessage: OpenAI.Chat.ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({
-            error: `Unknown function: ${toolCall.function.name}`,
-          }),
-        };
-        const validMessages = [...messages, message, toolResultMessage];
+        const toolResultMessages = buildToolResponseMessages(message.tool_calls, {});
+        const validMessages = [...messages, message, ...toolResultMessages];
 
         return {
           approved: false,
