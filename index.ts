@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 // Suppress punycode deprecation warnings from dependencies
-process.removeAllListeners('warning');
 process.on('warning', (warning) => {
   if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
     return; // Ignore punycode deprecation warnings from dependencies
@@ -26,6 +25,7 @@ import {
 } from './src/config';
 import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
+import { discoverFF1Devices } from './src/utilities/ff1-discovery';
 
 // Load version from package.json
 // Try built location first (dist/index.js -> ../package.json)
@@ -93,7 +93,7 @@ async function ensureConfigFile(): Promise<{ path: string; created: boolean }> {
 }
 
 function normalizeDeviceHost(host: string): string {
-  let normalized = host.trim();
+  let normalized = host.trim().replace(/\.$/, '');
   if (!normalized) {
     return normalized;
   }
@@ -252,6 +252,48 @@ program
       }
 
       const existingDevice = config.ff1Devices?.devices?.[0];
+      const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
+      const discoveredDevices = discoveryResult.devices;
+      let selectedDeviceIndex: number | null = null;
+      if (discoveryResult.error && discoveredDevices.length === 0) {
+        const errorMessage = discoveryResult.error.endsWith('.')
+          ? discoveryResult.error
+          : `${discoveryResult.error}.`;
+        console.log(
+          chalk.dim(`mDNS discovery failed: ${errorMessage} Continuing with manual entry.`)
+        );
+      } else if (discoveryResult.error) {
+        console.log(chalk.dim(`mDNS discovery warning: ${discoveryResult.error}`));
+      }
+
+      if (discoveredDevices.length > 0) {
+        console.log(chalk.green('\nFF1 devices on your network:'));
+        discoveredDevices.forEach((device, index) => {
+          const displayId = device.id || device.name || device.host;
+          console.log(chalk.dim(`  ${index + 1}) ${displayId}`));
+        });
+
+        const selectionAnswer = await ask(
+          `Select device [1-${discoveredDevices.length}] or press Enter to skip: `
+        );
+        if (selectionAnswer) {
+          const parsedIndex = Number.parseInt(selectionAnswer, 10);
+          if (
+            Number.isNaN(parsedIndex) ||
+            parsedIndex < 1 ||
+            parsedIndex > discoveredDevices.length
+          ) {
+            console.log(chalk.red('Invalid selection. Skipping auto-discovery.'));
+          } else {
+            selectedDeviceIndex = parsedIndex - 1;
+          }
+        }
+      } else if (!discoveryResult.error) {
+        console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
+      }
+
+      const selectedDevice =
+        selectedDeviceIndex === null ? null : discoveredDevices[selectedDeviceIndex];
       {
         const existingHost = existingDevice?.host || '';
         let rawDefaultDeviceId = '';
@@ -266,27 +308,37 @@ program
           }
         }
         const defaultDeviceId = isMissingConfigValue(rawDefaultDeviceId) ? '' : rawDefaultDeviceId;
-        const idPrompt = defaultDeviceId
-          ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
-          : 'Device ID (e.g. ff1-ABCD1234): ';
-        const idAnswer = await ask(idPrompt);
-        const rawDeviceId = idAnswer || defaultDeviceId;
-
         let hostValue = '';
-        if (rawDeviceId) {
-          const looksLikeHost =
-            rawDeviceId.includes('.') ||
-            rawDeviceId.includes(':') ||
-            rawDeviceId.startsWith('http');
-          if (looksLikeHost) {
-            hostValue = normalizeDeviceHost(rawDeviceId);
-          } else {
-            const deviceId = rawDeviceId.startsWith('ff1-') ? rawDeviceId : `ff1-${rawDeviceId}`;
-            hostValue = normalizeDeviceHost(`${deviceId}.local`);
+        if (selectedDevice) {
+          hostValue = normalizeDeviceHost(`${selectedDevice.host}:${selectedDevice.port}`);
+          console.log(
+            chalk.dim(
+              `Using discovered device: ${selectedDevice.name} (${selectedDevice.host}:${selectedDevice.port})`
+            )
+          );
+        } else {
+          const idPrompt = defaultDeviceId
+            ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
+            : 'Device ID (e.g. ff1-ABCD1234): ';
+          const idAnswer = await ask(idPrompt);
+          const rawDeviceId = idAnswer || defaultDeviceId;
+
+          if (rawDeviceId) {
+            const looksLikeHost =
+              rawDeviceId.includes('.') ||
+              rawDeviceId.includes(':') ||
+              rawDeviceId.startsWith('http');
+            if (looksLikeHost) {
+              hostValue = normalizeDeviceHost(rawDeviceId);
+            } else {
+              const deviceId = rawDeviceId.startsWith('ff1-') ? rawDeviceId : `ff1-${rawDeviceId}`;
+              hostValue = normalizeDeviceHost(`${deviceId}.local`);
+            }
           }
         }
 
-        const rawName = existingDevice?.name || 'ff1';
+        const discoveredName = selectedDevice?.name || selectedDevice?.id || '';
+        const rawName = existingDevice?.name || discoveredName || 'ff1';
         const defaultName = isMissingConfigValue(rawName) ? '' : rawName;
         const namePrompt = defaultName
           ? `Device name (kitchen, office, etc.) [${defaultName}]: `

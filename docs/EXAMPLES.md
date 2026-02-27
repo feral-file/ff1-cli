@@ -25,6 +25,8 @@ npm run dev -- chat "Get 3 items from Social Codes and 2 from 0xdef" -v
 npm run dev -- chat "your request" --model grok
 npm run dev -- chat "your request" --model gpt
 npm run dev -- chat "your request" --model gemini
+
+# Model names must match keys in config.json under `models`.
 ```
 
 ## Deterministic Build (no AI)

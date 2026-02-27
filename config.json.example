@@ -1,14 +1,14 @@
 {
-  "defaultModel": "gemini",
+  "defaultModel": "grok",
   "models": {
     "grok": {
       "apiKey": "YOUR_GROK_API_KEY_FROM_X_AI_CONSOLE",
       "baseURL": "https://api.x.ai/v1",
-      "model": "grok-4-fast-non-reasoning",
+      "model": "grok-beta",
       "availableModels": [
-        "grok-4-fast-reasoning",
-        "grok-4-fast-non-reasoning",
-        "grok-code-fast-1"
+        "grok-beta",
+        "grok-2-1212",
+        "grok-2-vision-1212"
       ],
       "timeout": 120000,
       "maxRetries": 3,
@@ -16,7 +16,7 @@
       "maxTokens": 4000,
       "supportsFunctionCalling": true
     },
-    "gpt": {
+    "chatgpt": {
       "apiKey": "YOUR_OPENAI_API_KEY_FROM_PLATFORM_OPENAI_COM",
       "baseURL": "https://api.openai.com/v1",
       "model": "gpt-4.1",
@@ -65,7 +65,7 @@
     }
   ],
   "playlist": {
-    "privateKey": "YOUR_ED25519_PRIVATE_KEY_BASE64_ENCODED_RUN_NODE_INDEX_JS_GENERATE_KEYS"
+    "privateKey": "YOUR_ED25519_PRIVATE_KEY_BASE64_OR_HEX"
   },
   "ff1Devices": {
     "devices": [

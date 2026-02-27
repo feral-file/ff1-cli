@@ -49,7 +49,7 @@ See the full configuration reference here: `./CONFIGURATION.md`.
     "gemini": {
       "apiKey": "your-gemini-key-here",
       "baseURL": "https://generativelanguage.googleapis.com/v1beta/openai/",
-      "model": "gemini-2.0-flash-exp",
+      "model": "gemini-2.5-flash",
       "supportsFunctionCalling": true
     }
   },
