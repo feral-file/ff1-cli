@@ -521,9 +521,9 @@ KEY RULES
 - The registry system handles full objects internally
 
 OUTPUT RULES
+- Do NOT print JSON arguments.
 - Before each function call, print exactly one sentence: "→ I'm …" describing the action.
-- Do NOT include JSON, tool names, or arguments in assistant content.
-- Call the function ONLY via tool calls (no JSON in text).
+- Call the function ONLY via tool calls and do not include tool names, JSON, or arguments in assistant content.
 - No chain‑of‑thought or extra narration; keep public output minimal.
 
 STOPPING CONDITIONS
@@ -757,38 +757,16 @@ async function buildPlaylistWithAI(params, options = {}) {
 
     messages.push(message);
 
-    // Print AI content when present (suppress tool args/JSON noise)
+    // Only print non-json assistant content while keeping function-call noise low.
     if (message.content) {
-      const lines = message.content.split('\n');
-      const filteredLines = lines
-        .map((line) => line.trimEnd())
-        .filter((line) => {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) {
-            return false;
-          }
-          const normalizedLine = trimmedLine.toLowerCase();
-          if (normalizedLine.startsWith('the playlist has been successfully built and verified')) {
-            return false;
-          }
-          return (
-            !trimmedLine.startsWith('```') &&
-            !trimmedLine.startsWith('{') &&
-            !trimmedLine.startsWith('[')
-          );
-        });
+      const trimmed = message.content.trim();
+      const hasToolCalls = message.tool_calls && message.tool_calls.length > 0;
+      const isJson = trimmed.startsWith('{') || trimmed.startsWith('[');
 
-      const lineToPrint = filteredLines[0];
-
-      if (lineToPrint) {
-        if (message.tool_calls && message.tool_calls.length > 0) {
-          console.log(chalk.cyan(lineToPrint));
-        } else if (!lineToPrint.includes("→ I'm")) {
-          console.log(chalk.cyan(lineToPrint));
-        }
+      if (!isJson && (verbose || !hasToolCalls)) {
+        console.log(chalk.cyan(trimmed));
       }
     }
-
     if (verbose) {
       console.log(chalk.dim(`\nIteration ${iterationCount}:`));
     }
