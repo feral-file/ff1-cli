@@ -371,13 +371,13 @@ const intentParserFunctionSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'confirm_send_playlist',
       description:
-        'Confirm the playlist file path and device name for sending. This function is called after the user mentions "send" or similar phrases.',
+        'Confirm the playlist file path or hosted URL and device name for sending. This function is called after the user mentions "send" or similar phrases.',
       parameters: {
         type: 'object',
         properties: {
           filePath: {
             type: 'string',
-            description: 'Path to the playlist file (default: "./playlist.json")',
+            description: 'Path to playlist file or playlist URL (default: "./playlist.json")',
           },
           deviceName: {
             type: 'string',

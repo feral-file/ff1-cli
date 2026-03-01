@@ -26,6 +26,7 @@ import {
 } from './src/config';
 import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
+import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlist-source';
 
 // Load version from package.json
 // Try built location first (dist/index.js -> ../package.json)
@@ -106,6 +107,107 @@ function normalizeDeviceHost(host: string): string {
     return `${url.protocol}//${url.hostname}:${port}`;
   } catch (_error) {
     return normalized;
+  }
+}
+
+interface PlaylistVerificationResult {
+  valid: boolean;
+  error?: string;
+  details?: Array<{ path: string; message: string }>;
+  playlist?: Playlist;
+}
+
+/**
+ * Print a focused failure for playlist source loading problems.
+ *
+ * @param {string} source - Playlist source value
+ * @param {Error} error - Load or parse error
+ */
+function printPlaylistSourceLoadFailure(source: string, error: Error): void {
+  const isUrl = isPlaylistSourceUrl(source);
+
+  if (isUrl) {
+    console.error(chalk.red('\nCould not load hosted playlist URL'));
+    console.error(chalk.red(`  Source: ${source}`));
+    console.error(chalk.red(`  Error: ${error.message}`));
+    console.log(chalk.yellow('\n  Hint:'));
+    console.log(chalk.yellow('    • Check the URL is reachable'));
+    console.log(chalk.yellow('    • Confirm the response is JSON'));
+    console.log(chalk.yellow('    • Use a local file path if network access is unavailable'));
+    return;
+  }
+
+  console.error(chalk.red(`\nCould not load playlist file`));
+  console.error(chalk.red(`  Source: ${source}`));
+  console.error(chalk.red(`  Error: ${error.message}`));
+}
+
+/**
+ * Print playlist verification failure details consistently.
+ *
+ * @param {Object} verifyResult - DP-1 verification result
+ * @param {string} [source] - Optional source label
+ */
+function printPlaylistVerificationFailure(
+  verifyResult: PlaylistVerificationResult,
+  source?: string
+): void {
+  console.error(
+    chalk.red(`\nPlaylist verification failed:${source ? ` (${source})` : ''}`),
+    verifyResult.error
+  );
+
+  if (verifyResult.details && verifyResult.details.length > 0) {
+    console.log(chalk.yellow('\n   Validation errors:'));
+    verifyResult.details.forEach((detail: { path: string; message: string }) => {
+      console.log(chalk.yellow(`     • ${detail.path}: ${detail.message}`));
+    });
+  }
+
+  console.log(chalk.yellow('\n   Use --skip-verify to send anyway (not recommended)\n'));
+}
+
+/**
+ * Load and verify a DP-1 playlist from local file or hosted URL.
+ *
+ * @param {string} source - Playlist source value
+ * @returns {Promise<Object>} Verification result with parsed playlist when valid
+ */
+async function verifyPlaylistSource(source: string): Promise<PlaylistVerificationResult> {
+  const loaded = await loadPlaylistSource(source);
+
+  const verifier = await import('./src/utilities/playlist-verifier');
+  const { verifyPlaylist } = verifier;
+  const verifyResult = verifyPlaylist(loaded.playlist);
+
+  return {
+    ...verifyResult,
+    playlist: verifyResult.valid ? loaded.playlist : undefined,
+  };
+}
+
+/**
+ * Run a shared verify/validate command flow.
+ *
+ * @param {string} source - Playlist source path or URL
+ */
+async function runVerifyCommand(source: string): Promise<void> {
+  try {
+    console.log(chalk.blue('\nVerify playlist\n'));
+
+    const verifier = await import('./src/utilities/playlist-verifier');
+    const { printVerificationResult } = verifier;
+
+    const result = await verifyPlaylistSource(source);
+
+    printVerificationResult(result, source);
+
+    if (!result.valid) {
+      process.exit(1);
+    }
+  } catch (error) {
+    printPlaylistSourceLoadFailure(source, error as Error);
+    process.exit(1);
   }
 }
 
@@ -582,55 +684,17 @@ program
 program
   .command('verify')
   .description('Verify a DP1 playlist file against DP-1 specification')
-  .argument('<file>', 'Path to the playlist file')
+  .argument('<file>', 'Path to the playlist file or hosted playlist URL')
   .action(async (file: string) => {
-    try {
-      console.log(chalk.blue('\nVerify playlist\n'));
-
-      // Import the verification utility
-      const verifier = await import('./src/utilities/playlist-verifier');
-      const { verifyPlaylistFile, printVerificationResult } = verifier;
-
-      // Verify the playlist
-      const result = await verifyPlaylistFile(file);
-
-      // Print results
-      printVerificationResult(result, file);
-
-      if (!result.valid) {
-        process.exit(1);
-      }
-    } catch (error) {
-      console.error(chalk.red('\nError:'), (error as Error).message);
-      process.exit(1);
-    }
+    await runVerifyCommand(file);
   });
 
 program
   .command('validate')
   .description('Validate a DP1 playlist file (alias for verify)')
-  .argument('<file>', 'Path to the playlist file')
+  .argument('<file>', 'Path to the playlist file or hosted playlist URL')
   .action(async (file: string) => {
-    try {
-      console.log(chalk.blue('\nVerify playlist\n'));
-
-      // Import the verification utility
-      const verifier = await import('./src/utilities/playlist-verifier');
-      const { verifyPlaylistFile, printVerificationResult } = verifier;
-
-      // Verify the playlist
-      const result = await verifyPlaylistFile(file);
-
-      // Print results
-      printVerificationResult(result, file);
-
-      if (!result.valid) {
-        process.exit(1);
-      }
-    } catch (error) {
-      console.error(chalk.red('\nError:'), (error as Error).message);
-      process.exit(1);
-    }
+    await runVerifyCommand(file);
   });
 
 program
@@ -698,16 +762,7 @@ program
         const verifyResult = verifyPlaylist(playlist);
 
         if (!verifyResult.valid) {
-          console.error(chalk.red('\nPlaylist verification failed:'), verifyResult.error);
-
-          if (verifyResult.details && verifyResult.details.length > 0) {
-            console.log(chalk.yellow('\n   Validation errors:'));
-            verifyResult.details.forEach((detail: { path: string; message: string }) => {
-              console.log(chalk.yellow(`     • ${detail.path}: ${detail.message}`));
-            });
-          }
-
-          console.log(chalk.yellow('\n   Use --skip-verify to send anyway (not recommended)\n'));
+          printPlaylistVerificationFailure(verifyResult);
           process.exit(1);
         }
       }
@@ -744,21 +799,22 @@ program
 
 program
   .command('send')
-  .description('Send a playlist file to an FF1 device')
-  .argument('<file>', 'Path to the playlist file')
+  .description('Send a playlist to an FF1 device')
+  .argument('<file>', 'Playlist file path or hosted playlist URL')
   .option('-d, --device <name>', 'Device name (uses first device if not specified)')
   .option('--skip-verify', 'Skip playlist verification before sending')
   .action(async (file: string, options: { device?: string; skipVerify?: boolean }) => {
     try {
       console.log(chalk.blue('\nSend playlist to FF1\n'));
 
-      // Read the playlist file
-      const content = await fs.readFile(file, 'utf-8');
-      const playlist: Playlist = JSON.parse(content);
+      const playlistResult = await loadPlaylistSource(file);
+      const playlist = playlistResult.playlist;
 
       // Verify playlist before sending (unless skipped)
       if (!options.skipVerify) {
-        console.log(chalk.cyan('Verify playlist'));
+        console.log(
+          chalk.cyan(`Verify playlist (${playlistResult.sourceType}: ${playlistResult.source})`)
+        );
 
         const verifier = await import('./src/utilities/playlist-verifier');
         const { verifyPlaylist } = verifier;
@@ -766,16 +822,7 @@ program
         const verifyResult = verifyPlaylist(playlist);
 
         if (!verifyResult.valid) {
-          console.error(chalk.red('\nPlaylist verification failed:'), verifyResult.error);
-
-          if (verifyResult.details && verifyResult.details.length > 0) {
-            console.log(chalk.yellow('\n   Validation errors:'));
-            verifyResult.details.forEach((detail: { path: string; message: string }) => {
-              console.log(chalk.yellow(`     • ${detail.path}: ${detail.message}`));
-            });
-          }
-
-          console.log(chalk.yellow('\n   Use --skip-verify to send anyway (not recommended)\n'));
+          printPlaylistVerificationFailure(verifyResult, `source: ${playlistResult.source}`);
           process.exit(1);
         }
 

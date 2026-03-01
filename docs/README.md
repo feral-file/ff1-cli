@@ -128,10 +128,10 @@ Notes:
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `play <url>` – Send a media URL directly to an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
-- `validate <file>` / `verify <file>` – Validate a DP1 playlist file
+- `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 playlist file
 - `sign <file>` – Sign playlist with Ed25519
   - Options: `-k, --key <base64>`, `-o, --output <file>`
-- `send <file>` – Send playlist to an FF1 device
+- `send <file>` – Send a local or hosted DP-1 playlist to an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
   - Options: `-s, --server <index>` (server index if multiple configured)
@@ -204,6 +204,9 @@ npm run dev -- sign playlist.json -o signed.json
 
 # Send to device (verifies by default)
 npm run dev -- send playlist.json -d "Living Room Display"
+
+# Send a hosted DP-1 playlist
+npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
 
 # Play a direct URL
 npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify

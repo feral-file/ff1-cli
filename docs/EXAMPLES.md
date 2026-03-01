@@ -92,18 +92,21 @@ npm run dev -- chat "Get 5 from Social Codes, shuffle, display on 'Living Room',
 ### How It Works
 
 **Mode 1: Build and Publish** (when sources are mentioned)
+
 1. Intent parser detects "publish" keywords with sources/requirements
 2. Calls `get_feed_servers` to retrieve configured servers
 3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
 4. Builds playlist → verifies → publishes automatically
 
 **Mode 2: Publish Existing File** (e.g., "publish playlist")
+
 1. Intent parser detects "publish playlist" or similar phrases
 2. Calls `get_feed_servers` to retrieve configured servers
 3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
 4. Publishes the playlist from `./playlist.json` (or specified path)
 
 Output shows:
+
 - Playlist build progress (Mode 1 only)
 - Device sending (if requested): `✓ Sent to device: Living Room`
 - Publishing status: `✓ Published to feed server`
@@ -114,12 +117,14 @@ Output shows:
 ```bash
 # Validate playlist
 npm run dev -- validate playlist.json
+npm run dev -- validate "https://cdn.example.com/playlist.json"
 
 # Sign playlist
 npm run dev -- sign playlist.json -o signed.json
 
 # Send to device
 npm run dev -- send playlist.json -d "Living Room Display"
+npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
 ```
 
 ## Publish to Feed Server
@@ -187,18 +192,21 @@ Select server (0-based index): 0
 ### Error Handling
 
 **Validation failed:**
+
 ```
 ❌ Failed to publish playlist
    Playlist validation failed: dpVersion: Required; id: Required
 ```
 
 **File not found:**
+
 ```
 ❌ Failed to publish playlist
    Playlist file not found: /path/to/playlist.json
 ```
 
 **API error:**
+
 ```
 ❌ Failed to publish playlist
    Failed to publish: {"error":"unauthorized","message":"Invalid API key"}
@@ -232,7 +240,6 @@ npm run dev -- config show
 # Reinitialize config
 npm run dev -- config init
 ```
-
 
 ### Natural‑language one‑shot examples (proven)
 

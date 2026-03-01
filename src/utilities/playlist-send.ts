@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { promises as fs } from 'fs';
+import { isPlaylistSourceUrl, loadPlaylistSource } from './playlist-source';
 
 interface PlaylistSendConfirmation {
   success: boolean;
@@ -61,7 +61,7 @@ async function getAvailableDevices(): Promise<Array<{ name: string; host: string
  * Reads the playlist file, validates it against DP-1 spec,
  * and returns confirmation result for user review.
  *
- * @param {string} filePath - Path to playlist file
+ * @param {string} filePath - Playlist file path or URL
  * @param {string} [deviceName] - Device name (optional)
  * @returns {Promise<PlaylistSendConfirmation>} Validation result
  */
@@ -84,40 +84,62 @@ export async function confirmPlaylistForSending(
   }
 
   try {
-    // Check if file exists
-    console.log(chalk.cyan(`Playlist file: ${resolvedPath}`));
+    // Load playlist from file or URL
+    console.log(chalk.cyan(`Playlist source: ${resolvedPath}`));
 
-    let _fileExists = false;
     let playlist: Record<string, unknown> | undefined;
+    let fileExists = false;
+    let loadedFrom: 'file' | 'url' = 'file';
 
     try {
-      const content = await fs.readFile(resolvedPath, 'utf-8');
-      playlist = JSON.parse(content);
-      _fileExists = true;
-      console.log(chalk.green('File loaded'));
+      const loaded = await loadPlaylistSource(resolvedPath);
+      playlist = loaded.playlist as Record<string, unknown>;
+      fileExists = loaded.sourceType === 'file';
+      loadedFrom = loaded.sourceType;
+      console.log(chalk.green(`Loaded from ${loadedFrom}: ${resolvedPath}`));
     } catch (error) {
-      const errorMsg = (error as Error).message;
-      if (errorMsg.includes('ENOENT') || errorMsg.includes('no such file')) {
-        console.log(chalk.red(`File not found: ${resolvedPath}`));
+      const message = (error as Error).message;
+      const isUrl = isPlaylistSourceUrl(resolvedPath);
+
+      if (isUrl) {
         return {
           success: false,
           filePath: resolvedPath,
           fileExists: false,
           playlistValid: false,
-          error: `Playlist file not found at ${resolvedPath}`,
-          message: `Could not find playlist file. Try:\n  • Run a playlist build first\n  • Check the file path is correct\n  • Use "send ./path/to/playlist.json"`,
+          error: `Could not load playlist URL: ${resolvedPath}`,
+          message: `${message}\n\nHint:\n  • Check the URL is reachable\n  • Confirm it returns JSON\n  • Use "send ./path/to/playlist.json" for local files`,
         };
       }
-      throw error;
+
+      if (message.includes('Invalid JSON in')) {
+        return {
+          success: false,
+          filePath: resolvedPath,
+          fileExists: true,
+          playlistValid: false,
+          error: message,
+          message: `${message}\n\nHint:\n  • Check the JSON payload is valid DP-1 format\n  • Check local path points to a playlist file`,
+        };
+      }
+
+      return {
+        success: false,
+        filePath: resolvedPath,
+        fileExists: false,
+        playlistValid: false,
+        error: `Playlist file not found at ${resolvedPath}`,
+        message: `Could not find playlist file. Try:\n  • Run a playlist build first\n  • Check the file path is correct\n  • Use "send ./path/to/playlist.json"`,
+      };
     }
 
     if (!playlist) {
       return {
         success: false,
         filePath: resolvedPath,
-        fileExists: true,
+        fileExists,
         playlistValid: false,
-        error: 'Playlist file is empty',
+        error: `Playlist source is empty: ${loadedFrom}`,
       };
     }
 
