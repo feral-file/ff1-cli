@@ -135,6 +135,8 @@ Notes:
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
   - Options: `-s, --server <index>` (server index if multiple configured)
+- `ssh <enable|disable>` – Manage SSH access on an FF1 device
+  - Options: `-d, --device <name>`, `--pubkey <path>`, `--ttl <duration>`
 - `config <init|show|validate>` – Manage configuration
 
 ## Usage Highlights
@@ -207,6 +209,16 @@ npm run dev -- send playlist.json -d "Living Room Display"
 
 # Play a direct URL
 npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+```
+
+### SSH access
+
+```bash
+# Enable SSH access for 30 minutes
+ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
+
+# Disable SSH access
+ff1 ssh disable -d "Living Room Display"
 ```
 
 ### Publish to feed server

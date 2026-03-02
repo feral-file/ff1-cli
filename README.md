@@ -52,6 +52,7 @@ npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --s
 - Configuration: `./docs/CONFIGURATION.md`
 - Function calling architecture: `./docs/FUNCTION_CALLING.md`
 - Examples: `./docs/EXAMPLES.md`
+- SSH access: `ff1 ssh enable|disable` in `./docs/README.md`
 
 ## Scripts
 
