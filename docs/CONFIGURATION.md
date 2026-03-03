@@ -123,6 +123,28 @@ Selection rules when sending:
 - If you omit `-d`, the first configured device is used.
 - If you pass `-d <name>`, the CLI matches the device by `name` (exact match). If not found, you’ll see an error listing available devices.
 
+Compatibility checks:
+
+- `send` and `ssh` now perform a compatibility preflight check before sending
+  commands to FF1. The CLI checks version information from these endpoints:
+
+  1. `GET /api/version`
+  2. `GET /api/info`
+  3. `GET /api/status`
+  4. fallback: `POST /api/cast` with `{ "command": "version" }`
+
+- Current minimum supported versions are:
+
+  - `send` (`displayPlaylist`): FF1 OS `1.0.0` or newer
+  - `ssh` (`sshAccess`): FF1 OS `1.0.0` or newer
+
+- If the CLI cannot detect a version from the device, it keeps going for now and sends the command.
+- If the detected version is below the minimum, the command fails early with an error that includes the detected version and endpoint used.
+
+Troubleshooting note:
+
+- If you get an unsupported-version error, update your FF1 OS and retry. If version detection seems inconsistent, check that device host and key are correct and retry with the device directly reachable.
+
 Examples:
 
 ```bash
@@ -133,7 +155,7 @@ npm run dev -- send playlist.json
 npm run dev -- send playlist.json -d "Living Room Display"
 ```
 
-Minimal `config.json` example (selected fields):
+ Minimal `config.json` example (selected fields):
 
 ```json
 {

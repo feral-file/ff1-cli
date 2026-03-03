@@ -3,9 +3,9 @@
  * Handles sending DP1 playlists to FF1 devices via the Relayer API
  */
 
-import { getFF1DeviceConfig } from '../config';
 import * as logger from '../logger';
 import type { Playlist } from '../types';
+import { assertFF1CommandCompatibility, resolveConfiguredDevice } from './ff1-compatibility';
 
 interface SendPlaylistParams {
   playlist: Playlist;
@@ -66,40 +66,23 @@ export async function sendPlaylistToDevice({
       };
     }
 
-    // Get device configuration
-    const deviceConfig = getFF1DeviceConfig();
-
-    if (!deviceConfig.devices || deviceConfig.devices.length === 0) {
+    const resolved = resolveConfiguredDevice(deviceName);
+    if (!resolved.success || !resolved.device) {
       return {
         success: false,
-        error: 'No FF1 devices configured. Please add devices to config.json under "ff1Devices"',
+        error: resolved.error || 'FF1 device is not configured correctly',
       };
     }
+    const device = resolved.device;
 
-    // Find device by name if provided, otherwise use first device
-    let device;
-    if (deviceName) {
-      device = deviceConfig.devices.find((d) => d.name === deviceName);
-      if (!device) {
-        const availableNames = deviceConfig.devices
-          .map((d) => d.name)
-          .filter(Boolean)
-          .join(', ');
-        return {
-          success: false,
-          error: `Device "${deviceName}" not found. Available devices: ${availableNames || 'none with names'}`,
-        };
-      }
-      logger.info(`Found device by name: ${deviceName}`);
-    } else {
-      device = deviceConfig.devices[0];
-      logger.info('Using first configured device');
-    }
-
-    if (!device.host) {
+    const compatibility = await assertFF1CommandCompatibility(device, 'displayPlaylist');
+    if (!compatibility.compatible) {
       return {
         success: false,
-        error: 'Invalid device configuration: must include host',
+        error: compatibility.error || 'FF1 OS does not support playlist casting',
+        details: compatibility.version
+          ? `Detected version ${compatibility.version} (source: ${compatibility.source || 'unknown'})`
+          : undefined,
       };
     }
 

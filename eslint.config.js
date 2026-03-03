@@ -67,7 +67,7 @@ module.exports = [
       sourceType: 'commonjs',
       parser: tsParser,
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
       },
       globals: {
         console: 'readonly',
