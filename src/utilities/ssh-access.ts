@@ -2,8 +2,8 @@
  * SSH access control for FF1 devices.
  */
 
-import { getFF1DeviceConfig } from '../config';
 import * as logger from '../logger';
+import { assertFF1CommandCompatibility, resolveConfiguredDevice } from './ff1-compatibility';
 
 interface SshAccessParams {
   enabled: boolean;
@@ -58,38 +58,21 @@ export async function sendSshAccessCommand({
       };
     }
 
-    const deviceConfig = getFF1DeviceConfig();
-
-    if (!deviceConfig.devices || deviceConfig.devices.length === 0) {
+    const resolved = resolveConfiguredDevice(deviceName);
+    if (!resolved.success || !resolved.device) {
       return {
         success: false,
-        error: 'No FF1 devices configured. Add a device under "ff1Devices" in config.json',
+        error: resolved.error || 'FF1 device is not configured correctly',
       };
     }
+    const device = resolved.device;
 
-    let device = deviceConfig.devices[0];
-    if (deviceName) {
-      const match = deviceConfig.devices.find((d) => d.name === deviceName);
-      if (!match) {
-        const availableNames = deviceConfig.devices
-          .map((d) => d.name)
-          .filter(Boolean)
-          .join(', ');
-        return {
-          success: false,
-          error: `Device "${deviceName}" not found. Available devices: ${availableNames || 'none with names'}`,
-        };
-      }
-      device = match;
-      logger.info(`Found device by name: ${deviceName}`);
-    } else {
-      logger.info('Using first configured device');
-    }
-
-    if (!device.host) {
+    const compatibility = await assertFF1CommandCompatibility(device, 'sshAccess');
+    if (!compatibility.compatible) {
       return {
         success: false,
-        error: 'Invalid device configuration: must include host',
+        error: compatibility.error || 'FF1 OS does not support SSH access command',
+        details: compatibility.version ? `Detected version ${compatibility.version}` : undefined,
       };
     }
 
