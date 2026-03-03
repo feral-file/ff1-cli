@@ -125,21 +125,15 @@ Selection rules when sending:
 
 Compatibility checks:
 
-- `send` and `ssh` now perform a compatibility preflight check before sending
-  commands to FF1. The CLI checks version information from these endpoints:
+- `send` and `ssh` perform a compatibility preflight before sending commands to FF1. The CLI gets the device version by calling `POST /api/cast` with `{ "command": "getDeviceStatus", "request": {} }` and reads `message.installedVersion` from the response.
 
-  1. `GET /api/version`
-  2. `GET /api/info`
-  3. `GET /api/status`
-  4. fallback: `POST /api/cast` with `{ "command": "version" }`
+- Minimum supported FF1 OS versions:
 
-- Current minimum supported versions are:
+  - `send` (`displayPlaylist`): `1.0.0` or newer
+  - `ssh` (`sshAccess`): `1.0.9` or newer
 
-  - `send` (`displayPlaylist`): FF1 OS `1.0.0` or newer
-  - `ssh` (`sshAccess`): FF1 OS `1.0.0` or newer
-
-- If the CLI cannot detect a version from the device, it keeps going for now and sends the command.
-- If the detected version is below the minimum, the command fails early with an error that includes the detected version and endpoint used.
+- If the CLI cannot get a version from the device (e.g. network or malformed response), it continues and sends the command.
+- If the detected version is below the minimum, the command fails early with an error that includes the detected version.
 
 Troubleshooting note:
 

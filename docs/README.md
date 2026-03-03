@@ -207,7 +207,7 @@ npm run dev -- sign playlist.json -o signed.json
 # Send to device (verifies by default)
 npm run dev -- send playlist.json -d "Living Room Display"
 
-# The send path now performs a compatibility preflight check against the target FF1.
+# The send path performs a compatibility preflight against the target FF1.
 # If the device reports an unsupported FF1 OS version, the command fails with
 # a clear version message before any cast request is sent.
 
@@ -224,7 +224,7 @@ ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
 # Disable SSH access
 ff1 ssh disable -d "Living Room Display"
 
-# `ff1 ssh` also performs the same FF1 OS compatibility preflight used by `send`.
+# `ff1 ssh` uses the same FF1 OS compatibility preflight as `send`.
 ```
 
 ### Publish to feed server
