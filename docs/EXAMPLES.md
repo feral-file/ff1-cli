@@ -23,8 +23,10 @@ npm run dev -- chat "Get 3 items from Social Codes and 2 from 0xdef" -v
 
 # Switch model
 npm run dev -- chat "your request" --model grok
-npm run dev -- chat "your request" --model chatgpt
+npm run dev -- chat "your request" --model gpt
 npm run dev -- chat "your request" --model gemini
+
+# Model names must match keys in config.json under `models`.
 ```
 
 ## Deterministic Build (no AI)
@@ -44,7 +46,7 @@ cat examples/params-example.json | npm run dev -- build -o playlist.json
 npm run dev -- chat "Build a playlist of my Tezos works from address tz1... plus 3 from Social Codes" -v -o playlist.json
 
 # Switch model if desired
-npm run dev -- chat "Build playlist from Ethereum address 0x... and 2 from Social Codes" --model chatgpt -v
+npm run dev -- chat "Build playlist from Ethereum address 0x... and 2 from Social Codes" --model gpt -v
 ```
 
 ### One‑shot complex prompt

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 // Suppress punycode deprecation warnings from dependencies
-process.removeAllListeners('warning');
 process.on('warning', (warning) => {
   if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
     return; // Ignore punycode deprecation warnings from dependencies
@@ -26,6 +25,7 @@ import {
 } from './src/config';
 import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
+import { discoverFF1Devices } from './src/utilities/ff1-discovery';
 import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlist-source';
 
 // Load version from package.json
@@ -50,7 +50,7 @@ const placeholderPattern = /YOUR_|your_/;
  * @param {string} outputPath - Path where the playlist was saved
  */
 function displayPlaylistSummary(playlist: Playlist, outputPath: string) {
-  console.log(chalk.green('\nPlaylist created'));
+  console.log(chalk.green('\nPlaylist saved'));
   console.log(chalk.dim(`  Output: ./${outputPath}`));
   console.log(chalk.dim('  Next: send last | publish playlist'));
   console.log();
@@ -93,8 +93,51 @@ async function ensureConfigFile(): Promise<{ path: string; created: boolean }> {
   return { path: createdPath, created: true };
 }
 
+/**
+ * Parse TTL duration string into seconds.
+ *
+ * @param {string} ttl - Duration string (e.g. "900", "15m", "2h")
+ * @returns {number} TTL in seconds
+ * @throws {Error} When ttl format is invalid
+ */
+function parseTtlSeconds(ttl: string): number {
+  const trimmed = ttl.trim();
+  const match = trimmed.match(/^(\d+)([smh]?)$/i);
+  if (!match) {
+    throw new Error('TTL must be a number of seconds or a duration like 15m or 2h');
+  }
+  const value = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  if (Number.isNaN(value)) {
+    throw new Error('TTL value is not a number');
+  }
+  if (unit === 'm') {
+    return value * 60;
+  }
+  if (unit === 'h') {
+    return value * 60 * 60;
+  }
+  return value;
+}
+
+/**
+ * Read an SSH public key from a file.
+ *
+ * @param {string} keyPath - Path to public key file
+ * @returns {Promise<string>} Public key contents
+ * @throws {Error} When the file is empty or unreadable
+ */
+async function readPublicKeyFile(keyPath: string): Promise<string> {
+  const content = await fs.readFile(keyPath, 'utf-8');
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error('Public key file is empty');
+  }
+  return trimmed;
+}
+
 function normalizeDeviceHost(host: string): string {
-  let normalized = host.trim();
+  let normalized = host.trim().replace(/\.$/, '');
   if (!normalized) {
     return normalized;
   }
@@ -305,7 +348,6 @@ program
       const keyHelpUrls: Record<string, string> = {
         grok: 'https://console.x.ai/',
         gpt: 'https://platform.openai.com/api-keys',
-        chatgpt: 'https://platform.openai.com/api-keys',
         gemini: 'https://aistudio.google.com/app/apikey',
       };
       if (!hasApiKeyForModel) {
@@ -355,6 +397,48 @@ program
       }
 
       const existingDevice = config.ff1Devices?.devices?.[0];
+      const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
+      const discoveredDevices = discoveryResult.devices;
+      let selectedDeviceIndex: number | null = null;
+      if (discoveryResult.error && discoveredDevices.length === 0) {
+        const errorMessage = discoveryResult.error.endsWith('.')
+          ? discoveryResult.error
+          : `${discoveryResult.error}.`;
+        console.log(
+          chalk.dim(`mDNS discovery failed: ${errorMessage} Continuing with manual entry.`)
+        );
+      } else if (discoveryResult.error) {
+        console.log(chalk.dim(`mDNS discovery warning: ${discoveryResult.error}`));
+      }
+
+      if (discoveredDevices.length > 0) {
+        console.log(chalk.green('\nFF1 devices on your network:'));
+        discoveredDevices.forEach((device, index) => {
+          const displayId = device.id || device.name || device.host;
+          console.log(chalk.dim(`  ${index + 1}) ${displayId}`));
+        });
+
+        const selectionAnswer = await ask(
+          `Select device [1-${discoveredDevices.length}] or press Enter to skip: `
+        );
+        if (selectionAnswer) {
+          const parsedIndex = Number.parseInt(selectionAnswer, 10);
+          if (
+            Number.isNaN(parsedIndex) ||
+            parsedIndex < 1 ||
+            parsedIndex > discoveredDevices.length
+          ) {
+            console.log(chalk.red('Invalid selection. Skipping auto-discovery.'));
+          } else {
+            selectedDeviceIndex = parsedIndex - 1;
+          }
+        }
+      } else if (!discoveryResult.error) {
+        console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
+      }
+
+      const selectedDevice =
+        selectedDeviceIndex === null ? null : discoveredDevices[selectedDeviceIndex];
       {
         const existingHost = existingDevice?.host || '';
         let rawDefaultDeviceId = '';
@@ -369,27 +453,37 @@ program
           }
         }
         const defaultDeviceId = isMissingConfigValue(rawDefaultDeviceId) ? '' : rawDefaultDeviceId;
-        const idPrompt = defaultDeviceId
-          ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
-          : 'Device ID (e.g. ff1-ABCD1234): ';
-        const idAnswer = await ask(idPrompt);
-        const rawDeviceId = idAnswer || defaultDeviceId;
-
         let hostValue = '';
-        if (rawDeviceId) {
-          const looksLikeHost =
-            rawDeviceId.includes('.') ||
-            rawDeviceId.includes(':') ||
-            rawDeviceId.startsWith('http');
-          if (looksLikeHost) {
-            hostValue = normalizeDeviceHost(rawDeviceId);
-          } else {
-            const deviceId = rawDeviceId.startsWith('ff1-') ? rawDeviceId : `ff1-${rawDeviceId}`;
-            hostValue = normalizeDeviceHost(`${deviceId}.local`);
+        if (selectedDevice) {
+          hostValue = normalizeDeviceHost(`${selectedDevice.host}:${selectedDevice.port}`);
+          console.log(
+            chalk.dim(
+              `Using discovered device: ${selectedDevice.name} (${selectedDevice.host}:${selectedDevice.port})`
+            )
+          );
+        } else {
+          const idPrompt = defaultDeviceId
+            ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
+            : 'Device ID (e.g. ff1-ABCD1234): ';
+          const idAnswer = await ask(idPrompt);
+          const rawDeviceId = idAnswer || defaultDeviceId;
+
+          if (rawDeviceId) {
+            const looksLikeHost =
+              rawDeviceId.includes('.') ||
+              rawDeviceId.includes(':') ||
+              rawDeviceId.startsWith('http');
+            if (looksLikeHost) {
+              hostValue = normalizeDeviceHost(rawDeviceId);
+            } else {
+              const deviceId = rawDeviceId.startsWith('ff1-') ? rawDeviceId : `ff1-${rawDeviceId}`;
+              hostValue = normalizeDeviceHost(`${deviceId}.local`);
+            }
           }
         }
 
-        const rawName = existingDevice?.name || 'ff1';
+        const discoveredName = selectedDevice?.name || selectedDevice?.id || '';
+        const rawName = existingDevice?.name || discoveredName || 'ff1';
         const defaultName = isMissingConfigValue(rawName) ? '' : rawName;
         const namePrompt = defaultName
           ? `Device name (kitchen, office, etc.) [${defaultName}]: `
@@ -562,7 +656,7 @@ program
 
             // Print final summary
             if (result && result.playlist) {
-              console.log(chalk.green('\nPlaylist created'));
+              console.log(chalk.green('\nPlaylist saved'));
               console.log(chalk.dim(`  Title: ${result.playlist.title}`));
               console.log(chalk.dim(`  Items: ${result.playlist.items?.length || 0}`));
               console.log(chalk.dim(`  Output: ${options.output}\n`));
@@ -1011,7 +1105,7 @@ program
       });
 
       if (result && result.playlist) {
-        console.log(chalk.green('\nPlaylist created'));
+        console.log(chalk.green('\nPlaylist saved'));
         console.log(chalk.dim(`  Title: ${result.playlist.title}`));
         console.log(chalk.dim(`  Items: ${result.playlist.items?.length || 0}`));
         console.log(chalk.dim(`  Output: ${options.output}\n`));
@@ -1079,6 +1173,76 @@ program
         console.log(chalk.yellow('Available actions: init, show, validate\n'));
         process.exit(1);
       }
+    } catch (error) {
+      console.error(chalk.red('\nError:'), (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('ssh')
+  .description('Enable or disable SSH access on an FF1 device')
+  .argument('<action>', 'Action: enable or disable')
+  .option('-d, --device <name>', 'Device name (uses first device if not specified)')
+  .option('--pubkey <path>', 'SSH public key file (required for enable)')
+  .option('--ttl <duration>', 'Auto-disable after duration (e.g. 30m, 2h, 900s)')
+  .action(async (action: string, options: { device?: string; pubkey?: string; ttl?: string }) => {
+    try {
+      const normalizedAction = action.trim().toLowerCase();
+      if (normalizedAction !== 'enable' && normalizedAction !== 'disable') {
+        console.error(chalk.red('\nUnknown action:'), action);
+        console.log(chalk.yellow('Available actions: enable, disable\n'));
+        process.exit(1);
+      }
+
+      const isEnable = normalizedAction === 'enable';
+      let publicKey: string | undefined;
+      if (isEnable) {
+        if (!options.pubkey) {
+          console.error(chalk.red('\nPublic key is required to enable SSH'));
+          console.log(chalk.yellow('Use: ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub\n'));
+          process.exit(1);
+        }
+        publicKey = await readPublicKeyFile(options.pubkey);
+      }
+
+      let ttlSeconds: number | undefined;
+      if (options.ttl) {
+        ttlSeconds = parseTtlSeconds(options.ttl);
+      }
+
+      const { sendSshAccessCommand } = await import('./src/utilities/ssh-access');
+
+      const result = await sendSshAccessCommand({
+        enabled: isEnable,
+        deviceName: options.device,
+        publicKey,
+        ttlSeconds,
+      });
+
+      if (result.success) {
+        console.log(chalk.green(`SSH ${isEnable ? 'enabled' : 'disabled'}`));
+        if (result.deviceName) {
+          console.log(chalk.dim(`  Device: ${result.deviceName}`));
+        }
+        if (result.device) {
+          console.log(chalk.dim(`  Host: ${result.device}`));
+        }
+        if (result.response && typeof result.response === 'object') {
+          const expiresAt = result.response.expiresAt as string | undefined;
+          if (expiresAt) {
+            console.log(chalk.dim(`  Expires: ${expiresAt}`));
+          }
+        }
+        console.log();
+        return;
+      }
+
+      console.error(chalk.red('\nSSH request failed:'), result.error);
+      if (result.details) {
+        console.error(chalk.dim(`  Details: ${result.details}`));
+      }
+      process.exit(1);
     } catch (error) {
       console.error(chalk.red('\nError:'), (error as Error).message);
       process.exit(1);

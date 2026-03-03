@@ -21,7 +21,7 @@
     "start": "node dist/index.js",
     "dev": "tsx index.ts",
     "prepublishOnly": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "tsx tests/ff1-compatibility.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,ts}\"",
@@ -44,6 +44,7 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.2",
+    "bonjour-service": "^1.3.0",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",

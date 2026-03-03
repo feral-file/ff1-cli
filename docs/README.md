@@ -40,7 +40,7 @@ See the full configuration reference here: `./CONFIGURATION.md`.
       "model": "grok-beta",
       "supportsFunctionCalling": true
     },
-    "chatgpt": {
+    "gpt": {
       "apiKey": "sk-your-openai-key-here",
       "baseURL": "https://api.openai.com/v1",
       "model": "gpt-4o",
@@ -49,7 +49,7 @@ See the full configuration reference here: `./CONFIGURATION.md`.
     "gemini": {
       "apiKey": "your-gemini-key-here",
       "baseURL": "https://generativelanguage.googleapis.com/v1beta/openai/",
-      "model": "gemini-2.0-flash-exp",
+      "model": "gemini-2.5-flash",
       "supportsFunctionCalling": true
     }
   },
@@ -135,6 +135,8 @@ Notes:
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
   - Options: `-s, --server <index>` (server index if multiple configured)
+- `ssh <enable|disable>` – Manage SSH access on an FF1 device
+  - Options: `-d, --device <name>`, `--pubkey <path>`, `--ttl <duration>`
 - `config <init|show|validate>` – Manage configuration
 
 ## Usage Highlights
@@ -163,7 +165,7 @@ How it works (at a glance):
 - If `deviceName` is present, the CLI will send the validated playlist to that FF1 device.
 - If `feedServer` is present (via "publish to my feed"), the CLI will publish the playlist to the selected feed server.
 
-Use `--model grok|chatgpt|gemini` to switch models, or set `defaultModel` in `config.json`.
+Use `--model grok|gpt|gemini` to switch models, or set `defaultModel` in `config.json`.
 
 ### Natural language publishing
 
@@ -205,11 +207,26 @@ npm run dev -- sign playlist.json -o signed.json
 # Send to device (verifies by default)
 npm run dev -- send playlist.json -d "Living Room Display"
 
+# The send path now performs a compatibility preflight check against the target FF1.
+# If the device reports an unsupported FF1 OS version, the command fails with
+# a clear version message before any cast request is sent.
 # Send a hosted DP-1 playlist
 npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
 
 # Play a direct URL
 npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+```
+
+### SSH access
+
+```bash
+# Enable SSH access for 30 minutes
+ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
+
+# Disable SSH access
+ff1 ssh disable -d "Living Room Display"
+
+# `ff1 ssh` also performs the same FF1 OS compatibility preflight used by `send`.
 ```
 
 ### Publish to feed server

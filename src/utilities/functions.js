@@ -7,6 +7,7 @@ const chalk = require('chalk');
 const playlistBuilder = require('./playlist-builder');
 const ff1Device = require('./ff1-device');
 const domainResolver = require('./domain-resolver');
+const logger = require('../logger');
 
 /**
  * Build DP1 v1.0.0 compliant playlist
@@ -85,7 +86,7 @@ async function sendPlaylistToDevice(params) {
  * console.log(result.domainMap); // { 'vitalik.eth': '0x...', 'alice.tez': 'tz...' }
  */
 async function resolveDomains(params) {
-  const { domains, displayResults = true } = params;
+  const { domains, displayResults = false } = params;
 
   if (!domains || !Array.isArray(domains) || domains.length === 0) {
     const error = 'No domains provided for resolution';
@@ -138,7 +139,7 @@ async function verifyPlaylist(params) {
     };
   }
 
-  console.log(chalk.cyan('\nValidate playlist'));
+  logger.verbose(chalk.cyan('\nValidate playlist'));
 
   // Dynamic import to avoid circular dependency
   const playlistVerifier = await import('./playlist-verifier');
@@ -157,14 +158,14 @@ async function verifyPlaylist(params) {
   const result = verify(playlist);
 
   if (result.valid) {
-    console.log(chalk.green('Playlist looks good'));
+    logger.verbose(chalk.green('Playlist looks good'));
     if (playlist.title) {
-      console.log(chalk.dim(`  Title: ${playlist.title}`));
+      logger.verbose(chalk.dim(`  Title: ${playlist.title}`));
     }
     if (playlist.items) {
-      console.log(chalk.dim(`  Items: ${playlist.items.length}`));
+      logger.verbose(chalk.dim(`  Items: ${playlist.items.length}`));
     }
-    console.log();
+    logger.verbose();
   } else {
     console.error(chalk.red('Playlist has issues'));
     console.error(chalk.red(`  ${result.error}`));
@@ -229,26 +230,7 @@ async function verifyAddresses(params) {
   const result = validateAddresses(addresses);
 
   // Display results
-  if (result.valid) {
-    console.log(chalk.green('\n✓ All addresses are valid'));
-    result.results.forEach((r) => {
-      const typeLabel =
-        r.type === 'ethereum'
-          ? 'Ethereum'
-          : r.type === 'ens'
-            ? 'ENS Domain'
-            : r.type === 'tezos-domain'
-              ? 'Tezos Domain'
-              : r.type === 'contract'
-                ? 'Tezos Contract'
-                : 'Tezos User';
-      console.log(chalk.dim(`  • ${r.address} (${typeLabel})`));
-      if (r.normalized) {
-        console.log(chalk.dim(`    Checksummed: ${r.normalized}`));
-      }
-    });
-    console.log();
-  } else {
+  if (!result.valid) {
     console.error(chalk.red('\nAddress validation failed'));
     result.errors.forEach((err) => {
       console.error(chalk.red(`  • ${err}`));
