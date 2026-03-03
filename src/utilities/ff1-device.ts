@@ -80,9 +80,7 @@ export async function sendPlaylistToDevice({
       return {
         success: false,
         error: compatibility.error || 'FF1 OS does not support playlist casting',
-        details: compatibility.version
-          ? `Detected version ${compatibility.version} (source: ${compatibility.source || 'unknown'})`
-          : undefined,
+        details: compatibility.version ? `Detected version ${compatibility.version}` : undefined,
       };
     }
 

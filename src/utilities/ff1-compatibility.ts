@@ -30,14 +30,12 @@ interface CompatibilityCheckOptions {
 
 interface FF1VersionProbe {
   version: string;
-  source: string;
 }
 
 export interface FF1CompatibilityResult {
   compatible: boolean;
   error?: string;
   version?: string;
-  source?: string;
 }
 
 const FF1_COMMAND_POLICIES: Record<FF1Command, FF1CommandPolicy> = {
@@ -45,13 +43,9 @@ const FF1_COMMAND_POLICIES: Record<FF1Command, FF1CommandPolicy> = {
     minimumVersion: '1.0.0',
   },
   sshAccess: {
-    minimumVersion: '1.0.0',
+    minimumVersion: '1.0.9',
   },
 };
-
-const VERSION_ENDPOINTS = ['/api/version', '/api/info', '/api/status'];
-
-const VERSION_COMMAND = 'version';
 
 /**
  * Load and validate the configured FF1 device selected by name.
@@ -188,11 +182,7 @@ function resolveCompatibility(
 ): FF1CompatibilityResult {
   if (!versionResult) {
     logger.warn(`Could not verify FF1 OS version for ${device.name || device.host}`);
-    return {
-      compatible: true,
-      version: undefined,
-      source: undefined,
-    };
+    return { compatible: true };
   }
 
   const normalizedVersion = normalizeVersion(versionResult.version);
@@ -200,7 +190,6 @@ function resolveCompatibility(
     return {
       compatible: true,
       version: versionResult.version,
-      source: versionResult.source,
     };
   }
 
@@ -208,7 +197,6 @@ function resolveCompatibility(
     return {
       compatible: false,
       version: normalizedVersion,
-      source: versionResult.source,
       error: `Unsupported FF1 OS ${normalizedVersion} for ${command}. FF1 OS must be ${policy.minimumVersion} or newer.`,
     };
   }
@@ -216,111 +204,44 @@ function resolveCompatibility(
   return {
     compatible: true,
     version: normalizedVersion,
-    source: versionResult.source,
   };
 }
 
 /**
- * Detect FF1 OS version using known version metadata endpoints.
+ * Detect FF1 OS version via POST /api/cast with getDeviceStatus command.
+ *
+ * Reads `message.installedVersion` from the device status response.
  *
  * @param {string} host - Device host URL
- * @param {Object} headers - Headers for requests
- * @returns {Promise<FF1VersionProbe | null>} Version + source or null if unavailable
- * @throws {Error} Never throws; callers ignore probe failures
+ * @param {Record<string, string>} headers - Request headers (e.g. API-KEY)
+ * @param {FetchFunction} fetchFn - Fetch implementation
+ * @returns {Promise<FF1VersionProbe | null>} Version probe or null if unavailable
  * @example
- * const probe = await detectFF1Version('http://ff1.local:1111', {});
+ * const probe = await detectFF1Version('http://ff1.local', {}, fetch);
  */
 async function detectFF1Version(
   host: string,
   headers: Record<string, string>,
   fetchFn: FetchFunction
 ): Promise<FF1VersionProbe | null> {
-  for (const endpoint of VERSION_ENDPOINTS) {
-    const result = await tryProbeVersionEndpoint(host + endpoint, headers, fetchFn);
-    if (result) {
-      return {
-        version: result,
-        source: `${endpoint}`,
-      };
-    }
-  }
-
-  const commandResult = await tryCastVersionCommand(host + '/api/cast', headers, fetchFn);
-  if (commandResult) {
-    return {
-      version: commandResult,
-      source: '/api/cast (command version)',
-    };
-  }
-
-  return null;
-}
-
-/**
- * Probe a simple GET endpoint for version metadata.
- *
- * @param {string} url - Version URL
- * @param {Record<string, string>} headers - Headers to include
- * @returns {Promise<string | null>} Version if available
- * @example
- * const v = await tryProbeVersionEndpoint('http://ff1.local/api/version', {});
- */
-async function tryProbeVersionEndpoint(
-  url: string,
-  headers: Record<string, string>,
-  fetchFn: FetchFunction
-): Promise<string | null> {
   try {
-    const response = await fetchFn(url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const text = await response.text();
-    return extractVersion(text);
-  } catch (_error) {
-    return null;
-  }
-}
-
-/**
- * Probe /api/cast with a version command payload.
- *
- * @param {string} url - Cast endpoint URL
- * @param {Record<string, string>} headers - Headers to include
- * @returns {Promise<string | null>} Version if returned
- * @example
- * const v = await tryCastVersionCommand('http://ff1.local/api/cast', {});
- */
-async function tryCastVersionCommand(
-  url: string,
-  headers: Record<string, string>,
-  fetchFn: FetchFunction
-): Promise<string | null> {
-  try {
-    const commandHeaders = {
-      ...headers,
-      'Content-Type': 'application/json',
-    };
-
-    const response = await fetchFn(url, {
+    const response = await fetchFn(`${host}/api/cast`, {
       method: 'POST',
-      headers: commandHeaders,
-      body: JSON.stringify({
-        command: VERSION_COMMAND,
-      }),
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'getDeviceStatus', request: {} }),
     });
 
     if (!response.ok) {
       return null;
     }
 
-    const text = await response.text();
-    return extractVersion(text);
+    const data = (await response.json()) as { message?: { installedVersion?: string } };
+    const version = data?.message?.installedVersion;
+    if (!version) {
+      return null;
+    }
+
+    return { version };
   } catch (_error) {
     return null;
   }
@@ -388,79 +309,4 @@ function compareVersions(left: string, right: string): number {
   }
 
   return 0;
-}
-
-/**
- * Parse version from response text using permissive extraction.
- *
- * @param {string} text - Raw response body
- * @returns {string | null} Version string if found
- * @example
- * extractVersion('{"version":"1.2.3"}') // '1.2.3'
- */
-function extractVersion(text: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (_error) {
-    parsed = text;
-  }
-
-  return extractVersionFromValue(parsed);
-}
-
-/**
- * Extract a version from unknown payload shapes.
- *
- * @param {unknown} value - Payload value
- * @param {number} [depth=0] - Recursion guard depth
- * @returns {string | null} Version if detected
- * @example
- * extractVersionFromValue({ info: { version: '1.2.3' } }) // '1.2.3'
- */
-function extractVersionFromValue(value: unknown, depth = 0): string | null {
-  if (depth > 4) {
-    return null;
-  }
-
-  if (typeof value === 'string') {
-    return normalizeVersion(value);
-  }
-
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-
-  const obj = value as Record<string, unknown>;
-
-  const prioritizedKeys = [
-    'osVersion',
-    'ff1Version',
-    'ff1VersionNumber',
-    'version',
-    'firmware',
-    'firmwareVersion',
-    'fwVersion',
-    'buildVersion',
-    'systemVersion',
-    'softwareVersion',
-  ];
-
-  for (const key of prioritizedKeys) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const extracted = extractVersionFromValue(obj[key], depth + 1);
-      if (extracted) {
-        return extracted;
-      }
-    }
-  }
-
-  for (const nestedValue of Object.values(obj)) {
-    const extracted = extractVersionFromValue(nestedValue, depth + 1);
-    if (extracted) {
-      return extracted;
-    }
-  }
-
-  return null;
 }

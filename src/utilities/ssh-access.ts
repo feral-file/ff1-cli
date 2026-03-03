@@ -72,9 +72,7 @@ export async function sendSshAccessCommand({
       return {
         success: false,
         error: compatibility.error || 'FF1 OS does not support SSH access command',
-        details: compatibility.version
-          ? `Detected version ${compatibility.version} (source: ${compatibility.source || 'unknown'})`
-          : undefined,
+        details: compatibility.version ? `Detected version ${compatibility.version}` : undefined,
       };
     }
 

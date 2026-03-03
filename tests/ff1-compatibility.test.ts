@@ -16,23 +16,24 @@ interface FF1DeviceForTest {
   topicID?: string;
 }
 
-interface VersionApiResponse {
+interface MockApiResponse {
   status: number;
   ok: boolean;
-  text: () => Promise<string>;
+  json: () => Promise<unknown>;
 }
 
-type FetchHandler = (url: string, options?: RequestInit) => VersionApiResponse;
+type FetchHandler = (url: string, options?: RequestInit) => MockApiResponse;
 
 let fixtureDir: string;
 const originalCwd = process.cwd();
 const originalFetch = global.fetch;
-let requests: string[] = [];
+let requests: { method: string; url: string; body?: unknown }[] = [];
 
 const installFetchMock = (handler: FetchHandler): void => {
   global.fetch = (async (url: RequestInfo | URL, options?: RequestInit) => {
     const requestUrl = typeof url === 'string' ? url : url.toString();
-    requests.push(`${options?.method || 'GET'} ${requestUrl}`);
+    const body = options?.body ? JSON.parse(options.body as string) : undefined;
+    requests.push({ method: options?.method || 'GET', url: requestUrl, body });
     return handler(requestUrl, options) as unknown as Response;
   }) as unknown as typeof global.fetch;
 };
@@ -53,6 +54,25 @@ const writeDeviceConfig = (devices: FF1DeviceForTest[]): void => {
     'utf8'
   );
 };
+
+/**
+ * Build a mock getDeviceStatus response matching the real API shape.
+ *
+ * @param {string} installedVersion - Version to report
+ * @returns {object} Mock response body
+ */
+const deviceStatusResponse = (installedVersion: string) => ({
+  message: {
+    screenRotation: 'landscape',
+    connectedWifi: 'test_wifi',
+    installedVersion,
+    latestVersion: installedVersion,
+    timezone: 'UTC',
+    currentTime: '2026-01-01 00:00:00',
+    volume: 25,
+    isMuted: false,
+  },
+});
 
 describe('resolveConfiguredDevice', () => {
   beforeEach(() => {
@@ -131,14 +151,12 @@ describe('assertFF1CommandCompatibility', () => {
     process.chdir(originalCwd);
   });
 
-  test('returns compatible when version cannot be detected', async () => {
-    installFetchMock((_url) => {
-      return {
-        status: 500,
-        ok: false,
-        text: async () => JSON.stringify({ error: 'not available' }),
-      };
-    });
+  test('returns compatible when getDeviceStatus call fails', async () => {
+    installFetchMock(() => ({
+      status: 500,
+      ok: false,
+      json: async () => ({ error: 'not available' }),
+    }));
 
     const result = await assertFF1CommandCompatibility(
       { host: 'http://ff1.local' },
@@ -147,57 +165,32 @@ describe('assertFF1CommandCompatibility', () => {
 
     assert.equal(result.compatible, true);
     assert.equal(result.version, undefined);
-    assert.equal(requests.length, 4);
-    assert.equal(requests[0], 'GET http://ff1.local/api/version');
-    assert.equal(requests[3], 'POST http://ff1.local/api/cast');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].method, 'POST');
+    assert.equal(requests[0].url, 'http://ff1.local/api/cast');
+    assert.deepEqual(requests[0].body, { command: 'getDeviceStatus', request: {} });
   });
 
   test('flags device versions that are below minimum', async () => {
-    installFetchMock((url) => {
-      if (url.endsWith('/api/version')) {
-        return {
-          status: 200,
-          ok: true,
-          text: async () => JSON.stringify({ version: '0.9.0' }),
-        };
-      }
-
-      const responseBody = 'not checked';
-      return {
-        status: 500,
-        ok: false,
-        text: async () => responseBody,
-      };
-    });
+    installFetchMock(() => ({
+      status: 200,
+      ok: true,
+      json: async () => deviceStatusResponse('0.9.0'),
+    }));
 
     const result = await assertFF1CommandCompatibility({ host: 'http://ff1.local' }, 'sshAccess');
 
     assert.equal(result.compatible, false);
     assert.equal(result.version, '0.9.0');
-    assert.equal(result.source, '/api/version');
-    assert.match(
-      result.error || '',
-      /Unsupported FF1 OS 0\.9\.0 for sshAccess\. FF1 OS must be 1\.0\.0 or newer\./
-    );
-    assert.match(result.error || '', /FF1 OS 0\.9\.0/);
+    assert.match(result.error || '', /Unsupported FF1 OS 0\.9\.0 for sshAccess/);
   });
 
-  test('accepts supported versions and reads nested metadata keys', async () => {
-    installFetchMock((url) => {
-      if (url.endsWith('/api/version')) {
-        return {
-          status: 200,
-          ok: true,
-          text: async () => JSON.stringify({ payload: { info: { firmwareVersion: '2.1' } } }),
-        };
-      }
-
-      return {
-        status: 500,
-        ok: false,
-        text: async () => JSON.stringify({ error: 'not needed' }),
-      };
-    });
+  test('accepts supported versions from getDeviceStatus', async () => {
+    installFetchMock(() => ({
+      status: 200,
+      ok: true,
+      json: async () => deviceStatusResponse('2.1.0'),
+    }));
 
     const result = await assertFF1CommandCompatibility(
       { host: 'http://ff1.local' },
@@ -206,37 +199,14 @@ describe('assertFF1CommandCompatibility', () => {
 
     assert.equal(result.compatible, true);
     assert.equal(result.version, '2.1.0');
-    assert.equal(result.source, '/api/version');
   });
 
-  test('falls back to /api/cast version command when needed', async () => {
-    installFetchMock((url) => {
-      if (
-        url.endsWith('/api/version') ||
-        url.endsWith('/api/info') ||
-        url.endsWith('/api/status')
-      ) {
-        return {
-          status: 404,
-          ok: false,
-          text: async () => 'not found',
-        };
-      }
-
-      if (url.endsWith('/api/cast')) {
-        return {
-          status: 200,
-          ok: true,
-          text: async () => JSON.stringify({ osVersion: '1.0.1' }),
-        };
-      }
-
-      return {
-        status: 500,
-        ok: false,
-        text: async () => 'unexpected endpoint',
-      };
-    });
+  test('returns compatible when installedVersion is missing from response', async () => {
+    installFetchMock(() => ({
+      status: 200,
+      ok: true,
+      json: async () => ({ message: { connectedWifi: 'test' } }),
+    }));
 
     const result = await assertFF1CommandCompatibility(
       { host: 'http://ff1.local' },
@@ -244,9 +214,22 @@ describe('assertFF1CommandCompatibility', () => {
     );
 
     assert.equal(result.compatible, true);
-    assert.equal(result.version, '1.0.1');
-    assert.equal(result.source, '/api/cast (command version)');
-    assert.equal(requests.length, 4);
-    assert.equal(requests[3], 'POST http://ff1.local/api/cast');
+    assert.equal(result.version, undefined);
+  });
+
+  test('normalizes two-segment versions from device', async () => {
+    installFetchMock(() => ({
+      status: 200,
+      ok: true,
+      json: async () => deviceStatusResponse('2.1'),
+    }));
+
+    const result = await assertFF1CommandCompatibility(
+      { host: 'http://ff1.local' },
+      'displayPlaylist'
+    );
+
+    assert.equal(result.compatible, true);
+    assert.equal(result.version, '2.1.0');
   });
 });
