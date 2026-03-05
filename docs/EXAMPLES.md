@@ -119,12 +119,14 @@ Output shows:
 ```bash
 # Validate playlist
 npm run dev -- validate playlist.json
+npm run dev -- validate "https://cdn.example.com/playlist.json"
 
 # Sign playlist
 npm run dev -- sign playlist.json -o signed.json
 
 # Send to device
 npm run dev -- send playlist.json -d "Living Room Display"
+npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
 ```
 
 ## Publish to Feed Server

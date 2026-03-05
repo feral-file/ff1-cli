@@ -128,10 +128,10 @@ Notes:
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `play <url>` – Send a media URL directly to an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
-- `validate <file>` / `verify <file>` – Validate a DP1 playlist file
+- `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 playlist file
 - `sign <file>` – Sign playlist with Ed25519
   - Options: `-k, --key <base64>`, `-o, --output <file>`
-- `send <file>` – Send playlist to an FF1 device
+- `send <file>` – Send a local or hosted DP-1 playlist to an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
   - Options: `-s, --server <index>` (server index if multiple configured)
@@ -207,9 +207,11 @@ npm run dev -- sign playlist.json -o signed.json
 # Send to device (verifies by default)
 npm run dev -- send playlist.json -d "Living Room Display"
 
-# The send path performs a compatibility preflight against the target FF1.
+# The send path now performs a compatibility preflight check against the target FF1.
 # If the device reports an unsupported FF1 OS version, the command fails with
 # a clear version message before any cast request is sent.
+# Send a hosted DP-1 playlist
+npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
 
 # Play a direct URL
 npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
@@ -224,7 +226,7 @@ ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
 # Disable SSH access
 ff1 ssh disable -d "Living Room Display"
 
-# `ff1 ssh` uses the same FF1 OS compatibility preflight as `send`.
+# `ff1 ssh` also performs the same FF1 OS compatibility preflight used by `send`.
 ```
 
 ### Publish to feed server
