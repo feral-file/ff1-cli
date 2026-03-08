@@ -19,14 +19,23 @@ jobs:
       - name: Verify package version matches tag
         run: |
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG_VERSION="${{ github.event.release.tag_name }}"
+          else
+            TAG_VERSION="${{ github.ref_name }}"
+          fi
+
           if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
             echo "Version mismatch: package.json is $PACKAGE_VERSION but tag is $TAG_VERSION."
+            echo "Before cutting a release, set package.json version to the exact tag (example: tag 1.0.2 -> version 1.0.2)."
             exit 1
           fi
 
+          echo "Version check passed: package.json and tag are both $PACKAGE_VERSION."
+
   build:
     needs: verify-version
+    if: github.event_name == 'release'
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ github.event.release.tag_name }}
@@ -34,7 +43,11 @@ jobs:
 
   publish-npm:
     needs: verify-version
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,15 +65,16 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   upload-release-assets:
     needs: build
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:

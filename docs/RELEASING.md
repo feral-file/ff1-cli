@@ -27,7 +27,7 @@ Run the appropriate script on each target platform and upload each pair to the G
 ## GitHub Actions
 
 - **Build** (`build.yml`): Trigger manually (Actions → Build → Run workflow) or on pull requests. Builds binaries on macOS, Linux, and Windows and uploads them as workflow artifacts for download.
-- **Release** (`release.yml`): Triggered when you **publish a release** (create a release from the repo Releases page, or publish an existing draft). Validates that `package.json` matches the tag, publishes to npm, builds binaries, then uploads them to that release. Pushing a tag alone does not run this; only creating/publishing a release does.
+- **Release** (`release.yml`): Runs a fast version check on every pushed tag and fails if `package.json` does not match the tag exactly. When you **publish a release** (create a release from the repo Releases page, or publish an existing draft), it validates again, publishes to npm, builds binaries, then uploads them to that release.
 
 ## npm Publish Requirements
 
