@@ -60,6 +60,8 @@ npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --s
 npm run dev            # Run CLI in dev (tsx)
 npm run build          # Build TypeScript
 npm run lint:fix       # Lint + fix
+npm run smoke          # Build + CLI smoke checks
+npm run verify         # Format + lint + test + smoke
 ```
 
 ## License
