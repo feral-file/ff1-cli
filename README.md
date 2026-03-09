@@ -21,7 +21,7 @@ Installs a prebuilt binary for macOS/Linux (no Node.js required).
 ## One-off Usage (npx)
 
 ```bash
-npx ff1-cli config init
+npx ff1-cli setup
 npx ff1-cli chat
 ```
 
@@ -30,9 +30,16 @@ npx ff1-cli chat
 **Set your LLM API key first (default Grok):** `export GROK_API_KEY='xai-your-api-key-here'`
 
 ```bash
-ff1 config init
+ff1 setup
 ff1 chat
 ff1 play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+```
+
+If you need manual config actions instead of guided setup:
+
+```bash
+ff1 config init
+ff1 config validate
 ```
 
 ## Dev Quick Start
@@ -41,7 +48,7 @@ ff1 play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
 
 ```bash
 npm install
-npm run dev -- config init
+npm run dev -- setup
 npm run dev -- chat
 npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
 ```

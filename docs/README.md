@@ -19,14 +19,18 @@ Installs a prebuilt binary for macOS/Linux (no Node.js required).
 ## Configure
 
 ```bash
-# Create example config and edit API keys
-ff1 config init
-
-# Validate configuration
-ff1 config validate
+# Guided setup (recommended)
+ff1 setup
 ```
 
 See the full configuration reference here: `./CONFIGURATION.md`.
+
+Manual config path:
+
+```bash
+ff1 config init
+ff1 config validate
+```
 
 ### config.json structure (minimal)
 
