@@ -25,6 +25,8 @@ ff1 setup
 
 See the full configuration reference here: `./CONFIGURATION.md`.
 
+During setup, you can pick a default FF1 device, so later `send`/`play` commands can run without `-d`.
+
 Manual config path:
 
 ```bash
@@ -202,23 +204,26 @@ cat params.json | npm run dev -- build -o playlist.json
 ### Validate, sign, and send
 
 ```bash
-# Validate
+# Optional explicit validation (build flows already validate)
 npm run dev -- validate playlist.json
 
 # Sign (uses key from config or override via --key)
 npm run dev -- sign playlist.json -o signed.json
 
-# Send to device (verifies by default)
+# Send to configured default device (verifies by default)
+npm run dev -- send playlist.json
+
+# Send to a specific named device
 npm run dev -- send playlist.json -d "Living Room Display"
 
 # The send path now performs a compatibility preflight check against the target FF1.
 # If the device reports an unsupported FF1 OS version, the command fails with
 # a clear version message before any cast request is sent.
 # Send a hosted DP-1 playlist
-npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
+npm run dev -- send "https://cdn.example.com/playlist.json"
 
 # Play a direct URL
-npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+npm run dev -- play "https://example.com/video.mp4" --skip-verify
 ```
 
 ### SSH access

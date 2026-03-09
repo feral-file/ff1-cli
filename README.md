@@ -32,7 +32,7 @@ npx ff1-cli chat
 ```bash
 ff1 setup
 ff1 chat
-ff1 play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+ff1 play "https://example.com/video.mp4" --skip-verify
 ```
 
 If you need manual config actions instead of guided setup:
@@ -50,7 +50,7 @@ ff1 config validate
 npm install
 npm run dev -- setup
 npm run dev -- chat
-npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+npm run dev -- play "https://example.com/video.mp4" --skip-verify
 ```
 
 ## Documentation
