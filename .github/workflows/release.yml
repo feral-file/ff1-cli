@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -90,6 +92,10 @@ jobs:
         run: |
           gh release upload "${{ github.event.release.tag_name }}" \
             *.tar.gz *.tar.gz.sha256 *.zip *.zip.sha256 \
-            --clobber
+            --clobber \
+            --repo "${{ github.repository }}"
+        working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_DIR: ${{ github.workspace }}/.git
+          GIT_WORK_TREE: ${{ github.workspace }}
