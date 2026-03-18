@@ -421,28 +421,62 @@ program
 
         const hasExistingHost = Boolean(existingDevice?.host);
         const selectionPrompt = hasExistingHost
-          ? `Select device [1-${discoveredDevices.length}], press Enter to keep current, or type m for manual entry: `
-          : `Select device [1-${discoveredDevices.length}] or press Enter for manual entry: `;
-        const selectionAnswer = await ask(selectionPrompt);
-        if (!selectionAnswer) {
-          if (hasExistingHost) {
-            shouldPromptManualDevice = false;
-            console.log(chalk.dim('Keeping existing FF1 device.'));
+          ? `Select device [1-${discoveredDevices.length}], enter ID/host, press Enter to keep current, or type m for manual entry: `
+          : `Select device [1-${discoveredDevices.length}], enter ID/host, or press Enter for manual entry: `;
+        while (true) {
+          const selectionAnswer = (await ask(selectionPrompt)).trim();
+          if (!selectionAnswer) {
+            if (hasExistingHost) {
+              shouldPromptManualDevice = false;
+              console.log(chalk.dim('Keeping existing FF1 device.'));
+            }
+            break;
           }
-        } else if (selectionAnswer.toLowerCase() === 'm') {
-          shouldPromptManualDevice = true;
-        } else {
+
+          const normalizedSelection = selectionAnswer.toLowerCase();
+          if (normalizedSelection === 'm') {
+            shouldPromptManualDevice = true;
+            break;
+          }
+
           const parsedIndex = Number.parseInt(selectionAnswer, 10);
           if (
-            Number.isNaN(parsedIndex) ||
-            parsedIndex < 1 ||
-            parsedIndex > discoveredDevices.length
+            !Number.isNaN(parsedIndex) &&
+            `${parsedIndex}` === selectionAnswer &&
+            parsedIndex >= 1 &&
+            parsedIndex <= discoveredDevices.length
           ) {
-            console.log(chalk.red('Invalid selection. Continuing with manual entry.'));
-          } else {
             selectedDeviceIndex = parsedIndex - 1;
             shouldPromptManualDevice = false;
+            break;
           }
+
+          const normalizedWithPrefix = normalizedSelection.startsWith('ff1-')
+            ? normalizedSelection
+            : `ff1-${normalizedSelection}`;
+          const matchedIndex = discoveredDevices.findIndex((device) => {
+            const candidates = [
+              device.id,
+              device.name,
+              device.host,
+              `${device.host}:${device.port}`,
+            ]
+              .filter((value): value is string => Boolean(value))
+              .map((value) => value.toLowerCase());
+            return (
+              candidates.includes(normalizedSelection) || candidates.includes(normalizedWithPrefix)
+            );
+          });
+
+          if (matchedIndex !== -1) {
+            selectedDeviceIndex = matchedIndex;
+            shouldPromptManualDevice = false;
+            break;
+          }
+
+          console.log(
+            chalk.red('Invalid selection. Enter a number, m, or a discovered device ID/host.')
+          );
         }
       } else if (!discoveryResult.error) {
         console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
