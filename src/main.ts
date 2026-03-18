@@ -426,6 +426,8 @@ export async function buildPlaylist(
     // If no playlist was built, display the AI's message
     if (!result.playlist && result.message) {
       console.log(chalk.yellow('\n' + result.message));
+    } else if (!result.playlist && result.error) {
+      console.error(chalk.red('\n' + result.error));
     }
 
     return result;
