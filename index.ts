@@ -400,6 +400,7 @@ program
       const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
       const discoveredDevices = discoveryResult.devices;
       let selectedDeviceIndex: number | null = null;
+      let shouldPromptManualDevice = true;
       if (discoveryResult.error && discoveredDevices.length === 0) {
         const errorMessage = discoveryResult.error.endsWith('.')
           ? discoveryResult.error
@@ -418,19 +419,29 @@ program
           console.log(chalk.dim(`  ${index + 1}) ${displayId}`));
         });
 
-        const selectionAnswer = await ask(
-          `Select device [1-${discoveredDevices.length}] or press Enter to skip: `
-        );
-        if (selectionAnswer) {
+        const hasExistingHost = Boolean(existingDevice?.host);
+        const selectionPrompt = hasExistingHost
+          ? `Select device [1-${discoveredDevices.length}], press Enter to keep current, or type m for manual entry: `
+          : `Select device [1-${discoveredDevices.length}] or press Enter for manual entry: `;
+        const selectionAnswer = await ask(selectionPrompt);
+        if (!selectionAnswer) {
+          if (hasExistingHost) {
+            shouldPromptManualDevice = false;
+            console.log(chalk.dim('Keeping existing FF1 device.'));
+          }
+        } else if (selectionAnswer.toLowerCase() === 'm') {
+          shouldPromptManualDevice = true;
+        } else {
           const parsedIndex = Number.parseInt(selectionAnswer, 10);
           if (
             Number.isNaN(parsedIndex) ||
             parsedIndex < 1 ||
             parsedIndex > discoveredDevices.length
           ) {
-            console.log(chalk.red('Invalid selection. Skipping auto-discovery.'));
+            console.log(chalk.red('Invalid selection. Continuing with manual entry.'));
           } else {
             selectedDeviceIndex = parsedIndex - 1;
+            shouldPromptManualDevice = false;
           }
         }
       } else if (!discoveryResult.error) {
@@ -461,6 +472,8 @@ program
               `Using discovered device: ${selectedDevice.name} (${selectedDevice.host}:${selectedDevice.port})`
             )
           );
+        } else if (!shouldPromptManualDevice && existingHost) {
+          hostValue = normalizeDeviceHost(existingHost);
         } else {
           const idPrompt = defaultDeviceId
             ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
