@@ -20,6 +20,7 @@ npm run dev chat
 npm run dev -- chat "Get 3 works from reas.eth" -o playlist.json
 npm run dev -- chat "Get 3 works from einstein-rosen.tez"
 npm run dev -- chat "Get tokens 52932,52457 from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0" -v
+npm run dev -- chat "Make a playlist of 10 works from 0xaeE022552B539dB18297D7481b6D547C622488B3" -v
 
 # Switch model
 npm run dev -- chat "your request" --model grok
@@ -75,6 +76,7 @@ Notes:
 
 - Feed playlist queries require reachable feed servers in your config.
 - If no feeds are reachable, feed playlist examples will fail even if the title exists.
+- Bare EVM prompts (`from 0x...`) now fall back from owner lookup to contract lookup when needed.
 
 ## Natural Language: Display and Publish
 

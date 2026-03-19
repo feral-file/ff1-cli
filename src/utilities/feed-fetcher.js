@@ -19,11 +19,30 @@ function getFeedApiUrls() {
 }
 
 /**
+ * Build a concise feed reachability error message.
+ *
+ * @param {Array<string>} failedFeeds - Feed URLs that could not be reached
+ * @returns {string} Human-readable error message
+ */
+function buildFeedUnreachableError(failedFeeds = []) {
+  const failedCount = Array.isArray(failedFeeds) ? failedFeeds.length : 0;
+  if (failedCount === 0) {
+    return 'No reachable feed servers available';
+  }
+
+  if (failedCount === 1) {
+    return `Configured feed server is unreachable: ${failedFeeds[0]}`;
+  }
+
+  return `All configured feed servers are unreachable (${failedCount}): ${failedFeeds.join(', ')}`;
+}
+
+/**
  * Fetch playlists from a single feed URL with pagination
  *
  * @param {string} feedUrl - Feed API base URL
  * @param {number} limit - Items per page (default: 50, max: 100)
- * @returns {Promise<Array>} Array of playlists
+ * @returns {Promise<Object>} Result with playlists and reachability
  */
 async function fetchPlaylistsFromFeed(feedUrl, limit = 100) {
   try {
@@ -33,20 +52,35 @@ async function fetchPlaylistsFromFeed(feedUrl, limit = 100) {
 
     if (!response.ok) {
       console.log(chalk.yellow(`  Feed ${feedUrl} returned ${response.status}`));
-      return [];
+      return {
+        playlists: [],
+        reachable: false,
+        feedUrl,
+        error: `HTTP ${response.status}`,
+      };
     }
 
     const data = await response.json();
     const playlists = data.items || [];
 
     // Add feedUrl to each playlist for tracking
-    return playlists.map((p) => ({
-      ...p,
+    return {
+      playlists: playlists.map((p) => ({
+        ...p,
+        feedUrl,
+      })),
+      reachable: true,
       feedUrl,
-    }));
+      error: null,
+    };
   } catch (error) {
     console.log(chalk.yellow(`  Failed to fetch from ${feedUrl}: ${error.message}`));
-    return [];
+    return {
+      playlists: [],
+      reachable: false,
+      feedUrl,
+      error: error.message,
+    };
   }
 }
 
@@ -58,7 +92,7 @@ async function fetchPlaylistsFromFeed(feedUrl, limit = 100) {
  * @param {number} pageSize - Items per page (default: 50, max: 100)
  * @param {number} topN - Keep top N matches per page (default: 10)
  * @param {number} maxItems - Maximum total items to fetch (default: 500)
- * @returns {Promise<Array>} Array of best matching playlists
+ * @returns {Promise<Object>} Result with matches and reachability
  */
 async function fetchPlaylistsWithPagination(
   feedUrl,
@@ -68,6 +102,7 @@ async function fetchPlaylistsWithPagination(
   maxItems = 500
 ) {
   const allMatches = [];
+  let reachable = false;
   let offset = 0;
   let hasMore = true;
   let totalFetched = 0;
@@ -82,6 +117,7 @@ async function fetchPlaylistsWithPagination(
       const response = await fetch(
         `${feedUrl}/playlists?limit=${currentLimit}&offset=${offset}&sort=-created`
       );
+      reachable = true;
 
       if (!response.ok) {
         if (response.status === 404 || response.status === 400) {
@@ -135,22 +171,37 @@ async function fetchPlaylistsWithPagination(
     }
   }
 
-  return allMatches;
+  return {
+    matches: allMatches,
+    reachable,
+    feedUrl,
+  };
 }
 
 /**
  * Fetch all playlists from all configured feeds
  *
- * @returns {Promise<Array>} Array of all playlists from all feeds
+ * @returns {Promise<Object>} Playlists with feed reachability metadata
  */
 async function fetchAllPlaylists() {
   const feedUrls = getFeedApiUrls();
 
   // Fetch playlists from all feeds in parallel
-  const allPlaylistsArrays = await Promise.all(feedUrls.map((url) => fetchPlaylistsFromFeed(url)));
+  const feedResults = await Promise.all(feedUrls.map((url) => fetchPlaylistsFromFeed(url)));
 
-  // Flatten and combine results from all feeds
-  return allPlaylistsArrays.flat();
+  const playlists = feedResults.flatMap((result) => result.playlists || []);
+  const reachableFeeds = feedResults
+    .filter((result) => result.reachable)
+    .map((result) => result.feedUrl);
+  const unreachableFeeds = feedResults
+    .filter((result) => !result.reachable)
+    .map((result) => result.feedUrl);
+
+  return {
+    playlists,
+    reachableFeeds,
+    unreachableFeeds,
+  };
 }
 
 /**
@@ -161,12 +212,21 @@ async function fetchAllPlaylists() {
  */
 async function searchExactPlaylist(playlistName) {
   try {
-    const playlists = await fetchAllPlaylists();
+    const { playlists, reachableFeeds, unreachableFeeds } = await fetchAllPlaylists();
+
+    if (reachableFeeds.length === 0) {
+      return {
+        success: false,
+        errorType: 'feed_unreachable',
+        error: buildFeedUnreachableError(unreachableFeeds),
+      };
+    }
 
     if (playlists.length === 0) {
       return {
         success: false,
-        error: 'No playlists found in any feed',
+        errorType: 'playlist_not_found',
+        error: `No playlists available in reachable feed server(s) for "${playlistName}"`,
       };
     }
 
@@ -184,12 +244,14 @@ async function searchExactPlaylist(playlistName) {
     } else {
       return {
         success: false,
+        errorType: 'playlist_not_found',
         error: `No exact match found for playlist "${playlistName}"`,
       };
     }
   } catch (error) {
     return {
       success: false,
+      errorType: 'feed_unreachable',
       error: error.message,
     };
   }
@@ -206,16 +268,32 @@ async function findBestMatchingPlaylist(searchTerm) {
     const feedUrls = getFeedApiUrls();
 
     // Fetch from all feeds in parallel with pagination and filtering
-    const allMatchesArrays = await Promise.all(
+    const allMatchesResults = await Promise.all(
       feedUrls.map((url) => fetchPlaylistsWithPagination(url, searchTerm, 50, 10))
     );
 
+    const reachableFeeds = allMatchesResults
+      .filter((result) => result.reachable)
+      .map((result) => result.feedUrl);
+    const unreachableFeeds = allMatchesResults
+      .filter((result) => !result.reachable)
+      .map((result) => result.feedUrl);
+
+    if (reachableFeeds.length === 0) {
+      return {
+        success: false,
+        errorType: 'feed_unreachable',
+        error: buildFeedUnreachableError(unreachableFeeds),
+      };
+    }
+
     // Flatten and combine results from all feeds
-    const allMatches = allMatchesArrays.flat();
+    const allMatches = allMatchesResults.flatMap((result) => result.matches || []);
 
     if (allMatches.length === 0) {
       return {
         success: false,
+        errorType: 'playlist_not_found',
         error: `No matching playlists found for "${searchTerm}"`,
       };
     }
@@ -246,6 +324,7 @@ async function findBestMatchingPlaylist(searchTerm) {
   } catch (error) {
     return {
       success: false,
+      errorType: 'feed_unreachable',
       error: error.message,
     };
   }
@@ -349,10 +428,15 @@ async function fetchFeedPlaylistDirect(playlistName, quantity = 5, duration = 10
   const result = await searchExactPlaylist(playlistName);
 
   if (!result.success) {
-    console.log(chalk.yellow(`   Playlist not found: ${result.error}`));
+    if (result.errorType === 'feed_unreachable') {
+      console.log(chalk.yellow(`   Feed server unavailable: ${result.error}`));
+    } else {
+      console.log(chalk.yellow(`   Playlist not found: ${result.error}`));
+    }
     return {
       success: false,
       error: result.error,
+      errorType: result.errorType,
       items: [],
     };
   }
@@ -385,10 +469,15 @@ async function searchFeedPlaylists(playlistName, quantity = 5, duration = 10) {
   const result = await findBestMatchingPlaylist(playlistName);
 
   if (!result.success) {
-    console.log(chalk.yellow(`   Playlist not found: ${result.error}\n`));
+    if (result.errorType === 'feed_unreachable') {
+      console.log(chalk.yellow(`   Feed server unavailable: ${result.error}\n`));
+    } else {
+      console.log(chalk.yellow(`   Playlist not found: ${result.error}\n`));
+    }
     return {
       success: false,
       error: result.error,
+      errorType: result.errorType,
     };
   }
 

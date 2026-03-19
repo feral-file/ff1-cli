@@ -152,6 +152,8 @@ npm run dev -- chat "Get tokens 52932,52457 from Ethereum contract 0xb932a70A576
 Feed playlists (for example `Unsupervised`, `Social Codes`) depend on your configured feed servers and network reachability.
 Use exact or near-exact playlist titles for best results.
 
+If you prompt with a bare EVM address (for example `from 0x...`), the CLI now tries owner-address lookup first, then automatically falls back to contract lookup when no owned tokens are found.
+
 ### One-shot complex prompt
 
 The model reads your request via the intent parser and turns it into structured `requirements` and `playlistSettings` (including shuffle, durations, and device). You can do everything in one line:
@@ -197,6 +199,8 @@ Publishing keywords: "publish", "publish to my feed", "push to feed", "send to f
 2. If multiple servers → ask which one to use
 3. Build → verify → publish automatically
 4. Display playlist ID and server URL on success
+
+If all configured feed servers are unreachable, the CLI now reports a feed availability error instead of "playlist not found".
 
 ### Deterministic (no AI)
 
