@@ -17,9 +17,9 @@ npm run dev -- config validate
 npm run dev chat
 
 # One-shot requests
-npm run dev -- chat "Get tokens 1,2,3 from Ethereum contract 0xabc" -o playlist.json
-npm run dev -- chat "Get token 42 from Tezos contract KT1abc"
-npm run dev -- chat "Get 3 items from Social Codes and 2 from 0xdef" -v
+npm run dev -- chat "Get 3 works from reas.eth" -o playlist.json
+npm run dev -- chat "Get 3 works from einstein-rosen.tez"
+npm run dev -- chat "Get tokens 52932,52457 from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0" -v
 
 # Switch model
 npm run dev -- chat "your request" --model grok
@@ -43,10 +43,10 @@ cat examples/params-example.json | npm run dev -- build -o playlist.json
 
 ```bash
 # Show tool‑call progress and validation
-npm run dev -- chat "Build a playlist of my Tezos works from address tz1... plus 3 from Social Codes" -v -o playlist.json
+npm run dev -- chat "Build a playlist of my works from reas.eth plus 3 from Unsupervised" -v -o playlist.json
 
 # Switch model if desired
-npm run dev -- chat "Build playlist from Ethereum address 0x... and 2 from Social Codes" --model gpt -v
+npm run dev -- chat "Build playlist from Ethereum address 0xaeE022552B539dB18297D7481b6D547C622488B3 and 2 from Unsupervised" --model gpt -v
 ```
 
 ### One‑shot complex prompt
@@ -55,8 +55,26 @@ The CLI can parse rich requests and do it all in one go: fetch, build a DP‑1 p
 
 ```bash
 # Example: combine sources, shuffle, set 6s per item, and send to device
-npm run dev -- chat "Get tokens 1,2 from contract 0xabc and token 42 from KT1xyz; shuffle; 6 seconds each; send to 'Living Room Display'." -o playlist.json -v
+npm run dev -- chat "Get tokens 52932,52457 from contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 and 2 from reas.eth; shuffle; 6 seconds each; send to 'Living Room Display'." -o playlist.json -v
 ```
+
+## Feral File Built Playlists
+
+Use exhibition titles from the official playlist repository:
+`https://github.com/feral-file/dp1-feed/tree/main/playlists`
+
+```bash
+# Fetch from a built playlist title
+npm run dev -- chat "Get 3 from Unsupervised" -v
+
+# Mix a built playlist with wallet/domain sources
+npm run dev -- chat "Get 3 from Unsupervised and 2 from reas.eth" -v -o playlist.json
+```
+
+Notes:
+
+- Feed playlist queries require reachable feed servers in your config.
+- If no feeds are reachable, feed playlist examples will fail even if the title exists.
 
 ## Natural Language: Display and Publish
 
@@ -70,7 +88,7 @@ npm run dev -- chat "Build playlist from Ethereum contract 0xb932a70A57673d89f4a
 
 # With feed selection (if multiple servers configured)
 # The CLI will ask: "Which feed server? 1) https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1 2) http://localhost:8787"
-npm run dev -- chat "Get 3 from Social Codes and publish to feed" -v
+npm run dev -- chat "Get 3 from Unsupervised and publish to feed" -v
 
 # Publish existing playlist (defaults to ./playlist.json)
 npm run dev chat
@@ -88,7 +106,7 @@ npm run dev chat
 npm run dev -- chat "Build playlist from contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; mix them up; send to my FF1 and publish to my feed" -o playlist.json -v
 
 # With explicit device name
-npm run dev -- chat "Get 5 from Social Codes, shuffle, display on 'Living Room', and publish to feed" -v
+npm run dev -- chat "Get 5 from Unsupervised, shuffle, display on 'Living Room', and publish to feed" -v
 ```
 
 ### How It Works
@@ -218,7 +236,7 @@ Select server (0-based index): 0
 
 ```bash
 # 1. Create a playlist (via chat or build)
-npm run dev -- chat "Get tokens 1,2,3 from contract 0xabc" -o playlist.json
+npm run dev -- chat "Get 3 works from reas.eth" -o playlist.json
 
 # 2. Validate it
 npm run dev -- validate playlist.json
@@ -293,7 +311,7 @@ npm run dev -- config init
   - Examples:
     ```bash
     npm run dev -- chat "Create a playlist from feed 'Unsupervised' (3 items); shuffle; send to device" -o playlist-feed1.json -v
-    npm run dev -- chat "Build a playlist from feed 'Social Codes' (3 items); shuffle; send to device" -o playlist-feed2.json -v
+    npm run dev -- chat "Build a playlist from feed 'Unsupervised' (3 items); shuffle; send to device" -o playlist-feed2.json -v
     ```
 
 - **Mixed in one prompt (ETH + TEZ + feed + ENS), shuffled, named device**
@@ -313,7 +331,7 @@ npm run dev -- config init
     ```
   - Example:
     ```bash
-    npm run dev -- chat "Create a playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 tokens 52932, 52457; then add 2 from 'Social Codes'; then add 1 from reas.eth; shuffle; push to my device" -o playlist-multi.json -v
+    npm run dev -- chat "Create a playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 tokens 52932, 52457; then add 2 from 'Unsupervised'; then add 1 from reas.eth; shuffle; push to my device" -o playlist-multi.json -v
     ```
 
 - **Synonym variants for the same ETH case**

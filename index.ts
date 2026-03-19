@@ -724,14 +724,14 @@ program
         console.log(chalk.dim('Describe the playlist you want. Ctrl+C to exit.'));
         console.log(chalk.dim(`Model: ${modelName}\n`));
         console.log(chalk.dim('Examples:'));
-        console.log(chalk.dim('  • Get tokens 1,2,3 from Ethereum contract 0xabc'));
-        console.log(chalk.dim('  • Get token 42 from Tezos contract KT1abc'));
-        console.log(chalk.dim('  • Get 3 from Social Codes and 2 from 0xdef'));
+        console.log(chalk.dim('  • Get 3 works from reas.eth'));
+        console.log(chalk.dim('  • Get 3 works from einstein-rosen.tez'));
         console.log(
           chalk.dim(
-            '  • Build a playlist of my Tezos works from address tz1... plus 3 from Social Codes'
+            '  • Get tokens 52932,52457 from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0'
           )
         );
+        console.log(chalk.dim('  • Get 3 from Unsupervised'));
         console.log(chalk.dim('  Tip: add -v to see tool calls'));
         console.log();
 
