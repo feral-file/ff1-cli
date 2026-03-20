@@ -400,6 +400,7 @@ program
       const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
       const discoveredDevices = discoveryResult.devices;
       let selectedDeviceIndex: number | null = null;
+      let shouldPromptManualDevice = true;
       if (discoveryResult.error && discoveredDevices.length === 0) {
         const errorMessage = discoveryResult.error.endsWith('.')
           ? discoveryResult.error
@@ -418,20 +419,64 @@ program
           console.log(chalk.dim(`  ${index + 1}) ${displayId}`));
         });
 
-        const selectionAnswer = await ask(
-          `Select device [1-${discoveredDevices.length}] or press Enter to skip: `
-        );
-        if (selectionAnswer) {
+        const hasExistingHost = Boolean(existingDevice?.host);
+        const selectionPrompt = hasExistingHost
+          ? `Select device [1-${discoveredDevices.length}], enter ID/host, press Enter to keep current, or type m for manual entry: `
+          : `Select device [1-${discoveredDevices.length}], enter ID/host, or press Enter for manual entry: `;
+        while (true) {
+          const selectionAnswer = (await ask(selectionPrompt)).trim();
+          if (!selectionAnswer) {
+            if (hasExistingHost) {
+              shouldPromptManualDevice = false;
+              console.log(chalk.dim('Keeping existing FF1 device.'));
+            }
+            break;
+          }
+
+          const normalizedSelection = selectionAnswer.toLowerCase();
+          if (normalizedSelection === 'm') {
+            shouldPromptManualDevice = true;
+            break;
+          }
+
           const parsedIndex = Number.parseInt(selectionAnswer, 10);
           if (
-            Number.isNaN(parsedIndex) ||
-            parsedIndex < 1 ||
-            parsedIndex > discoveredDevices.length
+            !Number.isNaN(parsedIndex) &&
+            `${parsedIndex}` === selectionAnswer &&
+            parsedIndex >= 1 &&
+            parsedIndex <= discoveredDevices.length
           ) {
-            console.log(chalk.red('Invalid selection. Skipping auto-discovery.'));
-          } else {
             selectedDeviceIndex = parsedIndex - 1;
+            shouldPromptManualDevice = false;
+            break;
           }
+
+          const normalizedWithPrefix = normalizedSelection.startsWith('ff1-')
+            ? normalizedSelection
+            : `ff1-${normalizedSelection}`;
+          const matchedIndex = discoveredDevices.findIndex((device) => {
+            const candidates = [
+              device.id,
+              device.name,
+              device.host,
+              `${device.host}:${device.port}`,
+            ]
+              .filter((value): value is string => Boolean(value))
+              .map((value) => value.toLowerCase());
+            return (
+              candidates.includes(normalizedSelection) || candidates.includes(normalizedWithPrefix)
+            );
+          });
+
+          if (matchedIndex !== -1) {
+            selectedDeviceIndex = matchedIndex;
+            shouldPromptManualDevice = false;
+            break;
+          }
+
+          console.log(
+            chalk.red('Invalid selection. Enter a number, m, or a discovered device ID/host.')
+          );
         }
       } else if (!discoveryResult.error) {
         console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
@@ -461,6 +506,8 @@ program
               `Using discovered device: ${selectedDevice.name} (${selectedDevice.host}:${selectedDevice.port})`
             )
           );
+        } else if (!shouldPromptManualDevice && existingHost) {
+          hostValue = normalizeDeviceHost(existingHost);
         } else {
           const idPrompt = defaultDeviceId
             ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
@@ -677,14 +724,14 @@ program
         console.log(chalk.dim('Describe the playlist you want. Ctrl+C to exit.'));
         console.log(chalk.dim(`Model: ${modelName}\n`));
         console.log(chalk.dim('Examples:'));
-        console.log(chalk.dim('  • Get tokens 1,2,3 from Ethereum contract 0xabc'));
-        console.log(chalk.dim('  • Get token 42 from Tezos contract KT1abc'));
-        console.log(chalk.dim('  • Get 3 from Social Codes and 2 from 0xdef'));
+        console.log(chalk.dim('  • Get 3 works from reas.eth'));
+        console.log(chalk.dim('  • Get 3 works from einstein-rosen.tez'));
         console.log(
           chalk.dim(
-            '  • Build a playlist of my Tezos works from address tz1... plus 3 from Social Codes'
+            '  • Get tokens 52932,52457 from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0'
           )
         );
+        console.log(chalk.dim('  • Get 3 from Unsupervised'));
         console.log(chalk.dim('  Tip: add -v to see tool calls'));
         console.log();
 

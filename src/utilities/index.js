@@ -14,6 +14,105 @@ const logger = require('../logger');
 const printedTokenCountKeys = new Set();
 
 /**
+ * Detect blockchain from contract address format.
+ *
+ * @param {string} contractAddress - Contract address
+ * @returns {string} Chain name
+ */
+function detectChainFromContractAddress(contractAddress) {
+  if (String(contractAddress || '').startsWith('KT')) {
+    return 'tezos';
+  }
+  return 'ethereum';
+}
+
+/**
+ * Convert indexer token rows to DP1 items.
+ *
+ * @param {Array<Object>} tokens - Raw indexer token rows
+ * @param {number} duration - Duration per item in seconds
+ * @returns {{ items: Array<Object>, skippedCount: number }} Converted items and skipped count
+ */
+function convertIndexerTokensToDP1Items(tokens, duration) {
+  const items = [];
+  let skippedCount = 0;
+
+  for (const token of tokens) {
+    const contractAddr = token.contract_address || token.contractAddress || '';
+    const chain = detectChainFromContractAddress(contractAddr);
+    const tokenData = nftIndexer.mapIndexerDataToStandardFormat(token, chain);
+
+    if (tokenData.success) {
+      const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
+      if (dp1Result.success && dp1Result.item) {
+        items.push(dp1Result.item);
+      } else if (!dp1Result.success) {
+        skippedCount++;
+      }
+    }
+  }
+
+  return { items, skippedCount };
+}
+
+/**
+ * Check if an address looks like an EVM address.
+ *
+ * @param {string} address - Address string
+ * @returns {boolean} True when address matches 0x + 40 hex chars
+ */
+function isLikelyEvmAddress(address) {
+  return /^0x[a-fA-F0-9]{40}$/.test(String(address || ''));
+}
+
+/**
+ * Query random tokens from a contract and convert to DP1 items.
+ *
+ * @param {string} contractAddress - Contract address
+ * @param {number|string} [quantity] - Number of random tokens to select
+ * @param {number} duration - Duration per item in seconds
+ * @returns {Promise<Array<Object>>} Array of DP1 items
+ */
+async function queryTokensByContractAddress(contractAddress, quantity, duration = 10) {
+  console.log(
+    chalk.cyan(
+      `   Fetching ${quantity || 100} random token(s) from contract ${contractAddress.substring(0, 10)}...`
+    )
+  );
+
+  const limit = Math.min(quantity || 100, 100);
+  const result = await nftIndexer.queryTokensByContract(contractAddress, limit);
+
+  if (!result.success) {
+    console.log(chalk.yellow(`   Could not fetch tokens from contract`));
+    return [];
+  }
+
+  if (result.tokens.length === 0) {
+    console.log(chalk.yellow(`   No tokens found in contract ${contractAddress}`));
+    return [];
+  }
+
+  let selectedTokens = result.tokens;
+  if (typeof quantity === 'number' && selectedTokens.length > quantity) {
+    selectedTokens = shuffleArray([...selectedTokens]).slice(0, quantity);
+  }
+
+  console.log(chalk.dim(`   Got ${selectedTokens.length} token(s)`));
+
+  const { items, skippedCount } = convertIndexerTokensToDP1Items(selectedTokens, duration);
+  if (skippedCount > 0) {
+    console.log(
+      chalk.yellow(
+        `   Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
+      )
+    );
+  }
+
+  return items;
+}
+
+/**
  * Initialize utilities with configuration
  *
  * The indexer now uses a hardcoded production endpoint, so no configuration is needed.
@@ -37,8 +136,9 @@ function initializeUtilities(_config) {
  * @param {number} duration - Duration per item in seconds
  * @returns {Promise<Array>} Array of DP1 playlist items
  */
-async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
+async function queryTokensByAddress(ownerAddress, quantity, duration = 10, options = {}) {
   try {
+    const { suppressNotFoundGuidance = false } = options;
     const shouldFetchAll = quantity === 'all' || quantity === undefined || quantity === null;
     const batchSize = 50; // Fetch 50 tokens per page
     let allTokens = [];
@@ -56,11 +156,13 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
           if (offset === 0) {
             // First page failed
             console.log(chalk.yellow(`   Could not fetch tokens for ${ownerAddress}`));
-            console.log(
-              chalk.cyan(
-                `   → Add this address in the Feral File mobile app, then try again with the CLI.`
-              )
-            );
+            if (!suppressNotFoundGuidance) {
+              console.log(
+                chalk.cyan(
+                  `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+                )
+              );
+            }
             return [];
           }
           // Subsequent pages failed - stop pagination but keep what we have
@@ -87,11 +189,13 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
 
       if (allTokens.length === 0 && offset === 0) {
         console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
-        console.log(
-          chalk.cyan(
-            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
-          )
-        );
+        if (!suppressNotFoundGuidance) {
+          console.log(
+            chalk.cyan(
+              `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+            )
+          );
+        }
         return [];
       }
     } else {
@@ -101,21 +205,25 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
 
       if (!result.success) {
         console.log(chalk.yellow(`   Could not fetch tokens for ${ownerAddress}`));
-        console.log(
-          chalk.cyan(
-            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
-          )
-        );
+        if (!suppressNotFoundGuidance) {
+          console.log(
+            chalk.cyan(
+              `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+            )
+          );
+        }
         return [];
       }
 
       if (result.tokens.length === 0) {
         console.log(chalk.yellow(`   No tokens found for ${ownerAddress}`));
-        console.log(
-          chalk.cyan(
-            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
-          )
-        );
+        if (!suppressNotFoundGuidance) {
+          console.log(
+            chalk.cyan(
+              `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+            )
+          );
+        }
         return [];
       }
 
@@ -135,29 +243,7 @@ async function queryTokensByAddress(ownerAddress, quantity, duration = 10) {
       printedTokenCountKeys.add(tokenCountKey);
     }
 
-    // Convert tokens to DP1 items
-    const items = [];
-    let skippedCount = 0;
-    for (const token of selectedTokens) {
-      // Detect blockchain from contract address (support both camelCase and snake_case)
-      let chain = 'ethereum';
-      const contractAddr = token.contract_address || token.contractAddress || '';
-      if (contractAddr.startsWith('KT')) {
-        chain = 'tezos';
-      }
-
-      // Map indexer token data to standard format
-      const tokenData = nftIndexer.mapIndexerDataToStandardFormat(token, chain);
-
-      if (tokenData.success) {
-        const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
-        if (dp1Result.success && dp1Result.item) {
-          items.push(dp1Result.item);
-        } else if (!dp1Result.success) {
-          skippedCount++;
-        }
-      }
-    }
+    const { items, skippedCount } = convertIndexerTokensToDP1Items(selectedTokens, duration);
 
     if (skippedCount > 0) {
       console.log(
@@ -213,7 +299,29 @@ async function queryRequirement(requirement, duration = 10) {
         return [];
       }
     } else {
-      return await queryTokensByAddress(ownerAddress, quantity, duration);
+      const isEvmAddress = isLikelyEvmAddress(ownerAddress);
+      const ownerItems = await queryTokensByAddress(ownerAddress, quantity, duration, {
+        suppressNotFoundGuidance: isEvmAddress,
+      });
+
+      if (ownerItems.length > 0) {
+        return ownerItems;
+      }
+
+      if (isEvmAddress) {
+        console.log(chalk.cyan(`   No owned tokens found. Trying this address as a contract...`));
+        const contractItems = await queryTokensByContractAddress(ownerAddress, quantity, duration);
+        if (contractItems.length > 0) {
+          return contractItems;
+        }
+        console.log(
+          chalk.cyan(
+            `   → Add this address in the Feral File mobile app, then try again with the CLI.`
+          )
+        );
+      }
+
+      return [];
     }
   }
 
@@ -248,71 +356,12 @@ async function queryRequirement(requirement, duration = 10) {
     const isContractQuery = contractAddress && (!tokenIds || tokenIds.length === 0);
 
     if (isContractQuery) {
-      // Query random tokens from the contract
-      console.log(
-        chalk.cyan(
-          `   Fetching ${quantity || 100} random token(s) from contract ${contractAddress.substring(0, 10)}...`
-        )
-      );
-
-      const limit = Math.min(quantity || 100, 100);
-      const result = await nftIndexer.queryTokensByContract(contractAddress, limit);
-
-      if (!result.success) {
-        console.log(chalk.yellow(`   Could not fetch tokens from contract`));
-        console.log(chalk.cyan(`   → Trying as owner address instead...`));
-        return await queryTokensByAddress(contractAddress, quantity, duration);
+      const contractItems = await queryTokensByContractAddress(contractAddress, quantity, duration);
+      if (contractItems.length > 0) {
+        return contractItems;
       }
-
-      if (result.tokens.length === 0) {
-        console.log(chalk.yellow(`   No tokens found in contract ${contractAddress}`));
-        console.log(chalk.cyan(`   → Trying as owner address instead...`));
-        return await queryTokensByAddress(contractAddress, quantity, duration);
-      }
-
-      // Convert tokens to DP1 items (similar to queryTokensByAddress logic)
-      let allTokens = result.tokens;
-
-      // Apply quantity limit with random selection if needed
-      if (quantity && allTokens.length > quantity) {
-        allTokens = shuffleArray([...allTokens]).slice(0, quantity);
-      }
-
-      console.log(chalk.dim(`   Got ${allTokens.length} token(s)`));
-
-      // Convert tokens to DP1 items
-      const dp1Items = [];
-      let skippedCount = 0;
-      for (const token of allTokens) {
-        // Detect blockchain from contract address
-        let chain = 'ethereum';
-        const contractAddr = token.contract_address || token.contractAddress || '';
-        if (contractAddr.startsWith('KT')) {
-          chain = 'tezos';
-        }
-
-        // Map indexer token data to standard format
-        const tokenData = nftIndexer.mapIndexerDataToStandardFormat(token, chain);
-
-        if (tokenData.success) {
-          const dp1Result = nftIndexer.convertToDP1Item(tokenData, duration);
-          if (dp1Result.success && dp1Result.item) {
-            dp1Items.push(dp1Result.item);
-          } else if (!dp1Result.success) {
-            skippedCount++;
-          }
-        }
-      }
-
-      if (skippedCount > 0) {
-        console.log(
-          chalk.yellow(
-            `   Skipped ${skippedCount} token(s) with invalid data (data URIs or URLs too long)`
-          )
-        );
-      }
-
-      return dp1Items;
+      console.log(chalk.cyan(`   → Trying as owner address instead...`));
+      return await queryTokensByAddress(contractAddress, quantity, duration);
     }
 
     // Handle specific token IDs (original logic)
