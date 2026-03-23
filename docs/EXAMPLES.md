@@ -6,6 +6,12 @@ Copy‑pasteable commands that work with the current CLI.
 
 ```bash
 npm install
+npm run dev -- setup
+```
+
+Manual config path:
+
+```bash
 npm run dev -- config init
 npm run dev -- config validate
 ```
