@@ -28,7 +28,7 @@ Use this rule as the top-level working contract for this repository.
 - Add comments freely when they help a later agent amend the code safely.
 
 ## Repo-specific constraints
-- Only these docs may be edited: `docs/README.md`, `docs/FUNCTION_CALLING.md`, `docs/EXAMPLES.md`, `docs/CONFIGURATION.md`, `docs/RELEASING.md`, `docs/project_spec.md`.
+- Only these docs may be edited: `docs/README.md`, `docs/FUNCTION_CALLING.md`, `docs/EXAMPLES.md`, `docs/CONFIGURATION.md`, `docs/RELEASING.md`, `docs/PROJECT_SPEC.md`.
 - Do not add new process docs under `/docs` or the repo root.
 - Only update docs when behavior changes.
 - Config priority is `config.json` > `.env` > defaults.

@@ -8,7 +8,7 @@ alwaysApply: true
 Apply this rule for large features, major flow changes, broad refactors, and architectural work.
 
 ## Required planning workflow
-1. Read `docs/project_spec.md`.
+1. Read `docs/PROJECT_SPEC.md`.
 2. Read the relevant docs and source files for the area being changed.
 3. Summarize the current behavior, constraints, and invariants.
 4. Write or update a short spec or design note in the handoff if no formal spec exists.

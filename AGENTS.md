@@ -42,7 +42,7 @@ TDD is the default discipline for behavior changes. For small, low-risk fixes, t
 
 ## Repo-specific implementation rules
 
-- Docs may only be updated in `/docs/README.md`, `/docs/FUNCTION_CALLING.md`, `/docs/EXAMPLES.md`, `/docs/CONFIGURATION.md`, `/docs/RELEASING.md`, or `/docs/project_spec.md`.
+- Docs may only be updated in `/docs/README.md`, `/docs/FUNCTION_CALLING.md`, `/docs/EXAMPLES.md`, `/docs/CONFIGURATION.md`, `/docs/RELEASING.md`, or `/docs/PROJECT_SPEC.md`.
 - Do not add new root or `/docs` process documents beyond the approved set above.
 - Only update docs when behavior, usage, operations, or user-facing output changes.
 - Config priority remains `config.json` > `.env` > defaults. Validate config before use.
@@ -62,7 +62,7 @@ Until those rules are defined, prefer conservative changes that improve clarity 
 
 Before implementing a major feature, flow change, refactor, or architectural update:
 
-1. Read `docs/project_spec.md`.
+1. Read `docs/PROJECT_SPEC.md`.
 2. Read the relevant docs and source files for the affected area.
 3. Summarize current behavior, constraints, and invariants.
 4. Write or update a short spec or design note in the handoff if no formal artifact exists.
