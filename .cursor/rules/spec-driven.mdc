@@ -1,0 +1,27 @@
+---
+description: Spec-driven workflow for substantial FF1-CLI changes
+alwaysApply: true
+---
+
+# Spec-Driven Development Rule
+
+Apply this rule for large features, major flow changes, broad refactors, and architectural work.
+
+## Required planning workflow
+1. Read `docs/project_spec.md`.
+2. Read the relevant docs and source files for the area being changed.
+3. Summarize the current behavior, constraints, and invariants.
+4. Write or update a short spec or design note in the handoff if no formal spec exists.
+5. Break the work into concrete tasks.
+6. Identify expected behaviors and how they will be verified.
+7. Add or update tests before implementation where behavior changes.
+8. Then implement and verify.
+
+Canonical sequence:
+`spec -> design -> tasks -> tests -> implementation -> verification`
+
+## Enforcement
+- Do not start large changes without first summarizing the current state.
+- If docs and implementation conflict, use the implemented behavior as the current-state baseline and note the mismatch.
+- Do not invent new permanent architecture or API policies; those sections are reserved as `TBD by repo owner`.
+- If a design choice or constraint is important enough to shape future amendments, preserve it in code comments near the affected logic.

@@ -1,0 +1,28 @@
+---
+description: TDD workflow and verification gates for FF1-CLI
+alwaysApply: true
+---
+
+# Testing and Verification Rule
+
+## Required sequence
+1. Write or update focused tests first when behavior changes.
+2. Implement until tests pass.
+3. Refactor while keeping tests green.
+4. Run the full verification commands before handoff or completion.
+
+## Constraints
+- Do not ship behavior changes without test coverage unless there is a clear, explicit reason.
+- Prefer unit tests for business logic and targeted integration coverage for boundary behavior.
+- Treat missing or failing tests as part of the work, not follow-up work.
+
+## Required verification commands
+```bash
+npm run lint:fix
+npm test
+npm run build
+GROK_API_KEY=dummy node dist/index.js validate examples/sample-playlist.json
+GROK_API_KEY=dummy node dist/index.js config validate
+```
+
+Fix failures and rerun until clean.

@@ -1,0 +1,41 @@
+---
+description: Core repository contract for FF1-CLI agentic work
+alwaysApply: true
+---
+
+# FF1-CLI Master Contract
+
+Use this rule as the top-level working contract for this repository.
+
+## Repository scope
+- Node.js CLI for FF1 computational art workflows and DP-1 playlist operations.
+- Keep terminology precise: `FF1`, `DP-1 envelope`, `DP-1 conformance`, `computational art playlist`, `channel endorsement`, `FF1 device`.
+
+## Non-negotiables
+- Prefer replacing or deleting flawed code paths over narrow local fixes when that yields a clearer design.
+- Do not preserve legacy behavior, compatibility shims, migrations, or transitional paths unless explicitly requested.
+- Keep functions small, composable, and testable.
+- Prefer comments that preserve durable context for future agent sessions.
+- When logic is non-obvious, document design intent, trade-offs, invariants, external dependencies, and coding constraints near the code.
+- Update JSDoc for new and changed functions.
+- Use TypeScript for new or updated source when practical.
+
+## Comment style
+- Follow a Go-style documentation posture.
+- Write comments as full sentences.
+- Start symbol doc comments with the symbol name.
+- Prefer comments that explain `why` and constraints over comments that narrate syntax.
+- Add comments freely when they help a later agent amend the code safely.
+
+## Repo-specific constraints
+- Only these docs may be edited: `docs/README.md`, `docs/FUNCTION_CALLING.md`, `docs/EXAMPLES.md`, `docs/CONFIGURATION.md`, `docs/RELEASING.md`, `docs/project_spec.md`.
+- Do not add new process docs under `/docs` or the repo root.
+- Only update docs when behavior changes.
+- Config priority is `config.json` > `.env` > defaults.
+- Temporary debug scripts belong in `/.tmp` and should not be committed.
+
+## Reserved owner-owned policy
+- Architecture boundaries: `TBD by repo owner`
+- API design rules: `TBD by repo owner`
+
+Do not invent permanent architecture or API policies beyond small, local improvements until the owner fills these sections in.

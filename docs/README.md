@@ -2,6 +2,8 @@
 
 Build DP-1 (Display Protocol 1) playlists from NFT data with either natural language (AI‑driven) or deterministic parameters. This doc covers install, config, and day‑to‑day usage.
 
+For project-level planning and future agentic work, see `./project_spec.md`.
+
 ## Install
 
 ```bash

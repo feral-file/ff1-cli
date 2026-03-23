@@ -6,6 +6,10 @@ on:
     types: [published]
 
 jobs:
+  ci:
+    if: github.event_name == 'release'
+    uses: ./.github/workflows/ci.yml
+
   verify-version:
     runs-on: ubuntu-latest
     steps:
@@ -36,7 +40,9 @@ jobs:
           echo "Version check passed: package.json and tag are both $PACKAGE_VERSION."
 
   build:
-    needs: verify-version
+    needs:
+      - ci
+      - verify-version
     if: github.event_name == 'release'
     uses: ./.github/workflows/build.yml
     with:
@@ -44,7 +50,9 @@ jobs:
     secrets: inherit
 
   publish-npm:
-    needs: verify-version
+    needs:
+      - ci
+      - verify-version
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     env:

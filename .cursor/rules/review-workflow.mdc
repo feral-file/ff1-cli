@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+
+# Review Workflow Rule
+
+When implementation is complete, run a review loop before commit, push, or PR.
+
+1. Produce a compact handoff: goal, scope, files changed, key decisions, checks run, known limitations.
+2. Invoke the reviewer sub-agent with fresh context and the shared review contract in `prompts/code-review.md`.
+3. Provide the reviewer the handoff, `git diff --stat`, `git diff`, and any relevant lint/test/build output.
+4. If the reviewer returns `Verdict: revise`, address the findings, re-run verification, update the handoff, and review again.
+5. Only proceed once the reviewer returns `Verdict: accept`.
