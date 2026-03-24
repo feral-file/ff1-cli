@@ -2,7 +2,7 @@
 
 This document defines the current product role, boundaries, and constraints for `ff1-cli`.
 
-It is based on the code in this repository and the current Feral File architecture, operations, reference, and strategy context as of March 17, 2026. It should be used as the planning entry point for substantial changes.
+It is derived from the behavior and interfaces implemented in this repository as of March 2026. It serves as the planning entry point for substantial changes and should be updated as the CLI evolves.
 
 ## Why this doc exists
 
@@ -15,7 +15,7 @@ It is based on the code in this repository and the current Feral File architectu
 - Project: `ff1-cli`
 - Type: Node.js CLI
 - System role: a control and integration surface for FF1 and DP-1 workflows
-- Primary purpose: turn user intent or structured parameters into valid DP-1 playlists, then verify, sign, publish, and send them through the canonical FF1 path
+- Primary purpose: turn user intent or structured parameters into valid DP-1 playlists, then validate them and optionally sign, publish, and send them through FF1 and feed paths
 
 In the Feral File architecture bands, `ff1-cli` sits primarily in the presentation and control layer. It is not the canonical source of truth for exhibitions, ownership, device runtime, or protocol evolution. It is a practical operator and developer surface that bridges those systems.
 
@@ -77,6 +77,14 @@ The current code and internal context imply these practical goals:
 - Support FF1 as the reference playback target without making correctness depend on proprietary-only infrastructure.
 - Serve as a reference surface for publish, verify, and play flows used elsewhere in the Feral File stack.
 
+### Current behavior
+
+The current implementation still depends on Feral File-operated infrastructure for some data retrieval paths, including the hardcoded production indexer endpoint used for NFT lookup.
+
+### Design direction
+
+Long-term interoperability should continue to reduce hard infrastructure coupling where practical, especially when a dependency blocks portability without adding protocol value.
+
 ## Non-goals
 
 `ff1-cli` should not become:
@@ -126,6 +134,7 @@ Based on the code today, the CLI is responsible for:
 - The CLI may call feed and device endpoints, but it should not become their compatibility abstraction layer of last resort.
 - The CLI may use models for orchestration, but deterministic utilities remain the source of truth for output correctness.
 - Trust-sensitive correctness must stay vendor-neutral and portable. The CLI can use cloud APIs for model orchestration, but the trust path cannot depend on cloud-specific guarantees.
+- Current implementation note: some retrieval paths still use Feral File-operated services directly, so portability here is an intended direction rather than a fully achieved property.
 
 ## Functional shape
 
@@ -177,10 +186,20 @@ Important constraints from the broader FF system:
 
 ## Reliability expectations
 
+### Current behavior
+
 - reliability matters more than novelty
 - the publish-to-play path should stay simple and testable
 - the CLI should help prove the path from canonical JSON to FF1 playback
-- compatibility checks should fail clearly when a target FF1 device cannot safely handle a command
+- compatibility checks fail clearly when incompatibility is confirmed
+- if FF1 OS version cannot be determined during preflight, the CLI currently proceeds and logs a warning instead of hard-blocking the command
+
+### Design direction
+
+- reliability matters more than novelty
+- the publish-to-play path should stay simple and testable
+- the CLI should help prove the path from canonical JSON to FF1 playback
+- compatibility messaging should remain explicit enough that operators can distinguish confirmed incompatibility from uncertain device state
 
 ## Code and design constraints
 
