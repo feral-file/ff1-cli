@@ -16,6 +16,19 @@ npm run dev -- config init
 npm run dev -- config validate
 ```
 
+## OpenClaw skill prompt
+
+If you want OpenClaw to run FF1 CLI end-to-end without confirmation, start from:
+
+`examples/openclaw-ff1-skill.md`
+
+Paste that prompt into your OpenClaw skill config, then test with plain requests like:
+
+```bash
+"Get 3 works from reas.eth and send to Living Room"
+"Get 3 from Unsupervised and publish to my feed"
+```
+
 ## Natural Language
 
 ```bash
