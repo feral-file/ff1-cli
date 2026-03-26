@@ -83,10 +83,12 @@ describe('resolveConfiguredDevice', () => {
 
   afterEach(() => {
     clearFetchMock();
+    // Windows keeps the current working directory locked, so move back out of
+    // the temp fixture before attempting recursive cleanup.
+    process.chdir(originalCwd);
     if (fixtureDir && existsSync(fixtureDir)) {
       rmSync(fixtureDir, { recursive: true, force: true });
     }
-    process.chdir(originalCwd);
   });
 
   test('returns the first configured device when no deviceName is provided', () => {
@@ -145,10 +147,12 @@ describe('assertFF1CommandCompatibility', () => {
 
   afterEach(() => {
     clearFetchMock();
+    // Windows keeps the current working directory locked, so move back out of
+    // the temp fixture before attempting recursive cleanup.
+    process.chdir(originalCwd);
     if (fixtureDir && existsSync(fixtureDir)) {
       rmSync(fixtureDir, { recursive: true, force: true });
     }
-    process.chdir(originalCwd);
   });
 
   test('returns compatible when getDeviceStatus call fails', async () => {
