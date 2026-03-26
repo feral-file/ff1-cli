@@ -243,6 +243,28 @@ function extractArtistName(artists) {
 }
 
 /**
+ * Check whether a media URL can be used as DP1 item source.
+ *
+ * @param {string} url - Candidate media URL
+ * @returns {boolean} True when URL is usable in DP1 source
+ */
+function isUsableSourceUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return false;
+  }
+
+  if (url.startsWith('data:')) {
+    return false;
+  }
+
+  if (url.length > 1024) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Get best media URL from metadata and enrichment source
  *
  * Prioritizes: enrichment_source.animation_url > metadata.animation_url > media_assets.source_url > image_url
@@ -259,51 +281,32 @@ function getBestMediaUrl(
   metadataMediaAssets = [],
   enrichmentMediaAssets = []
 ) {
-  // Priority: enrichment_source.animation_url > metadata.animation_url > media_assets > image_url
+  // Priority: animation_url > media assets > image_url
+  // Choose the first candidate that can be represented in DP1 source.
+  const candidates = [
+    enrichmentSource?.animation_url,
+    metadata?.animation_url,
+    ...(Array.isArray(enrichmentMediaAssets)
+      ? enrichmentMediaAssets.map((asset) => asset?.source_url)
+      : []),
+    ...(Array.isArray(metadataMediaAssets)
+      ? metadataMediaAssets.map((asset) => asset?.source_url)
+      : []),
+    enrichmentSource?.image_url,
+    metadata?.image_url,
+  ];
 
-  // Prefer enrichment_source animation URL first (if enrichment_source is available)
-  if (enrichmentSource && enrichmentSource.animation_url) {
-    return {
-      url: enrichmentSource.animation_url,
-      thumbnail: enrichmentSource.image_url || metadata.image_url || '',
-    };
-  }
-
-  // Fallback to metadata animation URL
-  if (metadata && metadata.animation_url) {
-    return {
-      url: metadata.animation_url,
-      thumbnail: metadata.image_url || (enrichmentSource && enrichmentSource.image_url) || '',
-    };
-  }
-
-  // Check enrichment source media assets (if enrichment_source is available)
-  if (
-    enrichmentSource &&
-    Array.isArray(enrichmentMediaAssets) &&
-    enrichmentMediaAssets.length > 0
-  ) {
-    const asset = enrichmentMediaAssets[0];
-    if (asset && asset.source_url) {
+  for (const candidate of candidates) {
+    if (isUsableSourceUrl(candidate)) {
       return {
-        url: asset.source_url,
+        url: candidate,
         thumbnail: enrichmentSource.image_url || metadata.image_url || '',
       };
     }
   }
 
-  // Check metadata media assets (fallback if enrichment_source not available)
-  if (Array.isArray(metadataMediaAssets) && metadataMediaAssets.length > 0) {
-    const asset = metadataMediaAssets[0];
-    if (asset && asset.source_url) {
-      return {
-        url: asset.source_url,
-        thumbnail: metadata.image_url || (enrichmentSource && enrichmentSource.image_url) || '',
-      };
-    }
-  }
-
-  // Fallback to static image URLs (prefer enrichment_source if available)
+  // Fallback to static image URL even if unsupported.
+  // Caller will validate and provide a clear reason if unusable.
   const imageUrl = (enrichmentSource && enrichmentSource.image_url) || metadata.image_url || '';
   return {
     url: imageUrl,
@@ -409,11 +412,17 @@ function convertToDP1Item(tokenData, duration = 10) {
 
   // Get source URL from indexer data
   // Priority: animation_url > image.url (from getBestMediaUrl)
-  let sourceUrl = token.animation_url || token.animationUrl;
-  if (!sourceUrl && token.image && typeof token.image === 'object') {
-    sourceUrl = token.image.url;
+  const candidateSourceUrls = [
+    token.animation_url || token.animationUrl,
+    token.image && typeof token.image === 'object' ? token.image.url : '',
+  ]
+    .map((value) => String(value || ''))
+    .filter(Boolean);
+
+  let sourceUrl = candidateSourceUrls.find((url) => isUsableSourceUrl(url)) || '';
+  if (!sourceUrl) {
+    sourceUrl = candidateSourceUrls[0] || '';
   }
-  sourceUrl = String(sourceUrl || '');
 
   // Validate source URL
   if (!sourceUrl) {

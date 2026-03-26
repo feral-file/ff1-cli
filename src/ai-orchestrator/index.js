@@ -25,6 +25,66 @@ function stableStringify(value) {
     .join(',')}}`;
 }
 
+/**
+ * Infer a query_requirement tool call from plain-text assistant content.
+ *
+ * Some model providers occasionally return JSON arguments in message content
+ * instead of emitting a formal tool call. This helper extracts JSON payloads
+ * and maps recognized shapes to a synthetic tool call.
+ *
+ * @param {string} content - Assistant text content
+ * @param {number} iterationCount - Current loop iteration number
+ * @returns {Object|null} Synthetic tool call object or null when not recognized
+ */
+function inferToolCallFromContent(content, iterationCount) {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+
+  const trimmed = content.trim();
+  const candidates = [trimmed];
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch && fencedMatch[1]) {
+    candidates.push(fencedMatch[1].trim());
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    candidates.push(trimmed.slice(firstBrace, lastBrace + 1).trim());
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        parsed.requirement &&
+        typeof parsed.requirement === 'object' &&
+        typeof parsed.duration === 'number'
+      ) {
+        return {
+          id: `synthetic_query_requirement_${iterationCount}`,
+          type: 'function',
+          function: {
+            name: 'query_requirement',
+            arguments: JSON.stringify({
+              requirement: parsed.requirement,
+              duration: parsed.duration,
+            }),
+          },
+        };
+      }
+    } catch (_error) {
+      // Ignore parse failures and continue trying other candidates.
+    }
+  }
+
+  return null;
+}
+
 async function createCompletionWithRetry(client, requestParams, maxRetries = 0) {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
@@ -738,21 +798,31 @@ async function buildPlaylistWithAI(params, options = {}) {
         contentText.includes('"requirement"') ||
         contentText.trim().startsWith('{'));
 
-    if (looksLikeToolAttempt && iterationCount < maxIterations - 1) {
-      if (verbose) {
-        console.log(
-          chalk.yellow(
-            'AI returned tool arguments in text. Forcing function call with a system reminder.'
-          )
-        );
+    if (looksLikeToolAttempt) {
+      const inferredToolCall = inferToolCallFromContent(contentText, iterationCount);
+      if (inferredToolCall) {
+        if (verbose) {
+          console.log(
+            chalk.yellow('AI returned JSON in text. Executing inferred query_requirement.')
+          );
+        }
+        message.tool_calls = [inferredToolCall];
+      } else if (iterationCount < maxIterations - 1) {
+        if (verbose) {
+          console.log(
+            chalk.yellow(
+              'AI returned tool arguments in text. Forcing function call with a system reminder.'
+            )
+          );
+        }
+        messages.push(message);
+        messages.push({
+          role: 'system',
+          content:
+            'CRITICAL: You MUST call the required function via tool_calls. Do not output JSON or arguments in plain text. Call the function now.',
+        });
+        continue;
       }
-      messages.push(message);
-      messages.push({
-        role: 'system',
-        content:
-          'CRITICAL: You MUST call the required function via tool_calls. Do not output JSON or arguments in plain text. Call the function now.',
-      });
-      continue;
     }
 
     messages.push(message);

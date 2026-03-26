@@ -21,14 +21,20 @@ Installs a prebuilt binary for macOS/Linux (no Node.js required).
 ## Configure
 
 ```bash
-# Create example config and edit API keys
-ff1 config init
-
-# Validate configuration
-ff1 config validate
+# Guided setup (recommended)
+ff1 setup
 ```
 
 See the full configuration reference here: `./CONFIGURATION.md`.
+
+During setup, you can pick a default FF1 device, so later `send`/`play` commands can run without `-d`.
+
+Manual config path:
+
+```bash
+ff1 config init
+ff1 config validate
+```
 
 ### config.json structure (minimal)
 
@@ -84,7 +90,7 @@ See `./CONFIGURATION.md` for environment variable mappings.
 ff1 chat
 
 # Or natural language in one shot
-ff1 chat "Get tokens 1,2,3 from Ethereum contract 0xabc" -o playlist.json
+ff1 chat "Get 3 works from reas.eth" -o playlist.json
 
 # Deterministic (no AI)
 ff1 build examples/params-example.json -o playlist.json
@@ -146,10 +152,15 @@ Notes:
 ### Natural language (AI)
 
 ```bash
-npm run dev -- chat "Get token 42 from Tezos contract KT1abc"
-npm run dev -- chat "Get tokens 100-105 from Ethereum contract 0xdef" -o playlist.json
-npm run dev -- chat "Get 3 from Social Codes and 2 from 0xabc" -v
+npm run dev -- chat "Get 3 works from reas.eth"
+npm run dev -- chat "Get 3 works from einstein-rosen.tez"
+npm run dev -- chat "Get tokens 52932,52457 from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0" -o playlist.json
 ```
+
+Feed playlists (for example `Unsupervised`, `Social Codes`) depend on your configured feed servers and network reachability.
+Use exact or near-exact playlist titles for best results.
+
+If you prompt with a bare EVM address (for example `from 0x...`), the CLI now tries owner-address lookup first, then automatically falls back to contract lookup when no owned tokens are found.
 
 ### One-shot complex prompt
 
@@ -157,7 +168,7 @@ The model reads your request via the intent parser and turns it into structured 
 
 ```bash
 # Mix sources, shuffle order, set per-item duration, and send to a named device
-npm run dev -- chat "From Ethereum contract 0xabc get tokens 1,2 and from Tezos KT1xyz get token 42; shuffle the order; 7 seconds per item; send to device 'Living Room Display'." -o playlist.json -v
+npm run dev -- chat "From Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 get tokens 52932,52457 and from reas.eth get 2 works; shuffle the order; 7 seconds per item; send to device 'Living Room Display'." -o playlist.json -v
 ```
 
 How it works (at a glance):
@@ -178,7 +189,16 @@ The intent parser recognizes publishing keywords and can both display and publis
 npm run dev -- chat "Build playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; publish to my feed" -o playlist.json -v
 
 # Display on FF1 AND publish to feed
-npm run dev -- chat "Get tokens 1,2 from 0xabc; shuffle; send to my FF1 and publish to feed" -o playlist.json -v
+npm run dev -- chat "Get 3 from Unsupervised; shuffle; send to my FF1 and publish to feed" -o playlist.json -v
+```
+
+For Feral File built playlists, you can reference titles listed in the repository:
+`https://github.com/feral-file/dp1-feed/tree/main/playlists`
+
+Example:
+
+```bash
+npm run dev -- chat "Get 3 from Unsupervised"
 ```
 
 Publishing keywords: "publish", "publish to my feed", "push to feed", "send to feed". The CLI will:
@@ -187,6 +207,8 @@ Publishing keywords: "publish", "publish to my feed", "push to feed", "send to f
 2. If multiple servers → ask which one to use
 3. Build → verify → publish automatically
 4. Display playlist ID and server URL on success
+
+If all configured feed servers are unreachable, the CLI now reports a feed availability error instead of "playlist not found".
 
 ### Deterministic (no AI)
 
@@ -200,23 +222,26 @@ cat params.json | npm run dev -- build -o playlist.json
 ### Validate, sign, and send
 
 ```bash
-# Validate
+# Optional explicit validation (build flows already validate)
 npm run dev -- validate playlist.json
 
 # Sign (uses key from config or override via --key)
 npm run dev -- sign playlist.json -o signed.json
 
-# Send to device (verifies by default)
+# Send to configured default device (verifies by default)
+npm run dev -- send playlist.json
+
+# Send to a specific named device
 npm run dev -- send playlist.json -d "Living Room Display"
 
 # The send path now performs a compatibility preflight check against the target FF1.
 # If the device reports an unsupported FF1 OS version, the command fails with
 # a clear version message before any cast request is sent.
 # Send a hosted DP-1 playlist
-npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
+npm run dev -- send "https://cdn.example.com/playlist.json"
 
 # Play a direct URL
-npm run dev -- play "https://example.com/video.mp4" -d "Living Room Display" --skip-verify
+npm run dev -- play "https://example.com/video.mp4" --skip-verify
 ```
 
 ### SSH access

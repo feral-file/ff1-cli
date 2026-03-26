@@ -1,6 +1,6 @@
 {
   "name": "ff1-cli",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "CLI to fetch NFT information and build DP1 playlists using Grok API",
   "main": "dist/index.js",
   "bin": {
@@ -26,7 +26,7 @@
     "check": "npm run format:check && npm run lint && npm run test",
     "verify": "npm run check && npm run smoke",
     "prepublishOnly": "npm run verify",
-    "test": "tsx tests/ff1-compatibility.test.ts",
+    "test": "tsx --test tests/**/*.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,ts}\"",

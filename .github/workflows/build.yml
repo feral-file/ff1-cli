@@ -37,6 +37,12 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
       - name: Build asset
         run: ${{ matrix.script }}
         env:

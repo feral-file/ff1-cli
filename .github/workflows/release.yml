@@ -104,3 +104,60 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_DIR: ${{ github.workspace }}/.git
           GIT_WORK_TREE: ${{ github.workspace }}
+
+  verify-release:
+    needs: [publish-npm, upload-release-assets]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          TAG="${{ github.event.release.tag_name }}"
+          REQUIRED_ASSETS=(
+            "ff1-cli-darwin-arm64.tar.gz"
+            "ff1-cli-darwin-arm64.tar.gz.sha256"
+            "ff1-cli-linux-x64.tar.gz"
+            "ff1-cli-linux-x64.tar.gz.sha256"
+            "ff1-cli-windows-x64.zip"
+            "ff1-cli-windows-x64.zip.sha256"
+          )
+
+          RELEASE_ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          for asset in "${REQUIRED_ASSETS[@]}"; do
+            if ! grep -qx "$asset" <<< "$RELEASE_ASSETS"; then
+              echo "Missing release asset: $asset"
+              echo "Release assets found:"
+              echo "$RELEASE_ASSETS"
+              exit 1
+            fi
+          done
+
+      - name: Verify npm package version
+        run: |
+          set -euo pipefail
+
+          TAG="${{ github.event.release.tag_name }}"
+          ATTEMPTS=10
+          SLEEP_SECONDS=10
+
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            NPM_VERSION=$(npm view ff1-cli version)
+            if [ "$NPM_VERSION" = "$TAG" ]; then
+              echo "npm version check passed: $NPM_VERSION"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              echo "npm version is $NPM_VERSION, expected $TAG; retrying in ${SLEEP_SECONDS}s (${attempt}/${ATTEMPTS})"
+              sleep "$SLEEP_SECONDS"
+            fi
+          done
+
+          echo "npm version check failed: expected $TAG"
+          exit 1
