@@ -1,4 +1,4 @@
-# Build binaries for macOS, Linux, and Windows. Trigger manually, on pull request, or via workflow_call (e.g. from release.yml).
+# Build binaries for macOS, Linux, and Windows. Trigger manually or via workflow_call (e.g. from release.yml).
 name: Build
 
 on:
@@ -8,7 +8,6 @@ on:
         description: 'Version label for built binaries'
         required: true
         type: string
-  pull_request:
   workflow_call:
     inputs:
       version:

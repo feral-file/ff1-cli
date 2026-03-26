@@ -1,81 +1,135 @@
-# AGENTS.md
+# AGENTS.md — FF1-CLI Repository Contract
 
-Instructions for AI coding agents working on FF1-CLI. This repo is a Node.js CLI for NFT data (Grok AI) and DP-1 playlists. Follow the rules below; run lint and smoke tests before finishing any task.
+This file is the repository-level contract for humans and coding agents working in `ff1-cli`.
 
-## Project overview
+It defines how work is done in this repo. Tool-specific details live in `.cursor/`, `opencode.json`, and shared review prompts.
 
-- **What:** FF1-CLI — CLI for computational art on FF1 (playlists, DP-1 envelopes, validation).
-- **Docs:** Only these files in `/docs`: `README.md`, `FUNCTION_CALLING.md`, `EXAMPLES.md`, `CONFIGURATION.md`, `RELEASING.md`. Root README is minimal with links to `/docs`. Do not add CHANGELOG, SETUP, or other new doc files.
-- **Docs updates:** Only when user-facing behavior changes. No docs for migrations, legacy cleanups, or internal refactors.
+## Repository overview
 
-## Setup and commands
+- Project: `ff1-cli`
+- Purpose: a Node.js CLI for FF1 computational art workflows, DP-1 envelopes, playlist validation, playlist publishing, and FF1 device operations
+- Primary runtime: Node.js + TypeScript
+- Domain terms to keep consistent: `FF1`, `DP-1 envelope`, `DP-1 conformance`, `computational art playlist`, `channel endorsement`, `FF1 device`
 
-- Install deps: `npm install`
-- Lint (required after code changes): `npm run lint:fix` — no warnings or errors before completing tasks.
-- Smoke tests before completing a task:
-  - `npm run build`
-  - `node dist/index.js validate examples/sample-playlist.json`
-  - `node dist/index.js config validate`
+## Portable operating model
 
-## Code style
+Default sequence:
 
-- **Use TypeScript** for new or updated source code (`.ts`). Legacy `.js` files remain until we migrate.
-- ESLint + Prettier (see `eslint.config.js`, `.prettierrc`): single quotes, 2-space indent, semicolons, 100 char width.
-- `const` by default; `let` only when reassigning. Strict equality (`===`, `!==`). Curly braces in control flow.
-- Prefix unused variables with `_` (e.g. `_error`).
-- Prefer `async`/`await`; wrap async code in try/catch.
+`spec -> design -> tasks -> tests -> implementation -> verification -> review -> merge`
 
-## Voice and writing (docs, comments, CLI output)
+TDD is the default discipline for behavior changes. For small, low-risk fixes, the sequence can be compressed, but work must still remain scoped, verified, reviewed, and traceable.
 
-- Pragmatic, clear, direct: short sentences; no corporate jargon; honest about limits. Use “we”; concrete next steps.
-- Use precise terms: FF1, DP-1 envelope, DP-1 conformance, computational art playlists, channel endorsements, etc. Use `backticks` for files, dirs, functions.
-- **Docs:** Start with why, then what/how, then examples. Skimmable headings; lists and short paragraphs.
-- **CLI/logs:** One idea per line. Success = one sentence past tense. Errors = cause + minimal context + next action. No stack traces unless `DEBUG`. No emojis; specific nouns (e.g. “DP-1 envelope” not “it”). If recovery exists, include it (e.g. “Re-run `node dist/index.js config validate`”).
+## Non-negotiables
 
-## Code philosophy and refactoring
+- Prefer replacing or deleting flawed code paths over narrow local patches when that yields a clearer design.
+- Do not preserve legacy behavior, compatibility shims, migrations, or transitional paths unless explicitly requested.
+- Keep functions small, single-purpose, and testable. Break up functions that exceed roughly 30 lines, carry multiple concerns, or hide business rules in branching.
+- Use TypeScript for new or updated source when practical. Legacy `.js` files may remain until intentionally migrated.
+- Prefer comments that carry durable engineering context for future amendment by later agent sessions.
+- When code is non-obvious, store design intent, trade-offs, invariants, edge cases, and coding constraints in comments near the code they govern.
+- Update JSDoc whenever a function changes. New or updated functions should have complete JSDoc.
 
-- **No backward compatibility:** Remove legacy code when refactoring; no deprecation period. Remove unused/obsolete code immediately.
-- **Functions:** Single responsibility; 10–20 lines preferred. Break complex flows into small composed functions. Pure when possible; clear names.
-- **Refactor checklist:** Remove all legacy code; break large functions; extract reuse; add/update JSDoc; remove unused imports/vars; prefer composition.
-- **Break up a function when:** >30 lines, >3 nesting levels, multiple unrelated concerns, “Step 1/2” comments, or hard to name.
+## Coding style and comments
 
-## JSDoc (required for all functions)
+- Follow a Go-style documentation standard for comments even though the repo is TypeScript-first.
+- Write comments as clear sentences. Start doc comments with the symbol name when documenting a function, type, constant, or module.
+- Prefer comments that explain `why`, `why now`, `why this shape`, and `what must not change` over comments that restate syntax.
+- Add comments generously when the code encodes business rules, validation invariants, protocol expectations, fallback behavior, security assumptions, or trade-offs that would be easy for a later agent to break.
+- Keep short obvious code paths uncommented. Extra comments are encouraged only when they add future maintenance value.
+- When a compromise is intentional, record the constraint and rejected alternative in the comment.
+- When behavior depends on external systems or repo conventions, record that dependency in the comment so a later agent can amend safely.
+- Preserve high-signal comments during refactors. Update them when the reasoning changes.
 
-- New functions: full JSDoc before committing. Updated functions: JSDoc updated to match.
-- Include: `@param` with types, `@returns` with type and description, `@throws` for exceptions, `@example` for non-trivial usage. Document object properties (e.g. `@param {Object} options`, `options.field`).
+## Repo-specific implementation rules
 
-## Function calling (new capabilities)
+- Docs may only be updated in `/docs/README.md`, `/docs/FUNCTION_CALLING.md`, `/docs/EXAMPLES.md`, `/docs/CONFIGURATION.md`, `/docs/RELEASING.md`, or `/docs/PROJECT_SPEC.md`.
+- Do not add new root or `/docs` process documents beyond the approved set above.
+- Only update docs when behavior, usage, operations, or user-facing output changes.
+- Config priority remains `config.json` > `.env` > defaults. Validate config before use.
+- Never commit secrets or local runtime files such as `config.json`, `.env`, or `node_modules`.
+- Temporary debug scripts belong in `/.tmp`, should not be committed, and should be removed after use.
 
-When adding a new function-calling capability:
+## Architecture and API design
 
-1. Implement in `src/function-calling/[module].ts`
-2. Add schema in `src/function-calling/index.ts` and register in the function registry
-3. Update `/docs/FUNCTION_CALLING.md`
-4. Run `npm run lint:fix`
+These sections are intentionally reserved for the repo owner to define.
 
-Function requirements: return shape with `success`; validate inputs early (fail fast); clear error messages; full JSDoc; single responsibility; small (10–20 lines ideal).
+- Architecture boundaries: `TBD by repo owner`
+- API design rules: `TBD by repo owner`
 
-## Configuration and security
+Until those rules are defined, prefer conservative changes that improve clarity without locking in new architectural patterns.
 
-- Config priority: `config.json` > `.env` > defaults. Validate config before use.
-- Never commit: `config.json`, `.env`, `node_modules`.
+## Required workflow for substantial changes
 
-## Error handling
+Before implementing a major feature, flow change, refactor, or architectural update:
 
-- Descriptive messages; log with context; use chalk for CLI output; support DEBUG mode; fail fast with clear validation.
+1. Read `docs/PROJECT_SPEC.md`.
+2. Read the relevant docs and source files for the affected area.
+3. Summarize current behavior, constraints, and invariants.
+4. Write or update a short spec or design note in the handoff if no formal artifact exists.
+5. Break the work into concrete tasks.
+6. Identify expected behaviors and verification steps.
+7. Add or update tests before implementation where behavior changes.
+8. Then implement, carrying forward the relevant design constraints in code comments when the resulting code would otherwise lose that context.
 
-## Testing and temporary scripts
+If no relevant spec or current-state summary exists for a substantial change, do not jump straight to implementation.
 
-- Test scripts for debugging: put in `/.tmp`; do not commit; delete after verification.
+## TDD and verification expectations
 
-## Git and commits
+For behavior changes:
 
-- When the user asks for a commit: use Conventional Commits. Run `npm run lint:fix` before committing. Prefer atomic commits; legacy removal in a separate commit when possible.
-- Format: `<type>(<scope>): <subject>` with optional body/footer. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `style`.
+1. Write or update focused tests first when practical.
+2. Implement until tests pass.
+3. Refactor while keeping tests green.
+4. Run the repo verification commands before handing work off or finishing.
 
-## Task workflows
+Required verification commands:
 
-- **New feature:** Implement in small functions with JSDoc → lint → update relevant doc → add example to EXAMPLES.md if needed → run smoke tests.
-- **Bug fix:** Fix → update JSDoc if needed → lint → test → update docs only if behavior changed.
-- **Refactor:** Remove legacy → break down large functions → add/update JSDoc → lint → test → update docs if user-facing.
-- **Doc update:** Edit one of the four existing docs only; do not create new doc files.
+```bash
+npm run lint:fix
+npm test
+npm run build
+GROK_API_KEY=dummy node dist/index.js validate examples/sample-playlist.json
+GROK_API_KEY=dummy node dist/index.js config validate
+```
+
+If strict test-first sequencing is not practical, call out the reason in the handoff or final summary.
+
+## Definition of done
+
+A task is complete only when:
+
+1. The requested change is implemented.
+2. Relevant tests were added or updated, or an explicit reason is given when none were appropriate.
+3. Verification passes cleanly.
+4. Docs are updated if user-facing behavior changed.
+5. Review has accepted the change.
+6. The branch is merge-ready without hidden follow-up work.
+
+## Review loop
+
+After implementation, run a review loop before merge or release preparation.
+
+1. Create a compact handoff with goal, scope, files changed, key decisions, checks run, and known limitations.
+2. Run a fresh-context review using the shared contract in `prompts/code-review.md`.
+3. If review returns `Verdict: revise`, address findings, re-run verification, update the handoff, and review again.
+4. Only proceed to commit, push, or PR when the reviewer returns `Verdict: accept`.
+
+Tool mappings:
+
+- Cursor reviewer: `.cursor/agents/reviewer.md`
+- OpenCode reviewer: `opencode.json`
+- Codex reviewer flow: use `prompts/code-review.md` as the shared review contract
+
+## Commit and PR conventions
+
+- Use Conventional Commits when creating commits.
+- Keep commits focused and reviewable.
+- Prefer separate commits for large legacy removal when that clarifies review.
+- PR or handoff summaries should include goal, scope, decisions, tests, and remaining risks.
+
+## Authoritative tool-specific files
+
+- Cursor rules: `.cursor/rules/`
+- Cursor sub-agents: `.cursor/agents/`
+- Shared review prompt: `prompts/code-review.md`
+- OpenCode config: `opencode.json`
