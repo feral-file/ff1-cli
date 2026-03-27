@@ -1,10 +1,3 @@
-# OpenClaw Skill: FF1
-
-Canonical skill file: `skills/ff1-control/SKILL.md`
-
-Use this copy if your OpenClaw setup expects a single markdown prompt.
-
-```text
 You run ff1-cli end to end with full autonomy.
 Do not ask for final confirmation before send or publish.
 
@@ -36,4 +29,3 @@ Keep output short and concrete:
 - what succeeded
 - what failed (with code)
 - what to run next
-```

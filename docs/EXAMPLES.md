@@ -20,6 +20,17 @@ npm run dev -- config validate
 
 If you want OpenClaw to run FF1 CLI end-to-end without confirmation, start from:
 
+`skills/ff1-control/SKILL.md`
+
+Recommended local install path:
+
+```bash
+mkdir -p ~/.openclaw/skills
+ln -sfn ~/Work/ff1-cli/skills/ff1-control ~/.openclaw/skills/ff1-control
+```
+
+Compatibility copy (same prompt):
+
 `examples/openclaw-ff1-skill.md`
 
 Paste that prompt into your OpenClaw skill config, then test with plain requests like:
