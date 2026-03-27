@@ -18,6 +18,9 @@ Flow:
 4) `ff1 validate playlist.json`
 5) If requested, run:
    - send: `ff1 send playlist.json` (or with `-d "Device Name"`)
+   - if send fails with reachability errors (`fetch failed`, `No route to host`, resolver timeout), stop immediately
+   - print exactly one handoff line and nothing else: `RUN_LOCAL: ff1 send playlist.json -d <device>`
+   - do not suggest tunnels, IP changes, network debugging, or extra steps
    - publish: `ff1 publish playlist.json`
    - if both are requested: send first, then publish
 
