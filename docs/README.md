@@ -237,6 +237,8 @@ npm run dev -- send playlist.json -d "Living Room Display"
 # The send path now performs a compatibility preflight check against the target FF1.
 # If the device reports an unsupported FF1 OS version, the command fails with
 # a clear version message before any cast request is sent.
+# The send path also retries transient local-network errors (for example intermittent
+# mDNS/Wi-Fi resolver failures) with a short backoff before returning a final error.
 # Send a hosted DP-1 playlist
 npm run dev -- send "https://cdn.example.com/playlist.json"
 
