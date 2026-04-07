@@ -127,6 +127,7 @@ export interface BuildPlaylistOptions {
   outputPath?: string;
   modelName?: string;
   interactive?: boolean;
+  deviceName?: string;
 }
 
 export interface BuildPlaylistResult {

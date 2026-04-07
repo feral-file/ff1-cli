@@ -184,7 +184,7 @@ export async function buildPlaylist(
   userRequest: string,
   options: BuildPlaylistOptions = {}
 ): Promise<BuildPlaylistResult | null> {
-  const { verbose = false, outputPath = 'playlist.json', modelName, interactive = true } = options;
+  const { verbose = false, outputPath = 'playlist.json', modelName, interactive = true, deviceName: defaultDeviceName } = options;
 
   // Enable verbose logging if requested
   if (verbose) {
@@ -203,7 +203,7 @@ export async function buildPlaylist(
     );
 
     if (sendMatch) {
-      const deviceName = sendMatch[1]?.trim();
+      const deviceName = sendMatch[1]?.trim() || defaultDeviceName;
       const { confirmPlaylistForSending } = await import('./utilities/playlist-send');
       const confirmation = await confirmPlaylistForSending(outputPath, deviceName);
       if (!confirmation.success) {

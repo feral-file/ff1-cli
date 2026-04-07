@@ -70,9 +70,7 @@ ff1 config validate
     "devices": [
       {
         "name": "Living Room Display",
-        "host": "http://192.168.1.100:1111",
-        "apiKey": "",
-        "topicID": ""
+        "host": "http://192.168.1.100:1111"
       }
     ]
   }
@@ -131,7 +129,7 @@ Notes:
 ## Commands (cheat sheet)
 
 - `chat [content]` – AI-driven natural language playlists
-  - Options: `-o, --output <file>`, `-m, --model <name>`, `-v, --verbose`
+  - Options: `-o, --output <file>`, `-m, --model <name>`, `-d, --device <name>`, `-v, --verbose`
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `play <url>` – Send a media URL directly to an FF1 device

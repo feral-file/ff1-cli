@@ -1,4 +1,5 @@
 import { Bonjour } from 'bonjour-service';
+import { execFile } from 'child_process';
 
 export interface FF1DiscoveredDevice {
   name: string;
@@ -18,7 +19,7 @@ interface DiscoveryOptions {
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 2000;
+const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Normalize mDNS TXT records to string values.
@@ -88,18 +89,129 @@ function getHostnameId(host: string): string {
 }
 
 /**
+ * Parse avahi-browse -t -r output into FF1DiscoveredDevice list.
+ * Handles resolved records (lines starting with '=') with hostname/address/port/txt fields.
+ */
+function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
+  const devices = new Map<string, FF1DiscoveredDevice>();
+  const lines = output.split('\n');
+  let current: Partial<FF1DiscoveredDevice> & { rawHost?: string } | null = null;
+
+  for (const line of lines) {
+    // Resolved record header: "=  wlan0 IPv4 FF1-HH9JSNOC   _ff1._tcp   local"
+    if (/^=\s/.test(line)) {
+      if (current?.rawHost) {
+        const host = normalizeMdnsHost(current.rawHost).toLowerCase();
+        const key = `${host}:${current.port ?? 1111}`;
+        const id = getHostnameId(host) || current.id;
+        devices.set(key, {
+          name: current.name || id || host,
+          host,
+          port: current.port ?? 1111,
+          id,
+          txt: current.txt,
+        });
+      }
+      const parts = line.trim().split(/\s+/);
+      // parts: ['=', 'wlan0', 'IPv4', 'FF1-HH9JSNOC', '_ff1._tcp', 'local']
+      const serviceName = parts[3] || '';
+      current = { name: serviceName.toLowerCase() };
+      continue;
+    }
+
+    if (!current) continue;
+
+    const hostnameMatch = line.match(/^\s+hostname\s*=\s*\[(.+)\]/);
+    if (hostnameMatch) {
+      current.rawHost = hostnameMatch[1];
+      continue;
+    }
+
+    const portMatch = line.match(/^\s+port\s*=\s*\[(\d+)\]/);
+    if (portMatch) {
+      current.port = parseInt(portMatch[1], 10);
+      continue;
+    }
+
+    const txtMatch = line.match(/^\s+txt\s*=\s*\[(.+)\]/);
+    if (txtMatch) {
+      const txt: Record<string, string> = {};
+      const pairs = txtMatch[1].matchAll(/"([^=]+)=([^"]*)"/g);
+      for (const [, k, v] of pairs) {
+        txt[k] = v;
+      }
+      current.txt = txt;
+      if (txt.name) current.name = txt.name;
+      if (txt.id) current.id = txt.id;
+      continue;
+    }
+  }
+
+  // Flush last record
+  if (current?.rawHost) {
+    const host = normalizeMdnsHost(current.rawHost).toLowerCase();
+    const key = `${host}:${current.port ?? 1111}`;
+    const id = getHostnameId(host) || current.id;
+    devices.set(key, {
+      name: current.name || id || host,
+      host,
+      port: current.port ?? 1111,
+      id,
+      txt: current.txt,
+    });
+  }
+
+  return Array.from(devices.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Discover FF1 devices using avahi-browse (Linux).
+ * Returns null if avahi-browse is not available.
+ */
+function discoverViaAvahi(): Promise<FF1DiscoveryResult | null> {
+  return new Promise((resolve) => {
+    execFile('avahi-browse', ['-t', '-r', '_ff1._tcp'], { timeout: 8000 }, (error, stdout, stderr) => {
+      if (error && !stdout) {
+        // avahi-browse not available or failed with no output
+        resolve(null);
+        return;
+      }
+      try {
+        const devices = parseAvahiBrowseOutput(stdout);
+        resolve({ devices });
+      } catch (_parseError) {
+        resolve(null);
+      }
+    });
+  });
+}
+
+/**
  * Discover FF1 devices via mDNS using the `_ff1._tcp` service.
+ * On Linux, uses avahi-browse for reliable multi-device discovery.
+ * Falls back to bonjour-service on other platforms or if avahi is unavailable.
  *
  * @param {Object} [options] - Discovery options
- * @param {number} [options.timeoutMs] - How long to browse before returning results
+ * @param {number} [options.timeoutMs] - How long to browse before returning results (bonjour fallback only)
  * @returns {Promise<FF1DiscoveryResult>} Discovered FF1 devices and optional error
  * @throws {Error} Never throws; returns empty list on errors
  * @example
- * const result = await discoverFF1Devices({ timeoutMs: 2000 });
+ * const result = await discoverFF1Devices();
  */
 export async function discoverFF1Devices(
   options: DiscoveryOptions = {}
 ): Promise<FF1DiscoveryResult> {
+  if (process.platform === 'linux') {
+    const avahiResult = await discoverViaAvahi();
+    if (avahiResult !== null) {
+      return avahiResult;
+    }
+  }
+
+  return discoverViaBonjour(options);
+}
+
+function discoverViaBonjour(options: DiscoveryOptions): Promise<FF1DiscoveryResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return new Promise((resolve) => {

@@ -176,7 +176,7 @@ async function discoverAndSelectDevice(
 ): Promise<DeviceDiscoverySelection> {
   const allowSkip = options?.allowSkip && existingDevices.length > 0;
 
-  const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
+  const discoveryResult = await discoverFF1Devices();
   const discoveredDevices = discoveryResult.devices;
 
   if (discoveryResult.error && discoveredDevices.length === 0) {
@@ -277,12 +277,10 @@ function upsertDevice(
     devices[existingIndex] = {
       ...devices[existingIndex],
       ...newDevice,
-      apiKey: devices[existingIndex].apiKey || '',
-      topicID: devices[existingIndex].topicID || '',
     };
     return { devices, updated: true };
   }
-  devices.push({ apiKey: '', topicID: '', ...newDevice });
+  devices.push({ ...newDevice });
   return { devices, updated: false };
 }
 
@@ -655,11 +653,12 @@ program
   .argument('[content]', 'Optional: Direct chat content (non-interactive mode)')
   .option('-o, --output <filename>', 'Output filename for the playlist', 'playlist.json')
   .option('-m, --model <name>', 'AI model to use (grok, gpt, gemini) - defaults to config setting')
+  .option('-d, --device <name>', 'Target FF1 device name (defaults to first configured device)')
   .option('-v, --verbose', 'Show detailed technical output of function calls', false)
   .action(
     async (
       content: string | undefined,
-      options: { output: string; model?: string; verbose: boolean }
+      options: { output: string; model?: string; device?: string; verbose: boolean }
     ) => {
       try {
         // Load and validate configuration
@@ -698,6 +697,7 @@ program
               outputPath: options.output,
               modelName: modelName,
               interactive: false, // Non-interactive mode
+              deviceName: options.device,
             });
 
             // Print final summary
@@ -779,6 +779,7 @@ program
               verbose: options.verbose,
               outputPath: options.output,
               modelName: modelName,
+              deviceName: options.device,
             });
 
             // Print summary after each response
