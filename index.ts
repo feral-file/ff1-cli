@@ -396,7 +396,7 @@ program
         };
       }
 
-      const existingDevice = config.ff1Devices?.devices?.[0];
+      const existingDevices = config.ff1Devices?.devices || [];
       const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
       const discoveredDevices = discoveryResult.devices;
       let selectedDeviceIndex: number | null = null;
@@ -412,23 +412,31 @@ program
         console.log(chalk.dim(`mDNS discovery warning: ${discoveryResult.error}`));
       }
 
+      if (existingDevices.length > 0) {
+        console.log(chalk.dim(`\nConfigured devices: ${existingDevices.map((d) => d.name || d.host).join(', ')}`));
+      }
+
       if (discoveredDevices.length > 0) {
         console.log(chalk.green('\nFF1 devices on your network:'));
         discoveredDevices.forEach((device, index) => {
           const displayId = device.id || device.name || device.host;
-          console.log(chalk.dim(`  ${index + 1}) ${displayId}`));
+          const alreadyConfigured = existingDevices.some(
+            (d) => d.host === normalizeDeviceHost(`${device.host}:${device.port}`)
+          );
+          const suffix = alreadyConfigured ? chalk.dim(' (already configured)') : '';
+          console.log(chalk.dim(`  ${index + 1}) ${displayId}${suffix}`));
         });
 
-        const hasExistingHost = Boolean(existingDevice?.host);
-        const selectionPrompt = hasExistingHost
-          ? `Select device [1-${discoveredDevices.length}], enter ID/host, press Enter to keep current, or type m for manual entry: `
+        const hasExistingDevices = existingDevices.length > 0;
+        const selectionPrompt = hasExistingDevices
+          ? `Select device [1-${discoveredDevices.length}], enter ID/host, press Enter to skip, or type m for manual entry: `
           : `Select device [1-${discoveredDevices.length}], enter ID/host, or press Enter for manual entry: `;
         while (true) {
           const selectionAnswer = (await ask(selectionPrompt)).trim();
           if (!selectionAnswer) {
-            if (hasExistingHost) {
+            if (hasExistingDevices) {
               shouldPromptManualDevice = false;
-              console.log(chalk.dim('Keeping existing FF1 device.'));
+              console.log(chalk.dim('Keeping existing devices.'));
             }
             break;
           }
@@ -485,19 +493,6 @@ program
       const selectedDevice =
         selectedDeviceIndex === null ? null : discoveredDevices[selectedDeviceIndex];
       {
-        const existingHost = existingDevice?.host || '';
-        let rawDefaultDeviceId = '';
-        if (existingHost) {
-          // If host is a .local device, extract just the device ID segment.
-          // Otherwise keep the full host (IP address or multi-label domain).
-          const hostWithoutScheme = existingHost.replace(/^https?:\/\//, '');
-          if (hostWithoutScheme.includes('.local')) {
-            rawDefaultDeviceId = hostWithoutScheme.split('.')[0] || '';
-          } else {
-            rawDefaultDeviceId = hostWithoutScheme;
-          }
-        }
-        const defaultDeviceId = isMissingConfigValue(rawDefaultDeviceId) ? '' : rawDefaultDeviceId;
         let hostValue = '';
         if (selectedDevice) {
           hostValue = normalizeDeviceHost(`${selectedDevice.host}:${selectedDevice.port}`);
@@ -506,14 +501,13 @@ program
               `Using discovered device: ${selectedDevice.name} (${selectedDevice.host}:${selectedDevice.port})`
             )
           );
-        } else if (!shouldPromptManualDevice && existingHost) {
-          hostValue = normalizeDeviceHost(existingHost);
+        } else if (!shouldPromptManualDevice) {
+          // User chose to keep existing devices, skip adding
+          hostValue = '';
         } else {
-          const idPrompt = defaultDeviceId
-            ? `Device ID (e.g. ff1-ABCD1234) [${defaultDeviceId}]: `
-            : 'Device ID (e.g. ff1-ABCD1234): ';
+          const idPrompt = 'Device ID (e.g. ff1-ABCD1234): ';
           const idAnswer = await ask(idPrompt);
-          const rawDeviceId = idAnswer || defaultDeviceId;
+          const rawDeviceId = idAnswer;
 
           if (rawDeviceId) {
             const looksLikeHost =
@@ -529,27 +523,36 @@ program
           }
         }
 
-        const discoveredName = selectedDevice?.name || selectedDevice?.id || '';
-        const rawName = existingDevice?.name || discoveredName || 'ff1';
-        const defaultName = isMissingConfigValue(rawName) ? '' : rawName;
-        const namePrompt = defaultName
-          ? `Device name (kitchen, office, etc.) [${defaultName}]: `
-          : 'Device name (kitchen, office, etc.): ';
-        const nameAnswer = await ask(namePrompt);
-        const deviceName = nameAnswer || defaultName || 'ff1';
-
         if (hostValue) {
-          config.ff1Devices = {
-            devices: [
-              {
-                ...existingDevice,
-                name: deviceName,
-                host: hostValue,
-                apiKey: existingDevice?.apiKey || '',
-                topicID: existingDevice?.topicID || '',
-              },
-            ],
+          const discoveredName = selectedDevice?.name || selectedDevice?.id || '';
+          const defaultName = discoveredName || 'ff1';
+          const namePrompt = defaultName !== 'ff1'
+            ? `Device name (kitchen, office, etc.) [${defaultName}]: `
+            : 'Device name (kitchen, office, etc.): ';
+          const nameAnswer = await ask(namePrompt);
+          const deviceName = nameAnswer || defaultName || 'ff1';
+
+          const newDevice = {
+            name: deviceName,
+            host: hostValue,
+            apiKey: '',
+            topicID: '',
           };
+
+          // Replace existing device with same host, or append
+          const existingIndex = existingDevices.findIndex((d) => d.host === hostValue);
+          const updatedDevices = [...existingDevices];
+          if (existingIndex !== -1) {
+            updatedDevices[existingIndex] = { ...updatedDevices[existingIndex], ...newDevice, apiKey: updatedDevices[existingIndex].apiKey || '', topicID: updatedDevices[existingIndex].topicID || '' };
+            console.log(chalk.dim(`Updated existing device: ${deviceName}`));
+          } else {
+            updatedDevices.push(newDevice);
+            console.log(chalk.dim(`Added device: ${deviceName}`));
+          }
+
+          config.ff1Devices = { devices: updatedDevices };
+        } else if (existingDevices.length > 0) {
+          config.ff1Devices = { devices: existingDevices };
         }
       }
 
@@ -624,11 +627,11 @@ program
           ok: !isMissingConfigValue(config.playlist?.privateKey || ''),
         },
         {
-          label: 'FF1 device host',
-          ok: !isMissingConfigValue(config.ff1Devices?.devices?.[0]?.host),
-          detail: isMissingConfigValue(config.ff1Devices?.devices?.[0]?.host)
-            ? undefined
-            : config.ff1Devices?.devices?.[0]?.host,
+          label: `FF1 devices (${config.ff1Devices?.devices?.length || 0})`,
+          ok: (config.ff1Devices?.devices?.length || 0) > 0 && !isMissingConfigValue(config.ff1Devices?.devices?.[0]?.host),
+          detail: (config.ff1Devices?.devices || [])
+            .map((d) => `${d.name || 'unnamed'} → ${d.host}`)
+            .join(', ') || undefined,
         },
       ];
 
@@ -1290,6 +1293,290 @@ program
         console.error(chalk.dim(`  Details: ${result.details}`));
       }
       process.exit(1);
+    } catch (error) {
+      console.error(chalk.red('\nError:'), (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+const deviceCommand = program
+  .command('device')
+  .description('Manage configured FF1 devices');
+
+deviceCommand
+  .command('list')
+  .description('List all configured FF1 devices')
+  .action(async () => {
+    try {
+      const configPath = await resolveExistingConfigPath();
+      if (!configPath) {
+        console.log(chalk.red('config.json not found'));
+        console.log(chalk.dim('Run: ff1 setup'));
+        process.exit(1);
+      }
+
+      const config = await readConfigFile(configPath);
+      const devices = config.ff1Devices?.devices || [];
+
+      if (devices.length === 0) {
+        console.log(chalk.yellow('\nNo devices configured'));
+        console.log(chalk.dim('Run: ff1 device add'));
+        console.log();
+        return;
+      }
+
+      console.log(chalk.blue(`\nFF1 Devices (${devices.length})\n`));
+      devices.forEach((device, index) => {
+        const isFirst = index === 0;
+        const marker = isFirst ? chalk.green('→') : ' ';
+        const nameLabel = device.name || 'unnamed';
+        console.log(`${marker} ${chalk.bold(nameLabel)}`);
+        console.log(`    Host: ${chalk.dim(device.host)}`);
+        if (device.apiKey) {
+          console.log(`    API key: ${chalk.green('Set')}`);
+        }
+        if (device.topicID) {
+          console.log(`    Topic: ${chalk.dim(device.topicID)}`);
+        }
+        if (isFirst) {
+          console.log(`    ${chalk.dim('(default)')}`);
+        }
+        console.log();
+      });
+    } catch (error) {
+      console.error(chalk.red('\nError:'), (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+deviceCommand
+  .command('add')
+  .description('Add a new FF1 device (with mDNS discovery)')
+  .option('--host <host>', 'Device host (skip discovery)')
+  .option('--name <name>', 'Device name')
+  .action(async (options: { host?: string; name?: string }) => {
+    let rl: readline.Interface | null = null;
+    try {
+      const configPath = await resolveExistingConfigPath();
+      if (!configPath) {
+        console.log(chalk.red('config.json not found'));
+        console.log(chalk.dim('Run: ff1 setup'));
+        process.exit(1);
+      }
+
+      const config = await readConfigFile(configPath);
+      const existingDevices = config.ff1Devices?.devices || [];
+
+      rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      const ask = async (question: string): Promise<string> =>
+        new Promise((resolve) => {
+          rl!.question(chalk.yellow(question), (answer: string) => {
+            resolve(answer.trim());
+          });
+        });
+
+      let hostValue = '';
+      let discoveredName = '';
+
+      if (options.host) {
+        hostValue = normalizeDeviceHost(options.host);
+      } else {
+        console.log(chalk.blue('\nDiscover FF1 devices...\n'));
+        const discoveryResult = await discoverFF1Devices({ timeoutMs: 2000 });
+        const discoveredDevices = discoveryResult.devices;
+
+        if (discoveryResult.error && discoveredDevices.length === 0) {
+          const errorMessage = discoveryResult.error.endsWith('.')
+            ? discoveryResult.error
+            : `${discoveryResult.error}.`;
+          console.log(chalk.dim(`mDNS discovery failed: ${errorMessage}`));
+        } else if (discoveryResult.error) {
+          console.log(chalk.dim(`mDNS discovery warning: ${discoveryResult.error}`));
+        }
+
+        if (discoveredDevices.length > 0) {
+          console.log(chalk.green('FF1 devices on your network:'));
+          discoveredDevices.forEach((device, index) => {
+            const displayId = device.id || device.name || device.host;
+            const normalized = normalizeDeviceHost(`${device.host}:${device.port}`);
+            const alreadyConfigured = existingDevices.some((d) => d.host === normalized);
+            const suffix = alreadyConfigured ? chalk.dim(' (already configured)') : '';
+            console.log(chalk.dim(`  ${index + 1}) ${displayId}${suffix}`));
+          });
+
+          while (true) {
+            const selectionAnswer = (
+              await ask(`\nSelect device [1-${discoveredDevices.length}], enter ID/host, or type m for manual entry: `)
+            ).trim();
+
+            if (!selectionAnswer || selectionAnswer.toLowerCase() === 'm') {
+              break;
+            }
+
+            const parsedIndex = Number.parseInt(selectionAnswer, 10);
+            if (
+              !Number.isNaN(parsedIndex) &&
+              `${parsedIndex}` === selectionAnswer &&
+              parsedIndex >= 1 &&
+              parsedIndex <= discoveredDevices.length
+            ) {
+              const selected = discoveredDevices[parsedIndex - 1];
+              hostValue = normalizeDeviceHost(`${selected.host}:${selected.port}`);
+              discoveredName = selected.name || selected.id || '';
+              break;
+            }
+
+            const normalizedSelection = selectionAnswer.toLowerCase();
+            const normalizedWithPrefix = normalizedSelection.startsWith('ff1-')
+              ? normalizedSelection
+              : `ff1-${normalizedSelection}`;
+            const matched = discoveredDevices.find((device) => {
+              const candidates = [
+                device.id,
+                device.name,
+                device.host,
+                `${device.host}:${device.port}`,
+              ]
+                .filter((value): value is string => Boolean(value))
+                .map((value) => value.toLowerCase());
+              return (
+                candidates.includes(normalizedSelection) ||
+                candidates.includes(normalizedWithPrefix)
+              );
+            });
+
+            if (matched) {
+              hostValue = normalizeDeviceHost(`${matched.host}:${matched.port}`);
+              discoveredName = matched.name || matched.id || '';
+              break;
+            }
+
+            console.log(chalk.red('Invalid selection. Try again.'));
+          }
+        } else if (!discoveryResult.error) {
+          console.log(chalk.dim('No FF1 devices found via mDNS.'));
+        }
+
+        if (!hostValue) {
+          const idAnswer = await ask('Device ID or host (e.g. ff1-ABCD1234): ');
+          if (!idAnswer) {
+            console.log(chalk.dim('\nNo device added.'));
+            rl.close();
+            return;
+          }
+
+          const looksLikeHost =
+            idAnswer.includes('.') || idAnswer.includes(':') || idAnswer.startsWith('http');
+          if (looksLikeHost) {
+            hostValue = normalizeDeviceHost(idAnswer);
+          } else {
+            const deviceId = idAnswer.startsWith('ff1-') ? idAnswer : `ff1-${idAnswer}`;
+            hostValue = normalizeDeviceHost(`${deviceId}.local`);
+          }
+        }
+      }
+
+      // Check for duplicate
+      const existingIndex = existingDevices.findIndex((d) => d.host === hostValue);
+      if (existingIndex !== -1) {
+        console.log(
+          chalk.yellow(`\nDevice already configured: ${existingDevices[existingIndex].name || existingDevices[existingIndex].host}`)
+        );
+        const overwrite = await promptYesNo(ask, 'Update this device?', false);
+        if (!overwrite) {
+          console.log(chalk.dim('No changes made.'));
+          rl.close();
+          return;
+        }
+      }
+
+      const defaultName = options.name || discoveredName || '';
+      const namePrompt = defaultName
+        ? `Device name (kitchen, office, etc.) [${defaultName}]: `
+        : 'Device name (kitchen, office, etc.): ';
+      const nameAnswer = await ask(namePrompt);
+      const deviceName = nameAnswer || defaultName || 'ff1';
+
+      // Check for duplicate name
+      const nameConflict = existingDevices.find(
+        (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
+      );
+      if (nameConflict) {
+        console.log(chalk.yellow(`Warning: another device already uses the name "${deviceName}"`));
+      }
+
+      const newDevice = {
+        name: deviceName,
+        host: hostValue,
+        apiKey: '',
+        topicID: '',
+      };
+
+      const updatedDevices = [...existingDevices];
+      if (existingIndex !== -1) {
+        updatedDevices[existingIndex] = {
+          ...updatedDevices[existingIndex],
+          ...newDevice,
+          apiKey: updatedDevices[existingIndex].apiKey || '',
+          topicID: updatedDevices[existingIndex].topicID || '',
+        };
+        console.log(chalk.green(`\nUpdated device: ${deviceName}`));
+      } else {
+        updatedDevices.push(newDevice);
+        console.log(chalk.green(`\nAdded device: ${deviceName}`));
+      }
+
+      config.ff1Devices = { devices: updatedDevices };
+      await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+      console.log(chalk.dim(`Total devices: ${updatedDevices.length}\n`));
+
+      rl.close();
+    } catch (error) {
+      console.error(chalk.red('\nError:'), (error as Error).message);
+      if (rl) rl.close();
+      process.exit(1);
+    }
+  });
+
+deviceCommand
+  .command('remove')
+  .description('Remove a configured FF1 device')
+  .argument('<name>', 'Device name to remove')
+  .action(async (name: string) => {
+    try {
+      const configPath = await resolveExistingConfigPath();
+      if (!configPath) {
+        console.log(chalk.red('config.json not found'));
+        process.exit(1);
+      }
+
+      const config = await readConfigFile(configPath);
+      const existingDevices = config.ff1Devices?.devices || [];
+
+      const deviceIndex = existingDevices.findIndex(
+        (d) => d.name?.toLowerCase() === name.toLowerCase()
+      );
+
+      if (deviceIndex === -1) {
+        console.error(chalk.red(`\nDevice "${name}" not found`));
+        if (existingDevices.length > 0) {
+          const names = existingDevices.map((d) => d.name || d.host).join(', ');
+          console.log(chalk.dim(`Available devices: ${names}`));
+        }
+        process.exit(1);
+      }
+
+      const removed = existingDevices[deviceIndex];
+      const updatedDevices = existingDevices.filter((_, i) => i !== deviceIndex);
+      config.ff1Devices = { devices: updatedDevices };
+
+      await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+      console.log(chalk.green(`\nRemoved device: ${removed.name || removed.host}`));
+      console.log(chalk.dim(`Remaining devices: ${updatedDevices.length}\n`));
     } catch (error) {
       console.error(chalk.red('\nError:'), (error as Error).message);
       process.exit(1);
