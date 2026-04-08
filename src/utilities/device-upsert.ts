@@ -27,10 +27,11 @@ export function upsertDevice(
     return { devices, updated: true };
   }
 
-  // Case 2: same name, different host — replace in-place to preserve array order
+  // Case 2: same name, different host — replace in-place to preserve array order.
+  // Spread existing entry first so apiKey/topicID survive a host change.
   const staleNameIndex = devices.findIndex((d) => d.name === newDevice.name);
   if (staleNameIndex !== -1) {
-    devices[staleNameIndex] = { ...newDevice };
+    devices[staleNameIndex] = { ...devices[staleNameIndex], ...newDevice };
     return { devices, updated: false };
   }
 

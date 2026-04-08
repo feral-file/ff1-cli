@@ -186,8 +186,9 @@ function discoverViaAvahi(options: DiscoveryOptions): Promise<FF1DiscoveryResult
       ['-t', '-r', '_ff1._tcp'],
       { timeout: timeoutMs },
       (error, stdout, _stderr) => {
-        if (error && !stdout) {
-          // avahi-browse not available or failed with no output
+        if (error) {
+          // Any non-zero exit — including partial stdout — falls through to
+          // the Bonjour fallback so discovery stays reliable on Linux.
           resolve(null);
           return;
         }

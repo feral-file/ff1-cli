@@ -331,16 +331,12 @@ export async function buildPlaylist(
 
     const params = intentParserResult.params;
 
-    // Merge CLI --device flag as fallback (intent parser device name takes precedence)
-    if (defaultDeviceName && params) {
-      const p = params as BuildPlaylistParams;
-      if (!p.playlistSettings) {
-        p.playlistSettings = {};
-      }
-      if (!p.playlistSettings.deviceName) {
-        p.playlistSettings.deviceName = defaultDeviceName;
-      }
-    }
+    // NOTE: do NOT merge defaultDeviceName into playlistSettings here.
+    // buildPlaylistDirect (src/utilities/index.js) sends whenever
+    // playlistSettings.deviceName is defined, so setting it here would turn
+    // every build-only `chat --device` invocation into an implicit network send.
+    // The CLI --device flag is used only in the two explicit send paths below
+    // (sendMatch shortcut and send_playlist action) via resolveEffectiveDeviceName.
 
     // Check if this is a send_playlist action
     if (params && (params as Record<string, unknown>).action === 'send_playlist') {

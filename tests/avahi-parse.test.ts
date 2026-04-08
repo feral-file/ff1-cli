@@ -71,4 +71,28 @@ describe('parseAvahiBrowseOutput', () => {
     const names = devices.map((d) => d.name).sort();
     assert.deepEqual(names, ['FF1-AAA', 'FF1-BBB']);
   });
+
+  // Regression: avahi-browse non-zero exit with partial stdout used to bypass
+  // Bonjour fallback by returning whatever was parsed. discoverViaAvahi now
+  // returns null on any non-zero exit so Bonjour runs instead.
+  // parseAvahiBrowseOutput must handle partial/incomplete output gracefully
+  // so the resolved record before the truncation point is still returned cleanly.
+  test('returns empty array for empty output', () => {
+    assert.deepEqual(parseAvahiBrowseOutput(''), []);
+  });
+
+  test('returns empty array for output with no resolved records', () => {
+    const output = '+  wlan0 IPv4 FF1-AAA _ff1._tcp local\n';
+    assert.deepEqual(parseAvahiBrowseOutput(output), []);
+  });
+
+  test('recovers the complete record before a truncated second record', () => {
+    const complete = makeAvahiRecord({ serviceName: 'FF1-AAA', hostname: 'ff1-aaa.local.' });
+    // Truncated second record — only the header line, no hostname/port/txt
+    const truncated = '=  wlan0 IPv4 FF1-BBB _ff1._tcp local';
+    const devices = parseAvahiBrowseOutput(`${complete}\n${truncated}`);
+    // Only the complete record should be returned
+    assert.equal(devices.length, 1);
+    assert.equal(devices[0].name, 'FF1-AAA');
+  });
 });

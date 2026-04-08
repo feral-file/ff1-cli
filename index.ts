@@ -525,7 +525,10 @@ program
       const selection = await discoverAndSelectDevice(ask, existingDevices, { allowSkip: true });
 
       if (selection.hostValue) {
-        const defaultName = selection.discoveredName || 'ff1';
+        // Prefer the already-stored label so re-running setup doesn't clobber it
+        const existingForHost = existingDevices.find((d) => d.host === selection.hostValue);
+        const existingName = existingForHost?.name || '';
+        const defaultName = existingName || selection.discoveredName || 'ff1';
         const namePrompt =
           defaultName !== 'ff1'
             ? `Device name (kitchen, office, etc.) [${defaultName}]: `

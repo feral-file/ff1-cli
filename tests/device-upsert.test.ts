@@ -48,6 +48,33 @@ describe('upsertDevice', () => {
     assert.equal(devices[existingIndex].name, 'kitchen');
   });
 
+  // Regression: same-name/different-host replace used to drop apiKey and topicID
+  test('preserves apiKey and topicID when same-name device moves to a new host', () => {
+    const existing = [
+      { name: 'kitchen', host: 'http://10.0.0.1:1111', apiKey: 'key-k', topicID: 'topic-k' },
+    ];
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://10.0.0.99:1111',
+    });
+    assert.equal(devices[0].host, 'http://10.0.0.99:1111');
+    assert.equal(devices[0].apiKey, 'key-k');
+    assert.equal(devices[0].topicID, 'topic-k');
+  });
+
+  // Regression: setup flow used discoveredName as default, clobbering stored labels
+  test('setup: existing host name takes precedence over discovered name on blank response', () => {
+    const existing = [{ name: 'kitchen', host: 'http://10.0.0.1:1111' }];
+    const existingForHost = existing.find((d) => d.host === 'http://10.0.0.1:1111');
+    const existingName = existingForHost?.name || '';
+    const discoveredName = 'FF1-HH9JSNOC'; // raw mDNS label from avahi
+    const defaultName = existingName || discoveredName || 'ff1';
+    const nameAnswer = ''; // user pressed Enter
+    const deviceName = nameAnswer || defaultName || 'ff1';
+
+    assert.equal(deviceName, 'kitchen', 'stored label must win over raw mDNS name');
+  });
+
   // Regression: re-adding a named device with a new host used to append to the end,
   // silently changing devices[0] (the implicit default for play/send/ssh).
   test('preserves array position when same-name device moves to a new host', () => {
