@@ -174,12 +174,13 @@ function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
  * Discover FF1 devices using avahi-browse (Linux).
  * Returns null if avahi-browse is not available.
  */
-function discoverViaAvahi(): Promise<FF1DiscoveryResult | null> {
+function discoverViaAvahi(options: DiscoveryOptions): Promise<FF1DiscoveryResult | null> {
   return new Promise((resolve) => {
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     execFile(
       'avahi-browse',
       ['-t', '-r', '_ff1._tcp'],
-      { timeout: 8000 },
+      { timeout: timeoutMs },
       (error, stdout, _stderr) => {
         if (error && !stdout) {
           // avahi-browse not available or failed with no output
@@ -213,7 +214,7 @@ export async function discoverFF1Devices(
   options: DiscoveryOptions = {}
 ): Promise<FF1DiscoveryResult> {
   if (process.platform === 'linux') {
-    const avahiResult = await discoverViaAvahi();
+    const avahiResult = await discoverViaAvahi(options);
     if (avahiResult !== null) {
       return avahiResult;
     }

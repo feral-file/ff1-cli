@@ -319,6 +319,17 @@ export async function buildPlaylist(
 
     const params = intentParserResult.params;
 
+    // Merge CLI --device flag as fallback (intent parser device name takes precedence)
+    if (defaultDeviceName && params) {
+      const p = params as BuildPlaylistParams;
+      if (!p.playlistSettings) {
+        p.playlistSettings = {};
+      }
+      if (!p.playlistSettings.deviceName) {
+        p.playlistSettings.deviceName = defaultDeviceName;
+      }
+    }
+
     // Check if this is a send_playlist action
     if (params && (params as Record<string, unknown>).action === 'send_playlist') {
       // Handle playlist sending directly

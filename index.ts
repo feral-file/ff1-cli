@@ -273,7 +273,7 @@ function upsertDevice(
   newDevice: { name: string; host: string; apiKey?: string; topicID?: string }
 ): { devices: typeof existingDevices; updated: boolean } {
   const existingIndex = existingDevices.findIndex((d) => d.host === newDevice.host);
-  const devices = [...existingDevices];
+  let devices = [...existingDevices];
   if (existingIndex !== -1) {
     devices[existingIndex] = {
       ...devices[existingIndex],
@@ -281,6 +281,8 @@ function upsertDevice(
     };
     return { devices, updated: true };
   }
+  // Remove any stale entry with the same name but a different host
+  devices = devices.filter((d) => d.name !== newDevice.name);
   devices.push({ ...newDevice });
   return { devices, updated: false };
 }
@@ -1363,6 +1365,17 @@ deviceCommand
   .option('--name <name>', 'Device name')
   .action(async (options: { host?: string; name?: string }) => {
     let rl: readline.Interface | null = null;
+    // Create readline lazily so non-interactive paths (--host + --name) never block on stdin
+    const ask = async (question: string): Promise<string> => {
+      if (!rl) {
+        rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      }
+      return new Promise((resolve) => {
+        rl!.question(chalk.yellow(question), (answer: string) => {
+          resolve(answer.trim());
+        });
+      });
+    };
     try {
       const configPath = await resolveExistingConfigPath();
       if (!configPath) {
@@ -1373,18 +1386,6 @@ deviceCommand
 
       const config = await readConfigFile(configPath);
       const existingDevices = config.ff1Devices?.devices || [];
-
-      rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-
-      const ask = async (question: string): Promise<string> =>
-        new Promise((resolve) => {
-          rl!.question(chalk.yellow(question), (answer: string) => {
-            resolve(answer.trim());
-          });
-        });
 
       let hostValue = '';
       let discoveredName = '';
@@ -1399,7 +1400,9 @@ deviceCommand
 
         if (!hostValue) {
           console.log(chalk.dim('\nNo device added.'));
-          rl.close();
+          if (rl) {
+            rl.close();
+          }
           return;
         }
       }
@@ -1407,25 +1410,43 @@ deviceCommand
       // Check for duplicate
       const existingIndex = existingDevices.findIndex((d) => d.host === hostValue);
       if (existingIndex !== -1) {
-        console.log(
-          chalk.yellow(
-            `\nDevice already configured: ${existingDevices[existingIndex].name || existingDevices[existingIndex].host}`
-          )
-        );
-        const overwrite = await promptYesNo(ask, 'Update this device?', false);
-        if (!overwrite) {
-          console.log(chalk.dim('No changes made.'));
-          rl.close();
-          return;
+        if (options.host && options.name) {
+          // Non-interactive: auto-overwrite when both flags are supplied
+          console.log(
+            chalk.yellow(
+              `\nUpdating existing device: ${existingDevices[existingIndex].name || existingDevices[existingIndex].host}`
+            )
+          );
+        } else {
+          console.log(
+            chalk.yellow(
+              `\nDevice already configured: ${existingDevices[existingIndex].name || existingDevices[existingIndex].host}`
+            )
+          );
+          const overwrite = await promptYesNo(ask, 'Update this device?', false);
+          if (!overwrite) {
+            console.log(chalk.dim('No changes made.'));
+            if (rl) {
+              rl.close();
+            }
+            return;
+          }
         }
       }
 
-      const defaultName = options.name || discoveredName || '';
-      const namePrompt = defaultName
-        ? `Device name (kitchen, office, etc.) [${defaultName}]: `
-        : 'Device name (kitchen, office, etc.): ';
-      const nameAnswer = await ask(namePrompt);
-      const deviceName = nameAnswer || defaultName || 'ff1';
+      // Preserve existing name as fallback so a blank prompt never clobbers a stored label
+      const existingName = existingIndex !== -1 ? existingDevices[existingIndex].name || '' : '';
+      let deviceName: string;
+      if (options.name) {
+        deviceName = options.name;
+      } else {
+        const defaultName = discoveredName || existingName || '';
+        const namePrompt = defaultName
+          ? `Device name (kitchen, office, etc.) [${defaultName}]: `
+          : 'Device name (kitchen, office, etc.): ';
+        const nameAnswer = await ask(namePrompt);
+        deviceName = nameAnswer || defaultName || 'ff1';
+      }
 
       // Check for duplicate name
       const nameConflict = existingDevices.find(
@@ -1442,7 +1463,9 @@ deviceCommand
       await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
       console.log(chalk.dim(`Total devices: ${result.devices.length}\n`));
 
-      rl.close();
+      if (rl) {
+        rl.close();
+      }
     } catch (error) {
       console.error(chalk.red('\nError:'), (error as Error).message);
       if (rl) {
