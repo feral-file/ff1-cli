@@ -7,24 +7,34 @@ export interface DeviceEntry {
 
 /**
  * Insert or update a device in the configured device list.
- * Deduplicates by host (updates in-place) and by name (removes stale entry
- * with same name but different host before inserting).
+ *
+ * Priority:
+ * 1. Same host → update in-place (preserves position and metadata).
+ * 2. Same name, different host → replace in-place (preserves position so that
+ *    devices[0] — the implicit default for play/send/ssh — does not silently change).
+ * 3. Neither match → append.
  */
 export function upsertDevice(
   existingDevices: DeviceEntry[],
   newDevice: { name: string; host: string; apiKey?: string; topicID?: string }
 ): { devices: DeviceEntry[]; updated: boolean } {
-  const existingIndex = existingDevices.findIndex((d) => d.host === newDevice.host);
-  let devices = [...existingDevices];
-  if (existingIndex !== -1) {
-    devices[existingIndex] = {
-      ...devices[existingIndex],
-      ...newDevice,
-    };
+  const devices = [...existingDevices];
+
+  // Case 1: same host — update in-place
+  const sameHostIndex = devices.findIndex((d) => d.host === newDevice.host);
+  if (sameHostIndex !== -1) {
+    devices[sameHostIndex] = { ...devices[sameHostIndex], ...newDevice };
     return { devices, updated: true };
   }
-  // Remove any stale entry with the same name but a different host
-  devices = devices.filter((d) => d.name !== newDevice.name);
+
+  // Case 2: same name, different host — replace in-place to preserve array order
+  const staleNameIndex = devices.findIndex((d) => d.name === newDevice.name);
+  if (staleNameIndex !== -1) {
+    devices[staleNameIndex] = { ...newDevice };
+    return { devices, updated: false };
+  }
+
+  // Case 3: new device
   devices.push({ ...newDevice });
   return { devices, updated: false };
 }

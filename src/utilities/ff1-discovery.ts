@@ -91,8 +91,9 @@ function getHostnameId(host: string): string {
 /**
  * Parse avahi-browse -t -r output into FF1DiscoveredDevice list.
  * Handles resolved records (lines starting with '=') with hostname/address/port/txt fields.
+ * Exported for testing.
  */
-function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
+export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
   const devices = new Map<string, FF1DiscoveredDevice>();
   const lines = output.split('\n');
   let current: (Partial<FF1DiscoveredDevice> & { rawHost?: string }) | null = null;
@@ -113,9 +114,12 @@ function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
         });
       }
       const parts = line.trim().split(/\s+/);
-      // parts: ['=', 'wlan0', 'IPv4', 'FF1-HH9JSNOC', '_ff1._tcp', 'local']
-      const serviceName = parts[3] || '';
-      current = { name: serviceName.toLowerCase() };
+      // parts: ['=', 'wlan0', 'IPv4', 'My Device Name', '_ff1._tcp', 'local']
+      // Service name may be multi-word; find the type token to bound the slice.
+      // Preserve original case — resolveConfiguredDevice does exact-match lookups.
+      const typeIndex = parts.indexOf('_ff1._tcp');
+      const serviceName = typeIndex > 3 ? parts.slice(3, typeIndex).join(' ') : parts[3] || '';
+      current = { name: serviceName };
       continue;
     }
 

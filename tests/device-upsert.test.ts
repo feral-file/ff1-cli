@@ -48,8 +48,9 @@ describe('upsertDevice', () => {
     assert.equal(devices[existingIndex].name, 'kitchen');
   });
 
-  // Regression: re-adding a named device with a new host used to leave a stale duplicate
-  test('removes stale entry with same name when host changes', () => {
+  // Regression: re-adding a named device with a new host used to append to the end,
+  // silently changing devices[0] (the implicit default for play/send/ssh).
+  test('preserves array position when same-name device moves to a new host', () => {
     const existing = [
       { name: 'kitchen', host: 'http://10.0.0.1:1111' },
       { name: 'office', host: 'http://10.0.0.2:1111' },
@@ -60,8 +61,11 @@ describe('upsertDevice', () => {
       host: 'http://10.0.0.99:1111',
     });
     assert.equal(updated, false);
-    assert.equal(devices.length, 2); // no duplicate; old kitchen entry was removed
-    const kitchen = devices.find((d) => d.name === 'kitchen');
-    assert.equal(kitchen?.host, 'http://10.0.0.99:1111');
+    assert.equal(devices.length, 2);
+    // kitchen must still be at index 0 — it was the implicit default
+    assert.equal(devices[0].name, 'kitchen');
+    assert.equal(devices[0].host, 'http://10.0.0.99:1111');
+    // office must still be at index 1
+    assert.equal(devices[1].name, 'office');
   });
 });
