@@ -119,7 +119,9 @@ function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
       continue;
     }
 
-    if (!current) continue;
+    if (!current) {
+      continue;
+    }
 
     const hostnameMatch = line.match(/^\s+hostname\s*=\s*\[(.+)\]/);
     if (hostnameMatch) {
@@ -141,8 +143,12 @@ function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
         txt[k] = v;
       }
       current.txt = txt;
-      if (txt.name) current.name = txt.name;
-      if (txt.id) current.id = txt.id;
+      if (txt.name) {
+        current.name = txt.name;
+      }
+      if (txt.id) {
+        current.id = txt.id;
+      }
       continue;
     }
   }
@@ -174,7 +180,7 @@ function discoverViaAvahi(): Promise<FF1DiscoveryResult | null> {
       'avahi-browse',
       ['-t', '-r', '_ff1._tcp'],
       { timeout: 8000 },
-      (error, stdout, stderr) => {
+      (error, stdout, _stderr) => {
         if (error && !stdout) {
           // avahi-browse not available or failed with no output
           resolve(null);

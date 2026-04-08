@@ -1445,7 +1445,9 @@ deviceCommand
       rl.close();
     } catch (error) {
       console.error(chalk.red('\nError:'), (error as Error).message);
-      if (rl) rl.close();
+      if (rl) {
+        rl.close();
+      }
       process.exit(1);
     }
   });
