@@ -27,6 +27,7 @@ import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
 import { discoverFF1Devices } from './src/utilities/ff1-discovery';
 import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlist-source';
+import { upsertDevice } from './src/utilities/device-upsert';
 
 // Load version from package.json
 // Try built location first (dist/index.js -> ../package.json)
@@ -266,25 +267,6 @@ async function discoverAndSelectDevice(
     return { hostValue: '', discoveredName: '', skipped: false };
   }
   return { hostValue: normalizeDeviceIdToHost(idAnswer), discoveredName: '', skipped: false };
-}
-
-function upsertDevice(
-  existingDevices: Array<{ host: string; name?: string; apiKey?: string; topicID?: string }>,
-  newDevice: { name: string; host: string; apiKey?: string; topicID?: string }
-): { devices: typeof existingDevices; updated: boolean } {
-  const existingIndex = existingDevices.findIndex((d) => d.host === newDevice.host);
-  let devices = [...existingDevices];
-  if (existingIndex !== -1) {
-    devices[existingIndex] = {
-      ...devices[existingIndex],
-      ...newDevice,
-    };
-    return { devices, updated: true };
-  }
-  // Remove any stale entry with the same name but a different host
-  devices = devices.filter((d) => d.name !== newDevice.name);
-  devices.push({ ...newDevice });
-  return { devices, updated: false };
 }
 
 interface PlaylistVerificationResult {
@@ -1440,7 +1422,7 @@ deviceCommand
       if (options.name) {
         deviceName = options.name;
       } else {
-        const defaultName = discoveredName || existingName || '';
+        const defaultName = existingName || discoveredName || '';
         const namePrompt = defaultName
           ? `Device name (kitchen, office, etc.) [${defaultName}]: `
           : 'Device name (kitchen, office, etc.): ';

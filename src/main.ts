@@ -40,6 +40,18 @@ const getIntentParser = () => require('./intent-parser');
 const getAIOrchestrator = () => require('./ai-orchestrator');
 
 /**
+ * Resolve the effective device name for a send operation.
+ * The intent (from NL parsing) takes precedence; CLI flag is the fallback.
+ * Exported for testing.
+ */
+export function resolveEffectiveDeviceName(
+  fromIntent: string | undefined,
+  fromCLI: string | undefined
+): string | undefined {
+  return fromIntent || fromCLI;
+}
+
+/**
  * Validate and apply constraints to requirements
  *
  * @param {Array<Object>} requirements - Array of requirements
@@ -341,7 +353,7 @@ export async function buildPlaylist(
 
       const sendResult = await utilities.sendToDevice(
         sendParams.playlist as Playlist,
-        sendParams.deviceName as string | undefined
+        resolveEffectiveDeviceName(sendParams.deviceName as string | undefined, defaultDeviceName)
       );
 
       if (sendResult.success) {
