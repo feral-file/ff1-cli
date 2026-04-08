@@ -184,7 +184,13 @@ export async function buildPlaylist(
   userRequest: string,
   options: BuildPlaylistOptions = {}
 ): Promise<BuildPlaylistResult | null> {
-  const { verbose = false, outputPath = 'playlist.json', modelName, interactive = true, deviceName: defaultDeviceName } = options;
+  const {
+    verbose = false,
+    outputPath = 'playlist.json',
+    modelName,
+    interactive = true,
+    deviceName: defaultDeviceName,
+  } = options;
 
   // Enable verbose logging if requested
   if (verbose) {

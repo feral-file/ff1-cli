@@ -95,7 +95,7 @@ function getHostnameId(host: string): string {
 function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
   const devices = new Map<string, FF1DiscoveredDevice>();
   const lines = output.split('\n');
-  let current: Partial<FF1DiscoveredDevice> & { rawHost?: string } | null = null;
+  let current: (Partial<FF1DiscoveredDevice> & { rawHost?: string }) | null = null;
 
   for (const line of lines) {
     // Resolved record header: "=  wlan0 IPv4 FF1-HH9JSNOC   _ff1._tcp   local"
@@ -170,19 +170,24 @@ function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
  */
 function discoverViaAvahi(): Promise<FF1DiscoveryResult | null> {
   return new Promise((resolve) => {
-    execFile('avahi-browse', ['-t', '-r', '_ff1._tcp'], { timeout: 8000 }, (error, stdout, stderr) => {
-      if (error && !stdout) {
-        // avahi-browse not available or failed with no output
-        resolve(null);
-        return;
+    execFile(
+      'avahi-browse',
+      ['-t', '-r', '_ff1._tcp'],
+      { timeout: 8000 },
+      (error, stdout, stderr) => {
+        if (error && !stdout) {
+          // avahi-browse not available or failed with no output
+          resolve(null);
+          return;
+        }
+        try {
+          const devices = parseAvahiBrowseOutput(stdout);
+          resolve({ devices });
+        } catch (_parseError) {
+          resolve(null);
+        }
       }
-      try {
-        const devices = parseAvahiBrowseOutput(stdout);
-        resolve({ devices });
-      } catch (_parseError) {
-        resolve(null);
-      }
-    });
+    );
   });
 }
 

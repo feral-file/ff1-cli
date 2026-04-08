@@ -154,8 +154,7 @@ function normalizeDeviceHost(host: string): string {
 }
 
 function normalizeDeviceIdToHost(rawId: string): string {
-  const looksLikeHost =
-    rawId.includes('.') || rawId.includes(':') || rawId.startsWith('http');
+  const looksLikeHost = rawId.includes('.') || rawId.includes(':') || rawId.startsWith('http');
   if (looksLikeHost) {
     return normalizeDeviceHost(rawId);
   }
@@ -253,7 +252,9 @@ async function discoverAndSelectDevice(
         };
       }
 
-      console.log(chalk.red('Invalid selection. Enter a number, m, or a discovered device ID/host.'));
+      console.log(
+        chalk.red('Invalid selection. Enter a number, m, or a discovered device ID/host.')
+      );
     }
   } else if (!discoveryResult.error) {
     console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
@@ -530,20 +531,28 @@ program
       const existingDevices = config.ff1Devices?.devices || [];
 
       if (existingDevices.length > 0) {
-        console.log(chalk.dim(`\nConfigured devices: ${existingDevices.map((d) => d.name || d.host).join(', ')}`));
+        console.log(
+          chalk.dim(
+            `\nConfigured devices: ${existingDevices.map((d) => d.name || d.host).join(', ')}`
+          )
+        );
       }
 
       const selection = await discoverAndSelectDevice(ask, existingDevices, { allowSkip: true });
 
       if (selection.hostValue) {
         const defaultName = selection.discoveredName || 'ff1';
-        const namePrompt = defaultName !== 'ff1'
-          ? `Device name (kitchen, office, etc.) [${defaultName}]: `
-          : 'Device name (kitchen, office, etc.): ';
+        const namePrompt =
+          defaultName !== 'ff1'
+            ? `Device name (kitchen, office, etc.) [${defaultName}]: `
+            : 'Device name (kitchen, office, etc.): ';
         const nameAnswer = await ask(namePrompt);
         const deviceName = nameAnswer || defaultName || 'ff1';
 
-        const result = upsertDevice(existingDevices, { name: deviceName, host: selection.hostValue });
+        const result = upsertDevice(existingDevices, {
+          name: deviceName,
+          host: selection.hostValue,
+        });
         console.log(chalk.dim(`${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
         config.ff1Devices = { devices: result.devices };
       } else if (existingDevices.length > 0) {
@@ -622,10 +631,13 @@ program
         },
         {
           label: `FF1 devices (${config.ff1Devices?.devices?.length || 0})`,
-          ok: (config.ff1Devices?.devices?.length || 0) > 0 && !isMissingConfigValue(config.ff1Devices?.devices?.[0]?.host),
-          detail: (config.ff1Devices?.devices || [])
-            .map((d) => `${d.name || 'unnamed'} → ${d.host}`)
-            .join(', ') || undefined,
+          ok:
+            (config.ff1Devices?.devices?.length || 0) > 0 &&
+            !isMissingConfigValue(config.ff1Devices?.devices?.[0]?.host),
+          detail:
+            (config.ff1Devices?.devices || [])
+              .map((d) => `${d.name || 'unnamed'} → ${d.host}`)
+              .join(', ') || undefined,
         },
       ];
 
@@ -1296,9 +1308,7 @@ program
     }
   });
 
-const deviceCommand = program
-  .command('device')
-  .description('Manage configured FF1 devices');
+const deviceCommand = program.command('device').description('Manage configured FF1 devices');
 
 deviceCommand
   .command('list')
@@ -1398,7 +1408,9 @@ deviceCommand
       const existingIndex = existingDevices.findIndex((d) => d.host === hostValue);
       if (existingIndex !== -1) {
         console.log(
-          chalk.yellow(`\nDevice already configured: ${existingDevices[existingIndex].name || existingDevices[existingIndex].host}`)
+          chalk.yellow(
+            `\nDevice already configured: ${existingDevices[existingIndex].name || existingDevices[existingIndex].host}`
+          )
         );
         const overwrite = await promptYesNo(ask, 'Update this device?', false);
         if (!overwrite) {
