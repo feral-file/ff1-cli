@@ -7,7 +7,12 @@
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { parseAvahiBrowseOutput, resolveAvahiResult } from '../src/utilities/ff1-discovery';
+import {
+  parseAvahiBrowseOutput,
+  resolveAvahiResult,
+  discoverFF1Devices,
+} from '../src/utilities/ff1-discovery';
+import type { FF1DiscoveryResult, DiscoveryOptions } from '../src/utilities/ff1-discovery';
 
 const makeAvahiRecord = ({
   serviceName,
@@ -256,5 +261,69 @@ describe('resolveAvahiResult', () => {
     const result = resolveAvahiResult(timeoutErr, unusableStdout);
     assert(result !== null, 'must not fall back to Bonjour on timeout');
     assert.deepEqual(result.devices, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// discoverFF1Devices — end-to-end platform gate and fallback wiring
+//
+// These tests use injectable discovery functions to verify the branching logic:
+//  - Linux + avahi returns non-null → use avahi result, skip Bonjour
+//  - Linux + avahi returns null (ENOENT) → fall back to Bonjour
+//  - Non-Linux → always use Bonjour, never call avahi
+// ---------------------------------------------------------------------------
+describe('discoverFF1Devices platform gate and fallback wiring', () => {
+  const avahiDevices: FF1DiscoveryResult = {
+    devices: [{ name: 'kitchen', host: 'http://ff1-hh9jsnoc.local:1111' }],
+  };
+  const bonjourDevices: FF1DiscoveryResult = {
+    devices: [{ name: 'office', host: 'http://192.168.1.11:1111' }],
+  };
+
+  // Regression: on Linux when avahi succeeds, Bonjour must not be called and
+  // the avahi result must be returned directly.
+  test('Linux + avahi non-null: returns avahi result without calling Bonjour', async () => {
+    let bonjourCalled = false;
+    const avahi = async (_o: DiscoveryOptions) => avahiDevices;
+    const bonjour = async (_o: DiscoveryOptions) => {
+      bonjourCalled = true;
+      return bonjourDevices;
+    };
+    const result = await discoverFF1Devices({ timeoutMs: 100 }, avahi, bonjour);
+    // Only run the platform-specific assertion on Linux; on other platforms the
+    // injected avahi function is never called, so we just verify no crash.
+    if (process.platform === 'linux') {
+      assert.deepEqual(result, avahiDevices, 'avahi result must be returned');
+      assert.equal(bonjourCalled, false, 'Bonjour must not be called when avahi succeeds');
+    }
+  });
+
+  // Regression: on Linux when avahi returns null (not installed / ENOENT), the
+  // function must fall back to Bonjour rather than returning an empty result.
+  test('Linux + avahi null (ENOENT): falls back to Bonjour', async () => {
+    const avahi = async (_o: DiscoveryOptions): Promise<FF1DiscoveryResult | null> => null;
+    const bonjour = async (_o: DiscoveryOptions) => bonjourDevices;
+    const result = await discoverFF1Devices({ timeoutMs: 100 }, avahi, bonjour);
+    if (process.platform === 'linux') {
+      assert.deepEqual(result, bonjourDevices, 'Bonjour result must be returned on avahi null');
+    }
+  });
+
+  // On non-Linux platforms the avahi path must never be entered; Bonjour runs directly.
+  test('non-Linux: Bonjour is used; injected avahi is never called', async () => {
+    let avahiCalled = false;
+    const avahi = async (_o: DiscoveryOptions) => {
+      avahiCalled = true;
+      return avahiDevices;
+    };
+    const bonjour = async (_o: DiscoveryOptions) => bonjourDevices;
+    const result = await discoverFF1Devices({ timeoutMs: 100 }, avahi, bonjour);
+    if (process.platform !== 'linux') {
+      assert.equal(avahiCalled, false, 'avahi must not be called on non-Linux');
+      assert.deepEqual(result, bonjourDevices);
+    } else {
+      // On Linux the avahi branch runs; just confirm no crash
+      assert(result);
+    }
   });
 });

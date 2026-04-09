@@ -17,7 +17,7 @@ export interface FF1DiscoveryResult {
   error?: string;
 }
 
-interface DiscoveryOptions {
+export interface DiscoveryOptions {
   timeoutMs?: number;
 }
 
@@ -295,16 +295,19 @@ function discoverViaAvahi(options: DiscoveryOptions): Promise<FF1DiscoveryResult
  * const result = await discoverFF1Devices();
  */
 export async function discoverFF1Devices(
-  options: DiscoveryOptions = {}
+  options: DiscoveryOptions = {},
+  // Injectable for testing — callers should omit these; defaults use the real implementations.
+  _avahiDiscovery: (o: DiscoveryOptions) => Promise<FF1DiscoveryResult | null> = discoverViaAvahi,
+  _bonjourDiscovery: (o: DiscoveryOptions) => Promise<FF1DiscoveryResult> = discoverViaBonjour
 ): Promise<FF1DiscoveryResult> {
   if (process.platform === 'linux') {
-    const avahiResult = await discoverViaAvahi(options);
+    const avahiResult = await _avahiDiscovery(options);
     if (avahiResult !== null) {
       return avahiResult;
     }
   }
 
-  return discoverViaBonjour(options);
+  return _bonjourDiscovery(options);
 }
 
 function discoverViaBonjour(options: DiscoveryOptions): Promise<FF1DiscoveryResult> {
