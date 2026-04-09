@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   resolveEffectiveDeviceName,
+  resolveSendPlaylistDeviceName,
   applyPlaylistDefaults,
   SEND_SHORTCUT_PATTERN,
   resolveSendShortcutDevice,
@@ -45,6 +46,39 @@ describe('resolveEffectiveDeviceName', () => {
     const rawDeviceName = 'null'; // parser emitted string "null"
     const sanitized = rawDeviceName === 'null' || rawDeviceName === '' ? undefined : rawDeviceName;
     assert.equal(resolveEffectiveDeviceName(sanitized, 'office'), 'office');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveSendPlaylistDeviceName — end-to-end send_playlist device routing
+//
+// These tests exercise the exported helper that buildPlaylist calls on the
+// send_playlist action path. They verify the full sanitize→resolve pipeline
+// that was previously only tested via the lower-level helper stubs.
+// ---------------------------------------------------------------------------
+describe('resolveSendPlaylistDeviceName (send_playlist action path)', () => {
+  test('uses CLI --device when intent emits no deviceName', () => {
+    assert.equal(resolveSendPlaylistDeviceName(undefined, 'kitchen'), 'kitchen');
+  });
+
+  test('uses CLI --device when intent emits null deviceName', () => {
+    assert.equal(resolveSendPlaylistDeviceName(null, 'kitchen'), 'kitchen');
+  });
+
+  test('uses CLI --device when intent emits literal "null" string', () => {
+    assert.equal(resolveSendPlaylistDeviceName('null', 'kitchen'), 'kitchen');
+  });
+
+  test('uses CLI --device when intent emits empty string deviceName', () => {
+    assert.equal(resolveSendPlaylistDeviceName('', 'kitchen'), 'kitchen');
+  });
+
+  test('intent deviceName takes precedence over CLI --device when valid', () => {
+    assert.equal(resolveSendPlaylistDeviceName('office', 'kitchen'), 'office');
+  });
+
+  test('returns undefined when both intent and CLI provide no device', () => {
+    assert.equal(resolveSendPlaylistDeviceName(undefined, undefined), undefined);
   });
 });
 

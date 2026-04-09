@@ -70,6 +70,27 @@ export function resolveEffectiveDeviceName(
 }
 
 /**
+ * Sanitize and resolve the device name for the direct send_playlist action path.
+ *
+ * The intent parser can emit literal "null" or "" as a device name string; these
+ * must be treated as absent so the CLI --device fallback is used instead.
+ * Exported for testing — mirrors the sanitization in confirmPlaylistForSending().
+ */
+export function resolveSendPlaylistDeviceName(
+  intentDeviceName: string | null | undefined,
+  cliDeviceName: string | undefined
+): string | undefined {
+  const sanitized =
+    intentDeviceName === 'null' ||
+    intentDeviceName === '' ||
+    intentDeviceName === null ||
+    intentDeviceName === undefined
+      ? undefined
+      : intentDeviceName;
+  return resolveEffectiveDeviceName(sanitized, cliDeviceName);
+}
+
+/**
  * Validate and apply constraints to requirements
  *
  * @param {Array<Object>} requirements - Array of requirements
@@ -365,14 +386,12 @@ export async function buildPlaylist(
       console.log();
       console.log(chalk.cyan('Sending to device'));
 
-      // Sanitize parser-emitted sentinel strings (e.g. literal "null") before
-      // resolving the device name, matching the normalization in confirmPlaylistForSending.
-      const rawSendDeviceName = sendParams.deviceName as string | undefined;
-      const sanitizedSendDeviceName =
-        rawSendDeviceName === 'null' || rawSendDeviceName === '' ? undefined : rawSendDeviceName;
       const sendResult = await utilities.sendToDevice(
         sendParams.playlist as Playlist,
-        resolveEffectiveDeviceName(sanitizedSendDeviceName, defaultDeviceName)
+        resolveSendPlaylistDeviceName(
+          sendParams.deviceName as string | null | undefined,
+          defaultDeviceName
+        )
       );
 
       if (sendResult.success) {

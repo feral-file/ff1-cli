@@ -96,6 +96,32 @@ describe('upsertDevice', () => {
     assert.equal(devices[1].name, 'office');
   });
 
+  // Regression: when a device moves to a new host, old IPs must be discarded so that
+  // --host <old-ip> does not route to the wrong device after the move.
+  test('replaces addresses when device moves to a new host (prevents stale-IP routing)', () => {
+    const existing = [
+      {
+        name: 'kitchen',
+        host: 'http://192.168.1.10:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['192.168.1.10'],
+      },
+    ];
+    // Device moved: same id, new host (.local), new IP
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://ff1-hh9jsnoc.local:1111',
+      id: 'ff1-hh9jsnoc',
+      addresses: ['192.168.1.20'],
+    });
+    assert.equal(devices.length, 1);
+    assert.ok(
+      !devices[0].addresses?.includes('192.168.1.10'),
+      'old IP must not persist after host change'
+    );
+    assert.ok(devices[0].addresses?.includes('192.168.1.20'), 'new IP must be stored');
+  });
+
   // Regression: addresses must be merged (not replaced) on update so a later discovery
   // reporting only a subset does not shrink the stored set and break the reverse IP lookup.
   test('merges addresses on update rather than replacing them', () => {

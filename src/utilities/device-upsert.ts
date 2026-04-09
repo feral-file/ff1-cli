@@ -38,12 +38,22 @@ function mergeAddresses(
   return merged;
 }
 
-/** Apply a patch to an entry, merging addresses rather than replacing them. */
+/**
+ * Apply a patch to an entry.
+ *
+ * Addresses are handled specially:
+ *  - Same host: merge (accumulate IPv6 addresses across partial discoveries).
+ *  - Host changed: replace (old IPs belonged to the old network location; keeping
+ *    them would cause --host <old-ip> to match the wrong device after a move).
+ */
 function applyPatch(existing: DeviceEntry, patch: Partial<DeviceEntry>): DeviceEntry {
+  const hostChanged = patch.host !== undefined && patch.host !== existing.host;
   return {
     ...existing,
     ...patch,
-    addresses: mergeAddresses(existing.addresses, patch.addresses),
+    addresses: hostChanged
+      ? patch.addresses // replace: stale IPs from old location must not persist
+      : mergeAddresses(existing.addresses, patch.addresses), // same host: accumulate
   };
 }
 
