@@ -145,3 +145,116 @@ describe('device add / setup workflow (avahi → lookup → upsert)', () => {
     assert.ok(devices[0].addresses?.includes('fe80::1'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Duplicate name collision guard
+// ---------------------------------------------------------------------------
+describe('device add name-collision guard', () => {
+  /**
+   * Simulate the CLI's pre-upsert name-collision check.
+   * Returns true if the chosen name is safe to use (no collision with a
+   * device that is NOT the one being updated).
+   */
+  function isNameAvailable(
+    existingDevices: Array<{ name?: string; host?: string }>,
+    chosenName: string,
+    existingIndex: number
+  ): boolean {
+    return !existingDevices.find(
+      (d, i) => d.name === chosenName && (existingIndex === -1 || i !== existingIndex)
+    );
+  }
+
+  test('name is available when no other device uses it', () => {
+    const devices = [
+      { name: 'kitchen', host: 'http://A' },
+      { name: 'office', host: 'http://B' },
+    ];
+    assert.ok(isNameAvailable(devices, 'bedroom', -1));
+  });
+
+  test('collision detected when a different device already uses the name', () => {
+    const devices = [
+      { name: 'kitchen', host: 'http://A' },
+      { name: 'office', host: 'http://B' },
+    ];
+    // Adding a brand-new device (existingIndex = -1) with name 'kitchen'
+    assert.ok(!isNameAvailable(devices, 'kitchen', -1));
+  });
+
+  test('no false collision when updating the device that already owns the name', () => {
+    const devices = [
+      { name: 'kitchen', host: 'http://A' },
+      { name: 'office', host: 'http://B' },
+    ];
+    // Updating index 0 ('kitchen') — the name still belongs to the same row, not a collision
+    assert.ok(isNameAvailable(devices, 'kitchen', 0));
+  });
+
+  // Regression: without the guard, upsertDevice case-3 would silently clobber the
+  // existing 'kitchen' entry when a new device (different host, no id) is added
+  // with the same name.
+  test('without guard, upsertDevice case-3 would clobber the existing entry', () => {
+    const existingDevices = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-aaa' },
+      { name: 'office', host: 'http://192.168.1.11:1111', id: 'ff1-bbb' },
+    ];
+    // Simulate adding a genuinely new device but accidentally re-using 'kitchen'
+    const { devices } = upsertDevice(existingDevices, {
+      name: 'kitchen', // accidentally same as existing
+      host: 'http://192.168.1.99:1111', // different host — new device
+      id: 'ff1-ccc', // different id — new device
+    });
+    // upsertDevice itself cannot distinguish accidental collision from intentional
+    // rename; without the CLI guard this appends a duplicate (id mismatch prevents
+    // case-1 match, host mismatch prevents case-2, but name match triggers case-3).
+    // The CLI guard must reject this BEFORE calling upsertDevice.
+    // Verify that without the guard the old 'kitchen' entry is replaced:
+    assert.equal(devices.length, 2);
+    assert.equal(
+      devices.find((d) => d.name === 'kitchen')?.host,
+      'http://192.168.1.99:1111',
+      'without guard, wrong entry is clobbered — this is the bug the guard prevents'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// device remove: unnamed-entry targeting
+// ---------------------------------------------------------------------------
+describe('device remove: match by host for unnamed entries', () => {
+  /**
+   * Simulate the updated remove lookup: match by name OR by normalised host URL.
+   */
+  function findDeviceToRemove(
+    existingDevices: Array<{ name?: string; host?: string }>,
+    arg: string
+  ): number {
+    const lower = arg.toLowerCase();
+    return existingDevices.findIndex(
+      (d) =>
+        (d.name && d.name.toLowerCase() === lower) || (d.host && d.host.toLowerCase() === lower)
+    );
+  }
+
+  test('finds a named device by name', () => {
+    const devices = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111' },
+      { host: 'http://192.168.1.11:1111' }, // unnamed
+    ];
+    assert.equal(findDeviceToRemove(devices, 'kitchen'), 0);
+  });
+
+  test('finds an unnamed device by exact host URL', () => {
+    const devices = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111' },
+      { host: 'http://192.168.1.11:1111' }, // unnamed — can only be targeted by host
+    ];
+    assert.equal(findDeviceToRemove(devices, 'http://192.168.1.11:1111'), 1);
+  });
+
+  test('returns -1 when neither name nor host matches', () => {
+    const devices = [{ name: 'kitchen', host: 'http://192.168.1.10:1111' }];
+    assert.equal(findDeviceToRemove(devices, 'bedroom'), -1);
+  });
+});

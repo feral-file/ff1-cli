@@ -1485,12 +1485,45 @@ deviceCommand
         deviceName = nameAnswer || defaultName || 'ff1';
       }
 
-      // Check for duplicate name
+      // Reject a name that is already used by a DIFFERENT device (not the one being updated).
+      // upsertDevice case-3 (same-name replace) is correct when the caller has confirmed
+      // the match via lookup; using it for an accidental name collision would silently
+      // overwrite the wrong entry and make the previous device unreachable.
       const nameConflict = existingDevices.find(
         (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
       );
       if (nameConflict) {
-        console.log(chalk.yellow(`Warning: another device already uses the name "${deviceName}"`));
+        if (options.name) {
+          // Non-interactive flag path: hard error so scripts don't silently clobber.
+          console.error(
+            chalk.red(
+              `\nError: device name "${deviceName}" is already used by another device (${nameConflict.host}).`
+            )
+          );
+          console.error(chalk.dim('Use a different name or run "ff1 device remove" first.'));
+          if (rl) {
+            rl.close();
+          }
+          process.exit(1);
+        }
+        // Interactive path: re-prompt until the user picks a unique name.
+        console.log(
+          chalk.yellow(
+            `"${deviceName}" is already used by another device. Please choose a different name.`
+          )
+        );
+        const retryAnswer = await ask('Device name: ');
+        deviceName = retryAnswer || 'ff1';
+        const retryConflict = existingDevices.find(
+          (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
+        );
+        if (retryConflict) {
+          console.error(chalk.red(`\nName "${deviceName}" is also taken. No changes made.`));
+          if (rl) {
+            rl.close();
+          }
+          return;
+        }
       }
 
       const result = upsertDevice(existingDevices, {
@@ -1532,8 +1565,22 @@ deviceCommand
       const config = await readConfigFile(configPath);
       const existingDevices = config.ff1Devices?.devices || [];
 
+      // Match by name (case-insensitive) or by host URL so that unnamed legacy/manual
+      // entries (stored without a name field) can still be targeted and removed.
+      const normalizedArg = name.toLowerCase();
+      let normalizedArgHost = '';
+      try {
+        normalizedArgHost = normalizeDeviceHost(name).toLowerCase();
+      } catch {
+        // not a valid URL — host matching will not apply
+      }
       const deviceIndex = existingDevices.findIndex(
-        (d) => d.name?.toLowerCase() === name.toLowerCase()
+        (d) =>
+          (d.name && d.name.toLowerCase() === normalizedArg) ||
+          (d.host && d.host.toLowerCase() === normalizedArg) ||
+          (normalizedArgHost &&
+            d.host &&
+            normalizeDeviceHost(d.host).toLowerCase() === normalizedArgHost)
       );
 
       if (deviceIndex === -1) {
