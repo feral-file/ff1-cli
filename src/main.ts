@@ -312,6 +312,7 @@ export async function buildPlaylist(
 
     let intentParserResult = await processIntentParserRequest(userRequest, {
       modelName,
+      defaultDeviceName,
     });
 
     // Handle interactive clarification loop
@@ -357,6 +358,7 @@ export async function buildPlaylist(
       // Continue intent parser conversation
       intentParserResult = await processIntentParserRequest(userResponse, {
         modelName,
+        defaultDeviceName,
         conversationContext: {
           messages: intentParserResult.messages,
         },

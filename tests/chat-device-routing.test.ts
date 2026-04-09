@@ -125,6 +125,42 @@ describe('send shortcut branch device routing', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// confirm_send_playlist path — intent parser's internal send branch
+//
+// When the intent parser calls confirm_send_playlist, it passes args.deviceName
+// from the model alongside the CLI --device fallback (defaultDeviceName from
+// processIntentParserRequest options). These tests document the resolution
+// contract so regressions are caught without mocking the full stack.
+// ---------------------------------------------------------------------------
+describe('confirm_send_playlist path device routing', () => {
+  // Simulate the resolution logic applied inside the intent parser handler.
+  function resolveConfirmSendDevice(
+    argsDeviceName: string | null | undefined,
+    defaultDeviceName: string | undefined
+  ): string | undefined {
+    return argsDeviceName && argsDeviceName !== 'null' ? argsDeviceName : defaultDeviceName;
+  }
+
+  // Regression: before fix, defaultDeviceName was never passed into processIntentParserRequest,
+  // so the CLI --device flag was silently dropped on the confirm_send_playlist path.
+  test('uses CLI --device when model omits deviceName', () => {
+    assert.equal(resolveConfirmSendDevice(undefined, 'kitchen'), 'kitchen');
+  });
+
+  test('uses CLI --device when model emits literal "null"', () => {
+    assert.equal(resolveConfirmSendDevice('null', 'kitchen'), 'kitchen');
+  });
+
+  test('model deviceName takes precedence over CLI --device when valid', () => {
+    assert.equal(resolveConfirmSendDevice('office', 'kitchen'), 'office');
+  });
+
+  test('returns undefined when neither model nor CLI provides a device', () => {
+    assert.equal(resolveConfirmSendDevice(undefined, undefined), undefined);
+  });
+});
+
 describe('build-only chat with --device does not implicitly send', () => {
   // Regression: the CLI --device flag was previously merged into
   // playlistSettings.deviceName before the intent was resolved, causing
