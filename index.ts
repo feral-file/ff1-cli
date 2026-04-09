@@ -28,6 +28,7 @@ import type { Config, Playlist } from './src/types';
 import { discoverFF1Devices } from './src/utilities/ff1-discovery';
 import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlist-source';
 import { upsertDevice } from './src/utilities/device-upsert';
+import { findExistingDeviceEntry } from './src/utilities/device-lookup';
 
 // Load version from package.json
 // Try built location first (dist/index.js -> ../package.json)
@@ -525,9 +526,14 @@ program
       const selection = await discoverAndSelectDevice(ask, existingDevices, { allowSkip: true });
 
       if (selection.hostValue) {
-        // Prefer the already-stored label so re-running setup doesn't clobber it
-        const existingForHost = existingDevices.find((d) => d.host === selection.hostValue);
-        const existingName = existingForHost?.name || '';
+        // Prefer the already-stored label so re-running setup (or re-adding a device
+        // that returned on a new IP) doesn't clobber the friendly name.
+        const existingEntry = findExistingDeviceEntry(
+          existingDevices,
+          selection.hostValue,
+          selection.discoveredName
+        );
+        const existingName = existingEntry?.name || '';
         const defaultName = existingName || selection.discoveredName || 'ff1';
         const namePrompt =
           defaultName !== 'ff1'
@@ -1419,8 +1425,13 @@ deviceCommand
         }
       }
 
-      // Preserve existing name as fallback so a blank prompt never clobbers a stored label
-      const existingName = existingIndex !== -1 ? existingDevices[existingIndex].name || '' : '';
+      // Preserve existing name as fallback. Try exact-host match first; if the
+      // device came back on a new IP, fall back to hostname/TXT-name identity matching.
+      const existingEntry =
+        existingIndex !== -1
+          ? existingDevices[existingIndex]
+          : findExistingDeviceEntry(existingDevices, hostValue, discoveredName);
+      const existingName = existingEntry?.name || '';
       let deviceName: string;
       if (options.name) {
         deviceName = options.name;

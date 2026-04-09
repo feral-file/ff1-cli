@@ -13,7 +13,12 @@
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { resolveEffectiveDeviceName, applyPlaylistDefaults } from '../src/main';
+import {
+  resolveEffectiveDeviceName,
+  applyPlaylistDefaults,
+  SEND_SHORTCUT_PATTERN,
+  resolveSendShortcutDevice,
+} from '../src/main';
 
 describe('resolveEffectiveDeviceName', () => {
   // Regression: before fix, CLI --device was ignored on the send_playlist path
@@ -31,6 +36,49 @@ describe('resolveEffectiveDeviceName', () => {
 
   test('intent deviceName used when CLI flag is absent', () => {
     assert.equal(resolveEffectiveDeviceName('kitchen', undefined), 'kitchen');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Send-shortcut branch — drives SEND_SHORTCUT_PATTERN + resolveSendShortcutDevice
+// These tests exercise the branch inside buildPlaylist that handles inline
+// "send last / send to <device>" requests typed during a chat session.
+// ---------------------------------------------------------------------------
+describe('send shortcut branch device routing', () => {
+  test('matches "send" with no target', () => {
+    assert(SEND_SHORTCUT_PATTERN.test('send'));
+  });
+
+  test('matches "send last"', () => {
+    assert(SEND_SHORTCUT_PATTERN.test('send last'));
+  });
+
+  test('matches "send to office" and extracts device name', () => {
+    const m = SEND_SHORTCUT_PATTERN.exec('send to office');
+    assert(m, 'pattern must match');
+    assert.equal(resolveSendShortcutDevice(m, undefined), 'office');
+  });
+
+  test('does not match a regular chat request', () => {
+    assert(!SEND_SHORTCUT_PATTERN.test('get 3 works from reas.eth'));
+    assert(!SEND_SHORTCUT_PATTERN.test('send email to team'));
+  });
+
+  // Regression: CLI --device flag was not reaching the send shortcut path
+  test('CLI --device is used as fallback when shortcut has no target device', () => {
+    const m = SEND_SHORTCUT_PATTERN.exec('send last');
+    assert(m, 'pattern must match');
+    assert.equal(
+      resolveSendShortcutDevice(m, 'office'),
+      'office',
+      '--device CLI flag must reach the send shortcut branch'
+    );
+  });
+
+  test('inline device overrides CLI --device flag', () => {
+    const m = SEND_SHORTCUT_PATTERN.exec('send to kitchen');
+    assert(m, 'pattern must match');
+    assert.equal(resolveSendShortcutDevice(m, 'office'), 'kitchen');
   });
 });
 

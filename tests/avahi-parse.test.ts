@@ -7,7 +7,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { parseAvahiBrowseOutput } from '../src/utilities/ff1-discovery';
+import { parseAvahiBrowseOutput, resolveAvahiResult } from '../src/utilities/ff1-discovery';
 
 const makeAvahiRecord = ({
   serviceName,
@@ -81,31 +81,6 @@ describe('parseAvahiBrowseOutput', () => {
     assert.deepEqual(parseAvahiBrowseOutput(output), []);
   });
 
-  // Regression: discoverViaAvahi previously returned null on ANY non-zero exit,
-  // discarding valid devices. avahi-browse can exit non-zero (e.g. SIGTERM from
-  // our timeout) after fully resolving all records. The correct behaviour:
-  //   non-zero + devices parsed  → use the devices, skip Bonjour fallback
-  //   non-zero + no devices      → return null so Bonjour runs
-  // This is tested via parseAvahiBrowseOutput: if it returns ≥1 device from the
-  // stdout string, discoverViaAvahi will use those results even on non-zero exit.
-  test('non-zero exit with usable stdout: parsed devices are non-empty so caller should use them', () => {
-    // Simulate stdout from a non-zero-exit avahi-browse that still resolved one device
-    const stdout = makeAvahiRecord({ serviceName: 'FF1-Office', hostname: 'ff1-office.local.' });
-    const devices = parseAvahiBrowseOutput(stdout);
-    assert.equal(
-      devices.length,
-      1,
-      'parsed result is usable — discoverViaAvahi must not discard it'
-    );
-  });
-
-  test('non-zero exit with unusable stdout: parsed devices are empty so caller should fall back', () => {
-    // Only announcement lines, no resolved records
-    const stdout = '+  wlan0 IPv4 FF1-Office _ff1._tcp local\n';
-    const devices = parseAvahiBrowseOutput(stdout);
-    assert.equal(devices.length, 0, 'no usable devices — discoverViaAvahi must return null');
-  });
-
   test('recovers the complete record before a truncated second record', () => {
     const complete = makeAvahiRecord({ serviceName: 'FF1-AAA', hostname: 'ff1-aaa.local.' });
     // Truncated second record — only the header line, no hostname/port/txt
@@ -114,5 +89,49 @@ describe('parseAvahiBrowseOutput', () => {
     // The complete record is still returned; the truncated one is silently dropped
     assert.equal(devices.length, 1);
     assert.equal(devices[0].name, 'FF1-AAA');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveAvahiResult — tests for the execFile error branch
+// ---------------------------------------------------------------------------
+describe('resolveAvahiResult', () => {
+  const usableStdout = makeAvahiRecord({
+    serviceName: 'FF1-Office',
+    hostname: 'ff1-office.local.',
+  });
+  const unusableStdout = '+  wlan0 IPv4 FF1-Office _ff1._tcp local\n';
+
+  test('clean exit returns parsed devices', () => {
+    const result = resolveAvahiResult(null, usableStdout);
+    assert(result !== null);
+    assert.equal(result.devices.length, 1);
+  });
+
+  test('clean exit with empty stdout returns empty device list (not null)', () => {
+    const result = resolveAvahiResult(null, '');
+    assert(result !== null);
+    assert.deepEqual(result.devices, []);
+  });
+
+  // Regression: non-zero + usable devices must NOT fall through to Bonjour
+  test('non-zero exit with usable stdout returns the parsed devices', () => {
+    const result = resolveAvahiResult(new Error('avahi exit 1'), usableStdout);
+    assert(result !== null, 'must return devices, not null');
+    assert.equal(result.devices.length, 1);
+    assert.equal(result.devices[0].name, 'FF1-Office');
+  });
+
+  // Non-zero + no usable output → Bonjour fallback
+  test('non-zero exit with no stdout returns null', () => {
+    assert.equal(resolveAvahiResult(new Error('ENOENT'), ''), null);
+  });
+
+  test('non-zero exit with announcement-only stdout returns null', () => {
+    assert.equal(resolveAvahiResult(new Error('exit 1'), unusableStdout), null);
+  });
+
+  test('non-zero exit with unparseable stdout returns null', () => {
+    assert.equal(resolveAvahiResult(new Error('exit 2'), 'garbage\x00data'), null);
   });
 });

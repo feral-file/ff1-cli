@@ -175,6 +175,40 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
 }
 
 /**
+ * Resolve the result of an avahi-browse subprocess call into an FF1DiscoveryResult
+ * or null (which triggers the Bonjour fallback).
+ *
+ * Rules:
+ *  - Clean exit (error === null): parse stdout and return whatever was found.
+ *  - Non-zero exit + usable stdout: avahi-browse can be killed by the execFile
+ *    timeout after emitting fully resolved records. Use the parsed devices if
+ *    ≥1 was found; otherwise fall through to null so Bonjour runs.
+ *  - Non-zero exit + no usable stdout: avahi-browse unavailable or failed — null.
+ *
+ * Exported for unit testing.
+ */
+export function resolveAvahiResult(error: Error | null, stdout: string): FF1DiscoveryResult | null {
+  if (error) {
+    if (stdout) {
+      try {
+        const devices = parseAvahiBrowseOutput(stdout);
+        if (devices.length > 0) {
+          return { devices };
+        }
+      } catch {
+        // unparseable output — fall through
+      }
+    }
+    return null;
+  }
+  try {
+    return { devices: parseAvahiBrowseOutput(stdout) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Discover FF1 devices using avahi-browse (Linux).
  * Returns null if avahi-browse is not available.
  */
@@ -186,32 +220,7 @@ function discoverViaAvahi(options: DiscoveryOptions): Promise<FF1DiscoveryResult
       ['-t', '-r', '_ff1._tcp'],
       { timeout: timeoutMs },
       (error, stdout, _stderr) => {
-        if (error) {
-          // Non-zero exit: try to parse whatever stdout we have.
-          // avahi-browse can exit non-zero (e.g. SIGTERM from the timeout) while
-          // still having emitted fully resolved records. Use those results if
-          // the parse yields at least one device; otherwise fall through to
-          // the Bonjour fallback so Linux discovery stays reliable.
-          if (stdout) {
-            try {
-              const devices = parseAvahiBrowseOutput(stdout);
-              if (devices.length > 0) {
-                resolve({ devices });
-                return;
-              }
-            } catch {
-              // unparseable output — fall through
-            }
-          }
-          resolve(null);
-          return;
-        }
-        try {
-          const devices = parseAvahiBrowseOutput(stdout);
-          resolve({ devices });
-        } catch (_parseError) {
-          resolve(null);
-        }
+        resolve(resolveAvahiResult(error, stdout));
       }
     );
   });

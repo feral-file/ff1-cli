@@ -40,6 +40,24 @@ const getIntentParser = () => require('./intent-parser');
 const getAIOrchestrator = () => require('./ai-orchestrator');
 
 /**
+ * Regex that matches the inline "send last / send playlist / send to <device>"
+ * shortcut inside the chat flow. Exported for testing.
+ */
+export const SEND_SHORTCUT_PATTERN =
+  /^send(?:\s+(?:last|playlist|the playlist))?(?:\s+to\s+(.+))?$/i;
+
+/**
+ * Extract the target device from a sendMatch result, falling back to the CLI
+ * --device flag. Exported for testing.
+ */
+export function resolveSendShortcutDevice(
+  match: RegExpMatchArray,
+  cliDefault: string | undefined
+): string | undefined {
+  return match[1]?.trim() || cliDefault;
+}
+
+/**
  * Resolve the effective device name for a send operation.
  * The intent (from NL parsing) takes precedence; CLI flag is the fallback.
  * Exported for testing.
