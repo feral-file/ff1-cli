@@ -29,6 +29,7 @@ import { discoverFF1Devices } from './src/utilities/ff1-discovery';
 import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlist-source';
 import { upsertDevice } from './src/utilities/device-upsert';
 import { findExistingDeviceEntry } from './src/utilities/device-lookup';
+import { normalizeDeviceHost, normalizeDeviceIdToHost } from './src/utilities/device-normalize';
 
 // Load version from package.json
 // Try built location first (dist/index.js -> ../package.json)
@@ -136,45 +137,6 @@ async function readPublicKeyFile(keyPath: string): Promise<string> {
     throw new Error('Public key file is empty');
   }
   return trimmed;
-}
-
-function normalizeDeviceHost(host: string): string {
-  let normalized = host.trim().replace(/\.$/, '');
-  if (!normalized) {
-    return normalized;
-  }
-  // Bare IPv6 address (e.g. fe80::1) — must be bracketed before adding http://
-  // so that new URL() doesn't misparse the colons as port separators.
-  // Only applies when there is no existing scheme, no existing brackets, and the
-  // string consists solely of hex digits and colons (the IPv6 character set).
-  if (
-    !normalized.startsWith('http://') &&
-    !normalized.startsWith('https://') &&
-    !normalized.startsWith('[') &&
-    /^[0-9a-fA-F:]+$/.test(normalized) &&
-    normalized.includes(':')
-  ) {
-    normalized = `[${normalized}]`;
-  }
-  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
-    normalized = `http://${normalized}`;
-  }
-  try {
-    const url = new URL(normalized);
-    const port = url.port || '1111';
-    return `${url.protocol}//${url.hostname}:${port}`;
-  } catch (_error) {
-    return normalized;
-  }
-}
-
-function normalizeDeviceIdToHost(rawId: string): string {
-  const looksLikeHost = rawId.includes('.') || rawId.includes(':') || rawId.startsWith('http');
-  if (looksLikeHost) {
-    return normalizeDeviceHost(rawId);
-  }
-  const deviceId = rawId.startsWith('ff1-') ? rawId : `ff1-${rawId}`;
-  return normalizeDeviceHost(`${deviceId}.local`);
 }
 
 interface DeviceDiscoverySelection {

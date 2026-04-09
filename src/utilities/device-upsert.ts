@@ -20,40 +20,27 @@ function withoutUndefined<T extends object>(obj: T): Partial<T> {
 }
 
 /**
- * Merge two address lists, deduplicating the result.
- * Preserves the existing list when the incoming list is empty or absent so that
- * a later discovery reporting only a subset does not shrink the stored set.
- */
-function mergeAddresses(
-  existing: string[] | undefined,
-  incoming: string[] | undefined
-): string[] | undefined {
-  if (!incoming || incoming.length === 0) {
-    return existing;
-  }
-  if (!existing || existing.length === 0) {
-    return incoming;
-  }
-  const merged = [...existing, ...incoming].filter((a, i, arr) => arr.indexOf(a) === i);
-  return merged;
-}
-
-/**
  * Apply a patch to an entry.
  *
  * Addresses are handled specially:
- *  - Same host: merge (accumulate IPv6 addresses across partial discoveries).
- *  - Host changed: replace (old IPs belonged to the old network location; keeping
- *    them would cause --host <old-ip> to match the wrong device after a move).
+ *  - Incoming non-empty: replace (covers both host-change moves and same-host DHCP
+ *    lease churn; keeps the stored set fresh so --host <ip> does not route to a stale
+ *    IP that has since been assigned to a different device).
+ *  - Incoming absent or empty: keep existing (--host path provides no addresses; the
+ *    stored set must be preserved so reverse IP lookup still works).
+ *
+ * Dual-stack accumulation (IPv4 + IPv6) is handled upstream by parseAvahiBrowseOutput
+ * before upsertDevice is called, so the full address set is always present in a single
+ * invocation.
  */
 function applyPatch(existing: DeviceEntry, patch: Partial<DeviceEntry>): DeviceEntry {
-  const hostChanged = patch.host !== undefined && patch.host !== existing.host;
   return {
     ...existing,
     ...patch,
-    addresses: hostChanged
-      ? patch.addresses // replace: stale IPs from old location must not persist
-      : mergeAddresses(existing.addresses, patch.addresses), // same host: accumulate
+    addresses:
+      patch.addresses && patch.addresses.length > 0
+        ? patch.addresses // replace: fresh discovery data supersedes stale IPs
+        : existing.addresses, // keep: no new address data (--host path)
   };
 }
 

@@ -122,9 +122,11 @@ describe('upsertDevice', () => {
     assert.ok(devices[0].addresses?.includes('192.168.1.20'), 'new IP must be stored');
   });
 
-  // Regression: addresses must be merged (not replaced) on update so a later discovery
-  // reporting only a subset does not shrink the stored set and break the reverse IP lookup.
-  test('merges addresses on update rather than replacing them', () => {
+  // Regression: DHCP lease churn — device keeps the same .local host but the DHCP server
+  // assigns a new IP. The incoming address set must replace the stored set so that
+  // --host <old-ip> does not later resolve to this device (the old IP may be assigned to
+  // a different device after the lease expires).
+  test('replaces addresses on same-host update to prevent stale-IP routing (DHCP churn)', () => {
     const existing = [
       {
         name: 'kitchen',
@@ -133,16 +135,39 @@ describe('upsertDevice', () => {
         addresses: ['192.168.1.10', 'fe80::1'],
       },
     ];
-    // Re-add with only the IPv4 address (e.g. an IPv4-only discovery run)
+    // New DHCP lease: same .local host, new IPv4 address
     const { devices } = upsertDevice(existing, {
       name: 'kitchen',
       host: 'http://ff1-hh9jsnoc.local:1111',
       id: 'ff1-hh9jsnoc',
-      addresses: ['192.168.1.10'],
+      addresses: ['192.168.1.20', 'fe80::1'],
+    });
+    assert.equal(devices.length, 1);
+    assert.ok(!devices[0].addresses?.includes('192.168.1.10'), 'stale IP must not persist');
+    assert.ok(devices[0].addresses?.includes('192.168.1.20'), 'new IP must be stored');
+    assert.ok(devices[0].addresses?.includes('fe80::1'), 'stable IPv6 link-local must be kept');
+  });
+
+  // When no addresses are provided (e.g. --host path), the existing stored set must be preserved
+  // so that reverse IP lookup via stored addresses still works.
+  test('preserves existing addresses when incoming addresses are absent', () => {
+    const existing = [
+      {
+        name: 'kitchen',
+        host: 'http://ff1-hh9jsnoc.local:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['192.168.1.10', 'fe80::1'],
+      },
+    ];
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://ff1-hh9jsnoc.local:1111',
+      id: 'ff1-hh9jsnoc',
+      // no addresses — simulates --host path
     });
     assert.equal(devices.length, 1);
     assert.ok(devices[0].addresses?.includes('192.168.1.10'), 'IPv4 must be preserved');
-    assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 must not be lost on partial update');
+    assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 must be preserved');
   });
 
   // Regression: device with stored id was not matched when it moved to a new host+name,
