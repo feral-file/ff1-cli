@@ -98,6 +98,29 @@ describe('parseAvahiBrowseOutput', () => {
     assert.deepEqual(devices[0].addresses, ['192.168.1.10']);
   });
 
+  // Regression: avahi can emit multiple address lines for a dual-stack device;
+  // the parser must accumulate all of them so findExistingDeviceEntry can match
+  // against the stored IP regardless of which address appears first.
+  test('accumulates all address lines for dual-stack devices', () => {
+    const output = [
+      '=  wlan0 IPv6 FF1-AAA _ff1._tcp local',
+      '   hostname = [ff1-aaa.local.]',
+      '   address = [fe80::1]',
+      '   port = [1111]',
+      '   txt = []',
+      '=  wlan0 IPv4 FF1-AAA _ff1._tcp local',
+      '   hostname = [ff1-aaa.local.]',
+      '   address = [192.168.1.10]',
+      '   port = [1111]',
+      '   txt = []',
+    ].join('\n');
+    const devices = parseAvahiBrowseOutput(output);
+    // Both records share the same key (hostname:port) so they merge into one entry
+    assert.equal(devices.length, 1);
+    assert.ok(devices[0].addresses?.includes('192.168.1.10'), 'IPv4 address must be present');
+    assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 address must be present');
+  });
+
   // Regression: avahi-browse -r can emit "_ff1._tcp.local" instead of "_ff1._tcp"
   // in the header line; indexOf('_ff1._tcp') returns -1 on the variant, truncating
   // multi-word names to a single token. The fix uses a prefix regex.

@@ -98,8 +98,12 @@ function getHostnameId(host: string): string {
 export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
   const devices = new Map<string, FF1DiscoveredDevice>();
   const lines = output.split('\n');
-  let current: (Partial<FF1DiscoveredDevice> & { rawHost?: string; rawAddress?: string }) | null =
-    null;
+  let current:
+    | (Partial<FF1DiscoveredDevice> & {
+        rawHost?: string;
+        rawAddresses?: string[];
+      })
+    | null = null;
 
   const flushCurrent = () => {
     if (!current?.rawHost) {
@@ -108,14 +112,22 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
     const host = normalizeMdnsHost(current.rawHost).toLowerCase();
     const key = `${host}:${current.port ?? 1111}`;
     const id = getHostnameId(host) || current.id;
-    const addresses = current.rawAddress ? [current.rawAddress] : undefined;
+    const newAddresses = current.rawAddresses ?? [];
+
+    // Merge with an existing entry for the same key (e.g. IPv4 + IPv6 records
+    // for the same .local hostname both resolve to the same host:port key).
+    const existing = devices.get(key);
+    const mergedAddresses = [...(existing?.addresses ?? []), ...newAddresses].filter(
+      (addr, i, arr) => arr.indexOf(addr) === i
+    ); // deduplicate
+
     devices.set(key, {
       name: current.name || id || host,
       host,
       port: current.port ?? 1111,
       id,
       txt: current.txt,
-      addresses,
+      addresses: mergedAddresses.length > 0 ? mergedAddresses : undefined,
     });
   };
 
@@ -146,7 +158,10 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
 
     const addressMatch = line.match(/^\s+address\s*=\s*\[(.+)\]/);
     if (addressMatch) {
-      current.rawAddress = addressMatch[1].trim();
+      if (!current.rawAddresses) {
+        current.rawAddresses = [];
+      }
+      current.rawAddresses.push(addressMatch[1].trim());
       continue;
     }
 

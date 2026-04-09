@@ -75,6 +75,19 @@ describe('findExistingDeviceEntry', () => {
     assert.equal(result?.name, 'kitchen');
   });
 
+  // Regression: stored IP must be found even when it is not the first address in the list.
+  test('IP ↔ .local: stored entry found when stored IP is not the first discovered address', () => {
+    const devices = [{ name: 'kitchen', host: 'http://192.168.1.10:1111' }];
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://ff1-hh9jsnoc.local:1111',
+      'ff1-hh9jsnoc',
+      'ff1-hh9jsnoc',
+      ['fe80::1', '192.168.1.10'] // stored IP is second in list
+    );
+    assert.equal(result?.name, 'kitchen');
+  });
+
   // Confirm address-based matching does not shadow an entry that already has an id.
   test('address match is skipped for entries that have a stored id', () => {
     const devices = [
