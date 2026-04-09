@@ -152,6 +152,23 @@ describe('findExistingDeviceEntry', () => {
     assert.equal(result?.name, 'kitchen');
   });
 
+  // Regression: step 4a must still match when discoveredId is absent (partial avahi result or
+  // --host path). Previously the guard read `if (d.id) return false`, which blocked the match
+  // even when no discoveredId was available to compare against — preventing migration for
+  // pre-id configs that gained an id in a later discovery.
+  test('address match succeeds for id-bearing entry when discoveredId is absent', () => {
+    const devices = [{ name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-hh9jsnoc' }];
+    // Partial avahi result: same IP as stored, but no id in this discovery pass
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://ff1-hh9jsnoc.local:1111',
+      'ff1-hh9jsnoc', // raw mDNS label
+      undefined, // no discoveredId
+      ['192.168.1.10'] // avahi-reported IP matches stored entry's host IP
+    );
+    assert.equal(result?.name, 'kitchen');
+  });
+
   // Confirm address-based matching does not shadow an entry that already has an id.
   test('address match is skipped for entries that have a stored id', () => {
     const devices = [

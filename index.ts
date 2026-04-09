@@ -143,6 +143,19 @@ function normalizeDeviceHost(host: string): string {
   if (!normalized) {
     return normalized;
   }
+  // Bare IPv6 address (e.g. fe80::1) — must be bracketed before adding http://
+  // so that new URL() doesn't misparse the colons as port separators.
+  // Only applies when there is no existing scheme, no existing brackets, and the
+  // string consists solely of hex digits and colons (the IPv6 character set).
+  if (
+    !normalized.startsWith('http://') &&
+    !normalized.startsWith('https://') &&
+    !normalized.startsWith('[') &&
+    /^[0-9a-fA-F:]+$/.test(normalized) &&
+    normalized.includes(':')
+  ) {
+    normalized = `[${normalized}]`;
+  }
   if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
     normalized = `http://${normalized}`;
   }
@@ -561,6 +574,9 @@ program
           selection.discoveredId,
           selection.discoveredAddresses
         );
+        const existingIndex = existingEntry
+          ? existingDevices.findIndex((d) => d === existingEntry)
+          : -1;
         const existingName = existingEntry?.name || '';
         const defaultName = existingName || selection.discoveredName || 'ff1';
         const namePrompt =
@@ -568,7 +584,31 @@ program
             ? `Device name (kitchen, office, etc.) [${defaultName}]: `
             : 'Device name (kitchen, office, etc.): ';
         const nameAnswer = await ask(namePrompt);
-        const deviceName = nameAnswer || defaultName || 'ff1';
+        let deviceName = nameAnswer || defaultName || 'ff1';
+
+        // Same name-collision guard as device add: reject names that would clobber
+        // a different device entry (one that the lookup did not identify as this device).
+        const setupNameConflict = existingDevices.find(
+          (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
+        );
+        if (setupNameConflict) {
+          console.log(
+            chalk.yellow(
+              `"${deviceName}" is already used by another device. Please choose a different name.`
+            )
+          );
+          const retryAnswer = await ask('Device name: ');
+          deviceName = retryAnswer || 'ff1';
+          const retryConflict = existingDevices.find(
+            (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
+          );
+          if (retryConflict) {
+            console.log(chalk.yellow(`"${deviceName}" is also taken. Skipping device.`));
+            config.ff1Devices = { devices: existingDevices };
+            await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+            return;
+          }
+        }
 
         const result = upsertDevice(existingDevices, {
           name: deviceName,

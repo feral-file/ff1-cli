@@ -69,11 +69,14 @@ export function findExistingDeviceEntry(
   const stripBrackets = (h: string) => (h.startsWith('[') && h.endsWith(']') ? h.slice(1, -1) : h);
 
   // 4a. Discovered IP → stored IP: mDNS reported addresses include the stored entry's IP.
-  //     Only matches entries without a stored id (handled above by step 1).
+  //     Skip only when both the stored entry AND the discovered device carry an id that
+  //     differs — in that case the devices are provably distinct. If discoveredId is absent
+  //     (partial avahi result, --host path) allow the address match regardless of whether
+  //     the stored entry has an id; the address is the best identity signal available.
   if (discoveredAddresses && discoveredAddresses.length > 0) {
     const byDiscoveredAddress = existingDevices.find((d) => {
-      if (d.id) {
-        return false; // already handled by the id check above
+      if (d.id && discoveredId && d.id !== discoveredId) {
+        return false; // different physical devices — do not conflate
       }
       try {
         const storedIp = stripBrackets(new URL(d.host || '').hostname);
