@@ -116,8 +116,9 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
       const parts = line.trim().split(/\s+/);
       // parts: ['=', 'wlan0', 'IPv4', 'My Device Name', '_ff1._tcp', 'local']
       // Service name may be multi-word; find the type token to bound the slice.
+      // Use a prefix regex so "_ff1._tcp.local" and "_ff1._tcp" both match.
       // Preserve original case — resolveConfiguredDevice does exact-match lookups.
-      const typeIndex = parts.indexOf('_ff1._tcp');
+      const typeIndex = parts.findIndex((p) => /^_ff1\._tcp/.test(p));
       const serviceName = typeIndex > 3 ? parts.slice(3, typeIndex).join(' ') : parts[3] || '';
       current = { name: serviceName };
       continue;

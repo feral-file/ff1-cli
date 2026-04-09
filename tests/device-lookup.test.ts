@@ -73,19 +73,20 @@ describe('findExistingDeviceEntry', () => {
     assert.equal(result, undefined);
   });
 
-  test('exact match takes priority over id/TXT-name match', () => {
+  test('id match takes priority over exact-host match', () => {
     const devices = [
       { name: 'kitchen', host: 'http://ff1-hh9jsnoc.local:1111', id: 'ff1-hh9jsnoc' },
       { name: 'office', host: 'http://10.0.0.2:1111', id: 'ff1-aaabbbcc' },
     ];
-    // Both exact-host and TXT-name could match different entries — host wins
+    // The office device (id ff1-aaabbbcc) moved to kitchen's host URL.
+    // id is the more reliable identity signal, so office wins over the exact-host kitchen entry.
     const result = findExistingDeviceEntry(
       devices,
       'http://ff1-hh9jsnoc.local:1111',
       'office',
       'ff1-aaabbbcc'
     );
-    assert.equal(result?.name, 'kitchen');
+    assert.equal(result?.name, 'office');
   });
 
   // Regression: upsertDevice must not append a duplicate when the same device

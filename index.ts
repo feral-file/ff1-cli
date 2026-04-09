@@ -244,12 +244,25 @@ async function discoverAndSelectDevice(
       const normalizedWithPrefix = normalizedSelection.startsWith('ff1-')
         ? normalizedSelection
         : `ff1-${normalizedSelection}`;
+      // Also normalize the answer as a URL-form host so pasted URLs like
+      // "http://ff1-hh9jsnoc.local:1111" match the device's normalized host.
+      let normalizedSelectionAsHost = '';
+      try {
+        normalizedSelectionAsHost = normalizeDeviceHost(selectionAnswer).toLowerCase();
+      } catch {
+        // not a valid URL — skip URL-form matching
+      }
       const matched = discoveredDevices.find((device) => {
+        const deviceNormalizedHost = normalizeDeviceHost(
+          `${device.host}:${device.port}`
+        ).toLowerCase();
         const candidates = [device.id, device.name, device.host, `${device.host}:${device.port}`]
           .filter((value): value is string => Boolean(value))
           .map((value) => value.toLowerCase());
         return (
-          candidates.includes(normalizedSelection) || candidates.includes(normalizedWithPrefix)
+          candidates.includes(normalizedSelection) ||
+          candidates.includes(normalizedWithPrefix) ||
+          (normalizedSelectionAsHost !== '' && normalizedSelectionAsHost === deviceNormalizedHost)
         );
       });
 

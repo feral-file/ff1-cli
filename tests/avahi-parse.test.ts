@@ -90,6 +90,23 @@ describe('parseAvahiBrowseOutput', () => {
     assert.equal(devices.length, 1);
     assert.equal(devices[0].name, 'FF1-AAA');
   });
+
+  // Regression: avahi-browse -r can emit "_ff1._tcp.local" instead of "_ff1._tcp"
+  // in the header line; indexOf('_ff1._tcp') returns -1 on the variant, truncating
+  // multi-word names to a single token. The fix uses a prefix regex.
+  test('parses multi-word name when type token is _ff1._tcp.local variant', () => {
+    // Build the record with the .local variant manually (makeAvahiRecord uses plain _ff1._tcp)
+    const output = [
+      '=  wlan0 IPv4 Living Room Display _ff1._tcp.local local',
+      '   hostname = [ff1-abc123.local.]',
+      '   address = [192.168.1.10]',
+      '   port = [1111]',
+      '   txt = []',
+    ].join('\n');
+    const devices = parseAvahiBrowseOutput(output);
+    assert.equal(devices.length, 1);
+    assert.equal(devices[0].name, 'Living Room Display');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -95,4 +95,34 @@ describe('upsertDevice', () => {
     // office must still be at index 1
     assert.equal(devices[1].name, 'office');
   });
+
+  // Regression: device with stored id was not matched when it moved to a new host+name,
+  // causing a duplicate entry to be appended.
+  test('updates in-place when same id is found even if host changed', () => {
+    const existing = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-hh9jsnoc' },
+      { name: 'office', host: 'http://192.168.1.11:1111', id: 'ff1-aaabbbcc' },
+    ];
+    const { devices, updated } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://ff1-hh9jsnoc.local:1111',
+      id: 'ff1-hh9jsnoc',
+    });
+    assert.equal(updated, false, 'host changed so not "updated" in same-host sense');
+    assert.equal(devices.length, 2, 'must not create a duplicate');
+    assert.equal(devices[0].host, 'http://ff1-hh9jsnoc.local:1111', 'host must be updated');
+    assert.equal(devices[0].id, 'ff1-hh9jsnoc', 'id must be preserved');
+  });
+
+  // Regression: callers pass id: undefined when discoveredId is absent; spreads with undefined
+  // values used to overwrite a previously stored id with undefined.
+  test('does not erase a stored id when caller passes id: undefined', () => {
+    const existing = [{ name: 'kitchen', host: 'http://10.0.0.1:1111', id: 'ff1-hh9jsnoc' }];
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen-renamed',
+      host: 'http://10.0.0.1:1111',
+      id: undefined,
+    });
+    assert.equal(devices[0].id, 'ff1-hh9jsnoc', 'stored id must survive a no-id update');
+  });
 });
