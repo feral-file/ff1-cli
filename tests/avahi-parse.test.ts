@@ -219,8 +219,9 @@ describe('resolveAvahiResult', () => {
   });
 
   // Non-zero + no usable output → Bonjour fallback
-  test('non-zero exit with no stdout returns null', () => {
-    assert.equal(resolveAvahiResult(new Error('ENOENT'), ''), null);
+  test('non-zero exit with no stdout returns null (ENOENT → Bonjour fallback)', () => {
+    const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    assert.equal(resolveAvahiResult(err, ''), null);
   });
 
   test('non-zero exit with announcement-only stdout returns null', () => {
@@ -229,5 +230,31 @@ describe('resolveAvahiResult', () => {
 
   test('non-zero exit with unparseable stdout returns null', () => {
     assert.equal(resolveAvahiResult(new Error('exit 2'), 'garbage\x00data'), null);
+  });
+
+  // Regression: avahi timeout (process killed by execFile deadline) with no devices in stdout
+  // must return an empty result — NOT null — so discoverFF1Devices does not fall back to
+  // Bonjour. Bonjour is unreliable on Linux; an empty scan result is more correct than a
+  // Bonjour result that may pick up the wrong service.
+  test('timeout with no stdout returns empty result, not null (no Bonjour fallback)', () => {
+    const timeoutErr = Object.assign(new Error('Process timeout'), { killed: true });
+    const result = resolveAvahiResult(timeoutErr, '');
+    assert(result !== null, 'timeout must not trigger Bonjour fallback (null)');
+    assert.deepEqual(result.devices, [], 'devices must be empty on timeout');
+    assert.ok(result.error, 'error message must be set');
+  });
+
+  test('timeout with partial usable stdout returns those devices (not empty)', () => {
+    const timeoutErr = Object.assign(new Error('Process timeout'), { killed: true });
+    const result = resolveAvahiResult(timeoutErr, usableStdout);
+    assert(result !== null);
+    assert.equal(result.devices.length, 1, 'partial devices from timeout must be returned');
+  });
+
+  test('timeout with announcement-only stdout returns empty result, not null', () => {
+    const timeoutErr = Object.assign(new Error('Process timeout'), { killed: true });
+    const result = resolveAvahiResult(timeoutErr, unusableStdout);
+    assert(result !== null, 'must not fall back to Bonjour on timeout');
+    assert.deepEqual(result.devices, []);
   });
 });

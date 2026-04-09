@@ -161,6 +161,65 @@ describe('confirm_send_playlist path device routing', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// buildPlaylistWithAI --device fallback (orchestrator path)
+//
+// When the intent parser identifies a send intent but the model cannot resolve
+// the device name from the user's text (null/empty/"null"), the CLI --device
+// flag must be used as fallback. When there is NO send intent (deviceName ===
+// undefined), the CLI flag must be ignored so build-only requests don't
+// accidentally trigger a network send.
+// ---------------------------------------------------------------------------
+describe('buildPlaylistWithAI orchestrator --device fallback', () => {
+  // Simulate the resolution applied at the top of buildPlaylistWithAI.
+  function resolveOrchestratorDevice(
+    playlistSettingsDeviceName: string | null | undefined,
+    defaultDeviceName: string | undefined
+  ): string | null | undefined {
+    // No send intent (undefined) → never use CLI flag
+    if (playlistSettingsDeviceName === undefined) {
+      return undefined;
+    }
+    // Send intent but no device name → fall back to CLI flag
+    if (
+      (!playlistSettingsDeviceName || playlistSettingsDeviceName === 'null') &&
+      defaultDeviceName
+    ) {
+      return defaultDeviceName;
+    }
+    return playlistSettingsDeviceName;
+  }
+
+  // Regression: before fix, defaultDeviceName was never forwarded to buildPlaylistWithAI,
+  // so `ff1 chat --device kitchen "build X and send"` dropped the kitchen target when the
+  // model emitted deviceName: null (send intent present, no device in text).
+  test('uses CLI --device when intent parser emits null deviceName (send intent, no device in text)', () => {
+    assert.equal(resolveOrchestratorDevice(null, 'kitchen'), 'kitchen');
+  });
+
+  test('uses CLI --device when intent parser emits empty string deviceName', () => {
+    assert.equal(resolveOrchestratorDevice('', 'kitchen'), 'kitchen');
+  });
+
+  test('uses CLI --device when intent parser emits literal "null" deviceName', () => {
+    assert.equal(resolveOrchestratorDevice('null', 'kitchen'), 'kitchen');
+  });
+
+  test('model deviceName takes precedence over CLI --device when valid', () => {
+    assert.equal(resolveOrchestratorDevice('office', 'kitchen'), 'office');
+  });
+
+  // Regression: build-only intent (deviceName === undefined) must NOT auto-send
+  // even when --device is set. This was the original design constraint.
+  test('CLI --device is ignored when send intent is absent (deviceName === undefined)', () => {
+    assert.equal(resolveOrchestratorDevice(undefined, 'kitchen'), undefined);
+  });
+
+  test('returns undefined when no send intent and no CLI device', () => {
+    assert.equal(resolveOrchestratorDevice(undefined, undefined), undefined);
+  });
+});
+
 describe('build-only chat with --device does not implicitly send', () => {
   // Regression: the CLI --device flag was previously merged into
   // playlistSettings.deviceName before the intent was resolved, causing

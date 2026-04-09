@@ -453,6 +453,7 @@ export async function buildPlaylist(
       verbose,
       outputPath,
       interactive,
+      defaultDeviceName,
     });
 
     // Handle confirmation loop in interactive mode
@@ -485,6 +486,7 @@ export async function buildPlaylist(
         verbose,
         outputPath,
         interactive,
+        defaultDeviceName,
         conversationContext: {
           messages: result.messages,
           userResponse,

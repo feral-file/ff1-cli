@@ -225,8 +225,14 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
  *  - Clean exit (error === null): parse stdout and return whatever was found.
  *  - Non-zero exit + usable stdout: avahi-browse can be killed by the execFile
  *    timeout after emitting fully resolved records. Use the parsed devices if
- *    ≥1 was found; otherwise fall through to null so Bonjour runs.
- *  - Non-zero exit + no usable stdout: avahi-browse unavailable or failed — null.
+ *    ≥1 was found; otherwise return empty result (avahi is present but slow —
+ *    do NOT fall back to Bonjour, which is less reliable on Linux).
+ *  - Timeout (error.killed === true) + no usable stdout: avahi is present but
+ *    the scan produced nothing before the deadline. Return empty rather than
+ *    falling back to Bonjour.
+ *  - Command not found (ENOENT): avahi-browse is not installed — return null
+ *    so the caller falls back to Bonjour.
+ *  - Other error + no usable stdout: treat as unavailable — null.
  *
  * Exported for unit testing.
  */
@@ -242,6 +248,13 @@ export function resolveAvahiResult(error: Error | null, stdout: string): FF1Disc
         // unparseable output — fall through
       }
     }
+    // Timeout: avahi is present but the scan was slow. Return empty rather than
+    // falling back to Bonjour, which is unreliable on Linux.
+    if ((error as NodeJS.ErrnoException & { killed?: boolean }).killed) {
+      return { devices: [], error: 'avahi-browse timed out before finding any devices' };
+    }
+    // ENOENT: avahi-browse not installed — fall back to Bonjour.
+    // All other errors with no usable output: also fall back.
     return null;
   }
   try {
