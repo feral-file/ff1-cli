@@ -148,9 +148,9 @@ describe('upsertDevice', () => {
     assert.ok(devices[0].addresses?.includes('fe80::1'), 'stable IPv6 link-local must be kept');
   });
 
-  // When no addresses are provided (e.g. --host path), the existing stored set must be preserved
-  // so that reverse IP lookup via stored addresses still works.
-  test('preserves existing addresses when incoming addresses are absent', () => {
+  // When no addresses are provided and the host is unchanged (e.g. --host <same-ip> path),
+  // the existing stored set must be preserved so that reverse IP lookup still works.
+  test('preserves existing addresses when incoming addresses are absent and host is unchanged', () => {
     const existing = [
       {
         name: 'kitchen',
@@ -161,13 +161,66 @@ describe('upsertDevice', () => {
     ];
     const { devices } = upsertDevice(existing, {
       name: 'kitchen',
-      host: 'http://ff1-hh9jsnoc.local:1111',
+      host: 'http://ff1-hh9jsnoc.local:1111', // same host
       id: 'ff1-hh9jsnoc',
-      // no addresses — simulates --host path
+      // no addresses — simulates --host path with same host
     });
     assert.equal(devices.length, 1);
     assert.ok(devices[0].addresses?.includes('192.168.1.10'), 'IPv4 must be preserved');
     assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 must be preserved');
+  });
+
+  // Regression: partial avahi timeout — avahi returns host+id but no address field.
+  // The host changed (.local → .local same name, different scenario, or IP → .local),
+  // so stale IPs from the old location must be cleared even though no new IPs arrived.
+  // Without this, --host <old-ip> can still match this device after DHCP churn.
+  test('clears addresses when host changes and no new addresses are provided (partial avahi)', () => {
+    const existing = [
+      {
+        name: 'kitchen',
+        host: 'http://192.168.1.10:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['192.168.1.10'],
+      },
+    ];
+    // Partial avahi result: host resolved to .local, id present, but address timed out
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://ff1-hh9jsnoc.local:1111', // host changed
+      id: 'ff1-hh9jsnoc',
+      // no addresses — partial avahi timeout
+    });
+    assert.equal(devices.length, 1);
+    assert.equal(devices[0].host, 'http://ff1-hh9jsnoc.local:1111', 'host must be updated');
+    assert.ok(
+      !devices[0].addresses?.includes('192.168.1.10'),
+      'stale IP must be cleared when host changes with no new addresses'
+    );
+  });
+
+  // Regression: --host <new-ip> update path — user provides a new IP for an existing .local
+  // entry. The host changes, no addresses are provided, so stale addresses must be cleared.
+  test('clears addresses when --host changes an existing .local entry to an IP host', () => {
+    const existing = [
+      {
+        name: 'kitchen',
+        host: 'http://ff1-hh9jsnoc.local:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['192.168.1.10'],
+      },
+    ];
+    // User ran: ff1 device add --host 192.168.1.20 (new IP, host changed)
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://192.168.1.20:1111', // host changed
+      id: 'ff1-hh9jsnoc',
+      // no addresses — --host path provides none
+    });
+    assert.equal(devices.length, 1);
+    assert.ok(
+      !devices[0].addresses?.includes('192.168.1.10'),
+      'stale IP from old host must be cleared'
+    );
   });
 
   // Regression: device with stored id was not matched when it moved to a new host+name,

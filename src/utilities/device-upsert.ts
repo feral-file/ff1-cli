@@ -23,25 +23,28 @@ function withoutUndefined<T extends object>(obj: T): Partial<T> {
  * Apply a patch to an entry.
  *
  * Addresses are handled specially:
- *  - Incoming non-empty: replace (covers both host-change moves and same-host DHCP
- *    lease churn; keeps the stored set fresh so --host <ip> does not route to a stale
- *    IP that has since been assigned to a different device).
- *  - Incoming absent or empty: keep existing (--host path provides no addresses; the
- *    stored set must be preserved so reverse IP lookup still works).
+ *  - Incoming non-empty: replace (fresh discovery data supersedes stale IPs).
+ *  - Host changed, no incoming addresses: clear (stale IPs belonged to the old
+ *    network location; keeping them lets --host <old-ip> match the wrong device
+ *    after DHCP churn or a partial avahi timeout that omits the address field).
+ *  - Same host, no incoming addresses: keep existing (--host path provides no
+ *    addresses; the stored set must be preserved so reverse IP lookup still works).
  *
  * Dual-stack accumulation (IPv4 + IPv6) is handled upstream by parseAvahiBrowseOutput
  * before upsertDevice is called, so the full address set is always present in a single
  * invocation.
  */
 function applyPatch(existing: DeviceEntry, patch: Partial<DeviceEntry>): DeviceEntry {
-  return {
-    ...existing,
-    ...patch,
-    addresses:
-      patch.addresses && patch.addresses.length > 0
-        ? patch.addresses // replace: fresh discovery data supersedes stale IPs
-        : existing.addresses, // keep: no new address data (--host path)
-  };
+  const hostChanged = patch.host !== undefined && patch.host !== existing.host;
+  let addresses: string[] | undefined;
+  if (patch.addresses && patch.addresses.length > 0) {
+    addresses = patch.addresses; // fresh data: replace
+  } else if (hostChanged) {
+    addresses = undefined; // host changed, no new IPs: clear stale addresses
+  } else {
+    addresses = existing.addresses; // same host, no new IPs: keep stored set
+  }
+  return { ...existing, ...patch, addresses };
 }
 
 /**
