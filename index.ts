@@ -167,12 +167,14 @@ function normalizeDeviceIdToHost(rawId: string): string {
 interface DeviceDiscoverySelection {
   hostValue: string;
   discoveredName: string;
+  /** mDNS device ID (e.g. 'ff1-hh9jsnoc'). Used to match a device when its host URL changes. */
+  discoveredId?: string;
   skipped: boolean;
 }
 
 async function discoverAndSelectDevice(
   ask: (question: string) => Promise<string>,
-  existingDevices: Array<{ host: string; name?: string }>,
+  existingDevices: Array<{ host: string; name?: string; id?: string }>,
   options?: { allowSkip?: boolean }
 ): Promise<DeviceDiscoverySelection> {
   const allowSkip = options?.allowSkip && existingDevices.length > 0;
@@ -193,8 +195,12 @@ async function discoverAndSelectDevice(
     console.log(chalk.green('\nFF1 devices on your network:'));
     discoveredDevices.forEach((device, index) => {
       const displayId = device.id || device.name || device.host;
-      const alreadyConfigured = existingDevices.some(
-        (d) => d.host === normalizeDeviceHost(`${device.host}:${device.port}`)
+      const normalizedHost = normalizeDeviceHost(`${device.host}:${device.port}`);
+      const alreadyConfigured = !!findExistingDeviceEntry(
+        existingDevices,
+        normalizedHost,
+        device.name || device.id || '',
+        device.id
       );
       const suffix = alreadyConfigured ? chalk.dim(' (already configured)') : '';
       console.log(chalk.dim(`  ${index + 1}) ${displayId}${suffix}`));
@@ -230,6 +236,7 @@ async function discoverAndSelectDevice(
         return {
           hostValue: normalizeDeviceHost(`${selected.host}:${selected.port}`),
           discoveredName: selected.name || selected.id || '',
+          discoveredId: selected.id,
           skipped: false,
         };
       }
@@ -250,6 +257,7 @@ async function discoverAndSelectDevice(
         return {
           hostValue: normalizeDeviceHost(`${matched.host}:${matched.port}`),
           discoveredName: matched.name || matched.id || '',
+          discoveredId: matched.id,
           skipped: false,
         };
       }
@@ -531,7 +539,8 @@ program
         const existingEntry = findExistingDeviceEntry(
           existingDevices,
           selection.hostValue,
-          selection.discoveredName
+          selection.discoveredName,
+          selection.discoveredId
         );
         const existingName = existingEntry?.name || '';
         const defaultName = existingName || selection.discoveredName || 'ff1';
@@ -545,6 +554,7 @@ program
         const result = upsertDevice(existingDevices, {
           name: deviceName,
           host: selection.hostValue,
+          id: selection.discoveredId,
         });
         console.log(chalk.dim(`${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
         config.ff1Devices = { devices: result.devices };
@@ -1380,6 +1390,7 @@ deviceCommand
 
       let hostValue = '';
       let discoveredName = '';
+      let discoveredId: string | undefined;
 
       if (options.host) {
         hostValue = normalizeDeviceHost(options.host);
@@ -1388,6 +1399,7 @@ deviceCommand
         const selection = await discoverAndSelectDevice(ask, existingDevices);
         hostValue = selection.hostValue;
         discoveredName = selection.discoveredName;
+        discoveredId = selection.discoveredId;
 
         if (!hostValue) {
           console.log(chalk.dim('\nNo device added.'));
@@ -1398,8 +1410,18 @@ deviceCommand
         }
       }
 
-      // Check for duplicate
-      const existingIndex = existingDevices.findIndex((d) => d.host === hostValue);
+      // Find any existing entry that represents this device, including cases
+      // where the host URL changed (IP ↔ .local) since the device was last added.
+      const existingEntry = findExistingDeviceEntry(
+        existingDevices,
+        hostValue,
+        discoveredName,
+        discoveredId
+      );
+      const existingIndex = existingEntry
+        ? existingDevices.findIndex((d) => d === existingEntry)
+        : -1;
+
       if (existingIndex !== -1) {
         if (options.host && options.name) {
           // Non-interactive: auto-overwrite when both flags are supplied
@@ -1425,12 +1447,8 @@ deviceCommand
         }
       }
 
-      // Preserve existing name as fallback. Try exact-host match first; if the
-      // device came back on a new IP, fall back to hostname/TXT-name identity matching.
-      const existingEntry =
-        existingIndex !== -1
-          ? existingDevices[existingIndex]
-          : findExistingDeviceEntry(existingDevices, hostValue, discoveredName);
+      // Preserve the stored friendly name as the default so a blank prompt never
+      // clobbers a curated label (even after a host-URL change).
       const existingName = existingEntry?.name || '';
       let deviceName: string;
       if (options.name) {
@@ -1452,7 +1470,11 @@ deviceCommand
         console.log(chalk.yellow(`Warning: another device already uses the name "${deviceName}"`));
       }
 
-      const result = upsertDevice(existingDevices, { name: deviceName, host: hostValue });
+      const result = upsertDevice(existingDevices, {
+        name: deviceName,
+        host: hostValue,
+        id: discoveredId,
+      });
       console.log(chalk.green(`\n${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
 
       config.ff1Devices = { devices: result.devices };

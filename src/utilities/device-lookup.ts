@@ -3,30 +3,39 @@
  *
  * Tries, in order:
  *  1. Exact URL match (the normal case).
- *  2. mDNS hostname match — covers the scenario where the stored entry used an IP
- *     address but the device is now discovered via its .local mDNS name, or vice
- *     versa. Both URLs are parsed; only the hostname component is compared so that
- *     port differences do not prevent a match.
- *  3. TXT-name match — if the device advertises a name (e.g. "kitchen") and a
+ *  2. mDNS device ID match — if a stored entry has an `id` field (e.g. 'ff1-hh9jsnoc')
+ *     that matches the discovered device's ID, they are the same physical device even
+ *     when the host URL changed (IP ↔ .local hostname, DHCP lease change, etc.).
+ *     This is the only reliable way to reconcile IP↔.local without a network lookup.
+ *  3. mDNS hostname component match — both URLs are parsed and only the hostname
+ *     part is compared (same .local name, different underlying IP or port).
+ *  4. TXT-name match — if the device advertises a name (e.g. "kitchen") and a
  *     stored entry has that same friendly name, treat them as the same device.
- *     Handles the case where the host representation changed and the operator has
- *     not manually renamed the device in config.
  *
  * Returns the matched entry so callers can preserve the stored friendly name as
  * the default when prompting, rather than falling back to the raw mDNS label.
  */
 export function findExistingDeviceEntry(
-  existingDevices: Array<{ host?: string; name?: string }>,
+  existingDevices: Array<{ host?: string; name?: string; id?: string }>,
   newHost: string,
-  discoveredName: string
-): { host?: string; name?: string } | undefined {
+  discoveredName: string,
+  discoveredId?: string
+): { host?: string; name?: string; id?: string } | undefined {
   // 1. Exact URL match
   const byHost = existingDevices.find((d) => d.host === newHost);
   if (byHost) {
     return byHost;
   }
 
-  // 2. mDNS hostname match (ignores port and protocol differences)
+  // 2. mDNS device ID match (reconciles IP ↔ .local changes)
+  if (discoveredId) {
+    const byId = existingDevices.find((d) => d.id === discoveredId);
+    if (byId) {
+      return byId;
+    }
+  }
+
+  // 3. mDNS hostname component match (ignores port and protocol differences)
   let newHostname = '';
   try {
     newHostname = new URL(newHost).hostname;
@@ -47,7 +56,7 @@ export function findExistingDeviceEntry(
     }
   }
 
-  // 3. TXT-name match
+  // 4. TXT-name match
   if (discoveredName) {
     return existingDevices.find((d) => d.name === discoveredName);
   }

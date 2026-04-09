@@ -1,6 +1,8 @@
 export interface DeviceEntry {
   host: string;
   name?: string;
+  /** mDNS device ID (e.g. 'ff1-hh9jsnoc'). Stored so host-change lookups can match by ID. */
+  id?: string;
   apiKey?: string;
   topicID?: string;
 }
@@ -16,7 +18,7 @@ export interface DeviceEntry {
  */
 export function upsertDevice(
   existingDevices: DeviceEntry[],
-  newDevice: { name: string; host: string; apiKey?: string; topicID?: string }
+  newDevice: { name: string; host: string; id?: string; apiKey?: string; topicID?: string }
 ): { devices: DeviceEntry[]; updated: boolean } {
   const devices = [...existingDevices];
 
