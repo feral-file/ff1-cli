@@ -91,6 +91,13 @@ describe('parseAvahiBrowseOutput', () => {
     assert.equal(devices[0].name, 'FF1-AAA');
   });
 
+  test('captures resolved IP address in addresses field', () => {
+    const output = makeAvahiRecord({ serviceName: 'FF1-AAA', hostname: 'ff1-aaa.local.' });
+    const devices = parseAvahiBrowseOutput(output);
+    assert.equal(devices.length, 1);
+    assert.deepEqual(devices[0].addresses, ['192.168.1.10']);
+  });
+
   // Regression: avahi-browse -r can emit "_ff1._tcp.local" instead of "_ff1._tcp"
   // in the header line; indexOf('_ff1._tcp') returns -1 on the variant, truncating
   // multi-word names to a single token. The fix uses a prefix regex.

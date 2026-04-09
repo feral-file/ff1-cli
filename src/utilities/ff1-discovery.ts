@@ -8,6 +8,8 @@ export interface FF1DiscoveredDevice {
   id?: string;
   fqdn?: string;
   txt?: Record<string, string>;
+  /** Resolved IP addresses reported by mDNS (used to correlate .local ↔ IP stored entries). */
+  addresses?: string[];
 }
 
 export interface FF1DiscoveryResult {
@@ -96,23 +98,31 @@ function getHostnameId(host: string): string {
 export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
   const devices = new Map<string, FF1DiscoveredDevice>();
   const lines = output.split('\n');
-  let current: (Partial<FF1DiscoveredDevice> & { rawHost?: string }) | null = null;
+  let current: (Partial<FF1DiscoveredDevice> & { rawHost?: string; rawAddress?: string }) | null =
+    null;
+
+  const flushCurrent = () => {
+    if (!current?.rawHost) {
+      return;
+    }
+    const host = normalizeMdnsHost(current.rawHost).toLowerCase();
+    const key = `${host}:${current.port ?? 1111}`;
+    const id = getHostnameId(host) || current.id;
+    const addresses = current.rawAddress ? [current.rawAddress] : undefined;
+    devices.set(key, {
+      name: current.name || id || host,
+      host,
+      port: current.port ?? 1111,
+      id,
+      txt: current.txt,
+      addresses,
+    });
+  };
 
   for (const line of lines) {
     // Resolved record header: "=  wlan0 IPv4 FF1-HH9JSNOC   _ff1._tcp   local"
     if (/^=\s/.test(line)) {
-      if (current?.rawHost) {
-        const host = normalizeMdnsHost(current.rawHost).toLowerCase();
-        const key = `${host}:${current.port ?? 1111}`;
-        const id = getHostnameId(host) || current.id;
-        devices.set(key, {
-          name: current.name || id || host,
-          host,
-          port: current.port ?? 1111,
-          id,
-          txt: current.txt,
-        });
-      }
+      flushCurrent();
       const parts = line.trim().split(/\s+/);
       // parts: ['=', 'wlan0', 'IPv4', 'My Device Name', '_ff1._tcp', 'local']
       // Service name may be multi-word; find the type token to bound the slice.
@@ -131,6 +141,12 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
     const hostnameMatch = line.match(/^\s+hostname\s*=\s*\[(.+)\]/);
     if (hostnameMatch) {
       current.rawHost = hostnameMatch[1];
+      continue;
+    }
+
+    const addressMatch = line.match(/^\s+address\s*=\s*\[(.+)\]/);
+    if (addressMatch) {
+      current.rawAddress = addressMatch[1].trim();
       continue;
     }
 
@@ -159,18 +175,7 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
   }
 
   // Flush last record
-  if (current?.rawHost) {
-    const host = normalizeMdnsHost(current.rawHost).toLowerCase();
-    const key = `${host}:${current.port ?? 1111}`;
-    const id = getHostnameId(host) || current.id;
-    devices.set(key, {
-      name: current.name || id || host,
-      host,
-      port: current.port ?? 1111,
-      id,
-      txt: current.txt,
-    });
-  }
+  flushCurrent();
 
   return Array.from(devices.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -298,6 +303,11 @@ function discoverViaBonjour(options: DiscoveryOptions): Promise<FF1DiscoveryResu
         const id = hostId || txt.id || undefined;
         const key = `${host}:${port}`;
 
+        const addresses =
+          Array.isArray(service.addresses) && service.addresses.length > 0
+            ? (service.addresses as string[])
+            : undefined;
+
         devices.set(key, {
           name,
           host,
@@ -305,6 +315,7 @@ function discoverViaBonjour(options: DiscoveryOptions): Promise<FF1DiscoveryResu
           id,
           fqdn: service.fqdn,
           txt,
+          addresses,
         });
       });
 

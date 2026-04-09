@@ -59,6 +59,39 @@ describe('findExistingDeviceEntry', () => {
     assert.equal(result?.name, 'kitchen');
   });
 
+  // Regression: pre-id config (no stored id, curated name) + mDNS label doesn't match
+  // the friendly name. Without address-based matching, findExistingDeviceEntry() falls
+  // through all checks and returns undefined → upsertDevice() appends a duplicate.
+  test('IP ↔ .local: stored entry found via resolved IP address when id and TXT name both absent', () => {
+    // Legacy config: no id, curated name that doesn't match the raw mDNS label
+    const devices = [{ name: 'kitchen', host: 'http://192.168.1.10:1111' }];
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://ff1-hh9jsnoc.local:1111', // new .local host
+      'ff1-hh9jsnoc', // raw mDNS label — does NOT match stored name 'kitchen'
+      'ff1-hh9jsnoc', // discoveredId — not stored, so id check won't find it
+      ['192.168.1.10'] // avahi-reported IP matches the stored entry's host
+    );
+    assert.equal(result?.name, 'kitchen');
+  });
+
+  // Confirm address-based matching does not shadow an entry that already has an id.
+  test('address match is skipped for entries that have a stored id', () => {
+    const devices = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-hh9jsnoc' },
+      { name: 'office', host: 'http://192.168.1.11:1111' }, // no id
+    ];
+    // discoveredId matches kitchen; addresses match office. id check should win.
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://ff1-hh9jsnoc.local:1111',
+      'ff1-hh9jsnoc',
+      'ff1-hh9jsnoc',
+      ['192.168.1.11'] // would match office by IP, but kitchen wins by id
+    );
+    assert.equal(result?.name, 'kitchen');
+  });
+
   test('returns undefined when no match by host, id, hostname, or name', () => {
     const devices = [
       { name: 'kitchen', host: 'http://ff1-hh9jsnoc.local:1111', id: 'ff1-hh9jsnoc' },

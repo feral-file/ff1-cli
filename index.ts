@@ -169,6 +169,8 @@ interface DeviceDiscoverySelection {
   discoveredName: string;
   /** mDNS device ID (e.g. 'ff1-hh9jsnoc'). Used to match a device when its host URL changes. */
   discoveredId?: string;
+  /** Resolved IP addresses from mDNS. Used to match pre-id configs stored with an IP host. */
+  discoveredAddresses?: string[];
   skipped: boolean;
 }
 
@@ -200,7 +202,8 @@ async function discoverAndSelectDevice(
         existingDevices,
         normalizedHost,
         device.name || device.id || '',
-        device.id
+        device.id,
+        device.addresses
       );
       const suffix = alreadyConfigured ? chalk.dim(' (already configured)') : '';
       console.log(chalk.dim(`  ${index + 1}) ${displayId}${suffix}`));
@@ -237,6 +240,7 @@ async function discoverAndSelectDevice(
           hostValue: normalizeDeviceHost(`${selected.host}:${selected.port}`),
           discoveredName: selected.name || selected.id || '',
           discoveredId: selected.id,
+          discoveredAddresses: selected.addresses,
           skipped: false,
         };
       }
@@ -271,6 +275,7 @@ async function discoverAndSelectDevice(
           hostValue: normalizeDeviceHost(`${matched.host}:${matched.port}`),
           discoveredName: matched.name || matched.id || '',
           discoveredId: matched.id,
+          discoveredAddresses: matched.addresses,
           skipped: false,
         };
       }
@@ -553,7 +558,8 @@ program
           existingDevices,
           selection.hostValue,
           selection.discoveredName,
-          selection.discoveredId
+          selection.discoveredId,
+          selection.discoveredAddresses
         );
         const existingName = existingEntry?.name || '';
         const defaultName = existingName || selection.discoveredName || 'ff1';
@@ -1404,6 +1410,7 @@ deviceCommand
       let hostValue = '';
       let discoveredName = '';
       let discoveredId: string | undefined;
+      let discoveredAddresses: string[] | undefined;
 
       if (options.host) {
         hostValue = normalizeDeviceHost(options.host);
@@ -1413,6 +1420,7 @@ deviceCommand
         hostValue = selection.hostValue;
         discoveredName = selection.discoveredName;
         discoveredId = selection.discoveredId;
+        discoveredAddresses = selection.discoveredAddresses;
 
         if (!hostValue) {
           console.log(chalk.dim('\nNo device added.'));
@@ -1429,7 +1437,8 @@ deviceCommand
         existingDevices,
         hostValue,
         discoveredName,
-        discoveredId
+        discoveredId,
+        discoveredAddresses
       );
       const existingIndex = existingEntry
         ? existingDevices.findIndex((d) => d === existingEntry)
