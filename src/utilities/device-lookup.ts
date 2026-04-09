@@ -8,9 +8,12 @@
  *  2. Exact URL match — normal case after ID (same host format, no migration).
  *  3. mDNS hostname component match — both URLs are parsed and only the hostname
  *     part is compared (same .local name, different underlying IP or port).
- *  4. IP address match — the discovered device reports a resolved IP address that
- *     matches the IP in a stored entry. Bridges IP ↔ .local migration for configs
- *     written before the id field existed (no stored id, curated friendly name).
+ *  4a. Discovered IP → stored IP: the mDNS discovery reports a resolved IP that
+ *     matches the IP in a stored entry. Bridges .local ↔ stored-IP migration for
+ *     pre-id configs with no stored id.
+ *  4b. New-host IP → stored addresses: the caller provides an IP host (e.g. from
+ *     --host <ip>) and a stored entry has that IP in its addresses list. Bridges
+ *     the reverse direction (.local stored, IP provided by the user).
  *  5. TXT-name match — if the device advertises a name that matches a stored
  *     friendly name, treat them as the same device (last-resort fallback for
  *     configs written before the id field existed).
@@ -19,12 +22,12 @@
  * the default when prompting, rather than falling back to the raw mDNS label.
  */
 export function findExistingDeviceEntry(
-  existingDevices: Array<{ host?: string; name?: string; id?: string }>,
+  existingDevices: Array<{ host?: string; name?: string; id?: string; addresses?: string[] }>,
   newHost: string,
   discoveredName: string,
   discoveredId?: string,
   discoveredAddresses?: string[]
-): { host?: string; name?: string; id?: string } | undefined {
+): { host?: string; name?: string; id?: string; addresses?: string[] } | undefined {
   // 1. mDNS device ID — stable hardware identity, checked before URL so stale
   //    host entries for other devices at the same IP do not shadow the result.
   if (discoveredId) {
@@ -61,13 +64,10 @@ export function findExistingDeviceEntry(
     }
   }
 
-  // 4. IP address match — handles IP ↔ .local migration for pre-id configs.
-  //    If the discovered device reports one or more resolved IP addresses and
-  //    a stored entry's host URL contains one of those IPs, treat them as the
-  //    same device. Only matches entries without a stored id so that a device
-  //    that has already been correlated by identity cannot be shadowed here.
+  // 4a. Discovered IP → stored IP: mDNS reported addresses include the stored entry's IP.
+  //     Only matches entries without a stored id (handled above by step 1).
   if (discoveredAddresses && discoveredAddresses.length > 0) {
-    const byAddress = existingDevices.find((d) => {
+    const byDiscoveredAddress = existingDevices.find((d) => {
       if (d.id) {
         return false; // already handled by the id check above
       }
@@ -78,8 +78,18 @@ export function findExistingDeviceEntry(
         return false;
       }
     });
-    if (byAddress) {
-      return byAddress;
+    if (byDiscoveredAddress) {
+      return byDiscoveredAddress;
+    }
+  }
+
+  // 4b. New-host IP → stored addresses: the new host is an IP URL and a stored
+  //     entry has that IP in its stored addresses list (populated from prior mDNS
+  //     discoveries). This bridges --host <ip> → existing .local entry.
+  if (newHostname && /^[0-9.]+$/.test(newHostname)) {
+    const byStoredAddress = existingDevices.find((d) => d.addresses?.includes(newHostname));
+    if (byStoredAddress) {
+      return byStoredAddress;
     }
   }
 

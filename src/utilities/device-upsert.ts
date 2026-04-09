@@ -5,6 +5,9 @@ export interface DeviceEntry {
   id?: string;
   apiKey?: string;
   topicID?: string;
+  /** Resolved IP addresses last observed for this device. Stored so --host <ip> can match
+   *  an existing .local entry without requiring a new mDNS scan. */
+  addresses?: string[];
 }
 
 /**
@@ -28,7 +31,14 @@ function withoutUndefined<T extends object>(obj: T): Partial<T> {
  */
 export function upsertDevice(
   existingDevices: DeviceEntry[],
-  newDevice: { name: string; host: string; id?: string; apiKey?: string; topicID?: string }
+  newDevice: {
+    name: string;
+    host: string;
+    id?: string;
+    apiKey?: string;
+    topicID?: string;
+    addresses?: string[];
+  }
 ): { devices: DeviceEntry[]; updated: boolean } {
   const devices = [...existingDevices];
   const patch = withoutUndefined(newDevice);

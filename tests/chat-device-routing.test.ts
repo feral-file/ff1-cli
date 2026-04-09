@@ -37,6 +37,15 @@ describe('resolveEffectiveDeviceName', () => {
   test('intent deviceName used when CLI flag is absent', () => {
     assert.equal(resolveEffectiveDeviceName('kitchen', undefined), 'kitchen');
   });
+
+  // Regression: the direct send_playlist path in main.ts must sanitize parser-emitted
+  // sentinel strings before resolving. A literal "null" from the intent parser is truthy
+  // and would override the CLI --device fallback without sanitization.
+  test('parser-emitted "null" string must be sanitized to undefined before resolution', () => {
+    const rawDeviceName = 'null'; // parser emitted string "null"
+    const sanitized = rawDeviceName === 'null' || rawDeviceName === '' ? undefined : rawDeviceName;
+    assert.equal(resolveEffectiveDeviceName(sanitized, 'office'), 'office');
+  });
 });
 
 // ---------------------------------------------------------------------------

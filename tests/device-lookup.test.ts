@@ -88,6 +88,28 @@ describe('findExistingDeviceEntry', () => {
     assert.equal(result?.name, 'kitchen');
   });
 
+  // Regression: --host <ip> path provides no discoveredAddresses; the match must work
+  // via the stored addresses on the .local entry (written during the prior mDNS setup).
+  test('IP host with no discoveredAddresses matches stored .local entry via stored addresses', () => {
+    // Stored from a prior mDNS-based device add: .local host + addresses persisted
+    const devices = [
+      {
+        name: 'kitchen',
+        host: 'http://ff1-hh9jsnoc.local:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['192.168.1.10'],
+      },
+    ];
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://192.168.1.10:1111', // user ran: ff1 device add --host 192.168.1.10
+      '', // no discoveredName
+      undefined, // no discoveredId (--host path skips discovery)
+      undefined // no discoveredAddresses (--host path skips discovery)
+    );
+    assert.equal(result?.name, 'kitchen');
+  });
+
   // Confirm address-based matching does not shadow an entry that already has an id.
   test('address match is skipped for entries that have a stored id', () => {
     const devices = [

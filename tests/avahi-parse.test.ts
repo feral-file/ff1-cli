@@ -121,6 +121,29 @@ describe('parseAvahiBrowseOutput', () => {
     assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 address must be present');
   });
 
+  // Regression: a later partial record (e.g. a second IPv6 interface record with no TXT)
+  // must not clobber the name/id/txt from the earlier complete record.
+  test('merge preserves name and txt from earlier complete record when later record is partial', () => {
+    const complete = makeAvahiRecord({
+      serviceName: 'FF1-HH9JSNOC',
+      hostname: 'ff1-hh9jsnoc.local.',
+      txtName: 'kitchen',
+    });
+    // Partial record for the same hostname (e.g. IPv6 interface): header + hostname + address only
+    const partial = [
+      '=  wlan0 IPv6 FF1-HH9JSNOC _ff1._tcp local',
+      '   hostname = [ff1-hh9jsnoc.local.]',
+      '   address = [fe80::1]',
+      '   port = [1111]',
+      '   txt = []',
+    ].join('\n');
+    const devices = parseAvahiBrowseOutput(`${complete}\n${partial}`);
+    assert.equal(devices.length, 1);
+    assert.equal(devices[0].name, 'kitchen', 'TXT name from first record must survive');
+    assert.ok(devices[0].addresses?.includes('192.168.1.10'), 'IPv4 address must be present');
+    assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 address must be present');
+  });
+
   // Regression: avahi-browse -r can emit "_ff1._tcp.local" instead of "_ff1._tcp"
   // in the header line; indexOf('_ff1._tcp') returns -1 on the variant, truncating
   // multi-word names to a single token. The fix uses a prefix regex.

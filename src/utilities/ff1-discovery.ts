@@ -116,17 +116,27 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
 
     // Merge with an existing entry for the same key (e.g. IPv4 + IPv6 records
     // for the same .local hostname both resolve to the same host:port key).
+    // Prefer TXT-sourced metadata from whichever record has it; a later partial
+    // record must not clobber a previously complete name/id/txt.
     const existing = devices.get(key);
     const mergedAddresses = [...(existing?.addresses ?? []), ...newAddresses].filter(
       (addr, i, arr) => arr.indexOf(addr) === i
     ); // deduplicate
 
+    // For name: prefer TXT-sourced name from either record; fall back to header name.
+    const mergedName =
+      existing?.txt?.name || current.txt?.name || existing?.name || current.name || id || host;
+    // For id: prefer existing id (already validated) over newly derived id.
+    const mergedId = existing?.id || id;
+    // For txt: prefer whichever record has txt metadata.
+    const mergedTxt = existing?.txt || current.txt;
+
     devices.set(key, {
-      name: current.name || id || host,
+      name: mergedName,
       host,
       port: current.port ?? 1111,
-      id,
-      txt: current.txt,
+      id: mergedId,
+      txt: mergedTxt,
       addresses: mergedAddresses.length > 0 ? mergedAddresses : undefined,
     });
   };

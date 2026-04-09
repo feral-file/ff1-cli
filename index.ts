@@ -574,6 +574,7 @@ program
           name: deviceName,
           host: selection.hostValue,
           id: selection.discoveredId,
+          addresses: selection.discoveredAddresses,
         });
         console.log(chalk.dim(`${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
         config.ff1Devices = { devices: result.devices };
@@ -1496,6 +1497,7 @@ deviceCommand
         name: deviceName,
         host: hostValue,
         id: discoveredId,
+        addresses: discoveredAddresses,
       });
       console.log(chalk.green(`\n${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
 

@@ -365,9 +365,14 @@ export async function buildPlaylist(
       console.log();
       console.log(chalk.cyan('Sending to device'));
 
+      // Sanitize parser-emitted sentinel strings (e.g. literal "null") before
+      // resolving the device name, matching the normalization in confirmPlaylistForSending.
+      const rawSendDeviceName = sendParams.deviceName as string | undefined;
+      const sanitizedSendDeviceName =
+        rawSendDeviceName === 'null' || rawSendDeviceName === '' ? undefined : rawSendDeviceName;
       const sendResult = await utilities.sendToDevice(
         sendParams.playlist as Playlist,
-        resolveEffectiveDeviceName(sendParams.deviceName as string | undefined, defaultDeviceName)
+        resolveEffectiveDeviceName(sanitizedSendDeviceName, defaultDeviceName)
       );
 
       if (sendResult.success) {
