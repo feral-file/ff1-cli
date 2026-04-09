@@ -99,9 +99,13 @@ export function findExistingDeviceEntry(
     }
   }
 
-  // 5. TXT-name match (fallback for entries without a stored id)
+  // 5. TXT-name match — only for entries WITHOUT a stored id.
+  //    If a stored entry already has an id and it did not match in step 1, then
+  //    the discovered device is a physically distinct device that merely advertises
+  //    the same friendly name; matching by name alone would resolve to the wrong row
+  //    and cause upsertDevice to overwrite a different device.
   if (discoveredName) {
-    return existingDevices.find((d) => d.name === discoveredName);
+    return existingDevices.find((d) => !d.id && d.name === discoveredName);
   }
 
   return undefined;

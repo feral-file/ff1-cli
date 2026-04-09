@@ -54,9 +54,29 @@ describe('findExistingDeviceEntry', () => {
   });
 
   test('TXT-name match: stored entry found by discoveredName when host completely changed', () => {
+    // No stored id — TXT-name fallback applies
     const devices = [{ name: 'kitchen', host: 'http://192.168.1.10:1111' }];
     const result = findExistingDeviceEntry(devices, 'http://10.0.0.99:1111', 'kitchen');
     assert.equal(result?.name, 'kitchen');
+  });
+
+  // Regression: a different physical device (different id) that merely advertises the same
+  // friendly name must NOT match via TXT-name fallback. If it did, upsertDevice case-3
+  // would overwrite the existing entry instead of adding a new row.
+  test('TXT-name fallback is skipped when stored entry has an id (different physical device)', () => {
+    const devices = [{ name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-aaa' }];
+    // Completely different device: different id, different host, but same TXT name
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://192.168.1.99:1111',
+      'kitchen', // TXT name matches — but this is a different device
+      'ff1-ccc' // different id → id check (step 1) won't match; step 5 must also refuse
+    );
+    assert.equal(
+      result,
+      undefined,
+      'different device must not match via TXT-name when stored entry has id'
+    );
   });
 
   // Regression: pre-id config (no stored id, curated name) + mDNS label doesn't match

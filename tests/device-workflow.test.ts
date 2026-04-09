@@ -147,6 +147,62 @@ describe('device add / setup workflow (avahi → lookup → upsert)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Two distinct devices sharing the same friendly/TXT name
+// ---------------------------------------------------------------------------
+describe('same-friendly-name collision: lookup + add flow', () => {
+  // Regression: TXT-name fallback must not collapse two physically distinct devices
+  // (different ids, different hosts) into the same config row.
+  test('lookup returns undefined when a stored id-bearing entry has the same name as a different device', () => {
+    const stored = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-aaa' },
+      { name: 'office', host: 'http://192.168.1.11:1111', id: 'ff1-bbb' },
+    ];
+    // Genuinely new device with a different id that happens to advertise name='kitchen'
+    const existingEntry = findExistingDeviceEntry(
+      stored,
+      'http://192.168.1.99:1111', // different host
+      'kitchen', // same TXT friendly name as stored device
+      'ff1-ccc' // different id
+    );
+    assert.equal(existingEntry, undefined, 'must not resolve to the existing kitchen entry');
+  });
+
+  // Regression: the full device-add flow — lookup yields undefined → name-collision
+  // guard fires → upsertDevice is NOT called with the colliding name → no overwrite.
+  test('add flow: when lookup returns undefined and name collides, guard prevents overwrite', () => {
+    const stored = [{ name: 'kitchen', host: 'http://192.168.1.10:1111', id: 'ff1-aaa' }];
+    const newHost = 'http://192.168.1.99:1111';
+    const newId = 'ff1-ccc';
+    const advertisedName = 'kitchen';
+
+    // Step 1: lookup — must return undefined
+    const existingEntry = findExistingDeviceEntry(stored, newHost, advertisedName, newId);
+    const existingIndex = existingEntry ? stored.findIndex((d) => d === existingEntry) : -1;
+    assert.equal(existingIndex, -1, 'no existing entry should be found');
+
+    // Step 2: name-collision guard — must fire because existingIndex === -1
+    // and another device already owns the name
+    const nameConflict = stored.find(
+      (d, i) => d.name === advertisedName && (existingIndex === -1 || i !== existingIndex)
+    );
+    assert.ok(nameConflict, 'name-collision guard must detect the conflict');
+    // The guard would error/re-prompt here — upsertDevice is never called
+    // Verify that calling upsertDevice with the colliding name would clobber (showing why the guard matters)
+    const { devices } = upsertDevice(stored, { name: advertisedName, host: newHost, id: newId });
+    assert.equal(
+      devices.length,
+      1,
+      'upsertDevice alone would collapse to 1 row — guard must prevent this call'
+    );
+    assert.equal(
+      devices[0].id,
+      newId,
+      'the original kitchen entry would be overwritten without the guard'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Duplicate name collision guard
 // ---------------------------------------------------------------------------
 describe('device add name-collision guard', () => {
