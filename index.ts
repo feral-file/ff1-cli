@@ -620,7 +620,7 @@ program
           label: `FF1 devices (${config.ff1Devices?.devices?.length || 0})`,
           ok:
             (config.ff1Devices?.devices?.length || 0) > 0 &&
-            !isMissingConfigValue(config.ff1Devices?.devices?.[0]?.host),
+            (config.ff1Devices?.devices || []).every((d) => !isMissingConfigValue(d.host)),
           detail:
             (config.ff1Devices?.devices || [])
               .map((d) => `${d.name || 'unnamed'} → ${d.host}`)

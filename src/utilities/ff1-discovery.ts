@@ -187,8 +187,22 @@ function discoverViaAvahi(options: DiscoveryOptions): Promise<FF1DiscoveryResult
       { timeout: timeoutMs },
       (error, stdout, _stderr) => {
         if (error) {
-          // Any non-zero exit — including partial stdout — falls through to
-          // the Bonjour fallback so discovery stays reliable on Linux.
+          // Non-zero exit: try to parse whatever stdout we have.
+          // avahi-browse can exit non-zero (e.g. SIGTERM from the timeout) while
+          // still having emitted fully resolved records. Use those results if
+          // the parse yields at least one device; otherwise fall through to
+          // the Bonjour fallback so Linux discovery stays reliable.
+          if (stdout) {
+            try {
+              const devices = parseAvahiBrowseOutput(stdout);
+              if (devices.length > 0) {
+                resolve({ devices });
+                return;
+              }
+            } catch {
+              // unparseable output — fall through
+            }
+          }
           resolve(null);
           return;
         }

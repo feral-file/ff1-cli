@@ -72,11 +72,6 @@ describe('parseAvahiBrowseOutput', () => {
     assert.deepEqual(names, ['FF1-AAA', 'FF1-BBB']);
   });
 
-  // Regression: avahi-browse non-zero exit with partial stdout used to bypass
-  // Bonjour fallback by returning whatever was parsed. discoverViaAvahi now
-  // returns null on any non-zero exit so Bonjour runs instead.
-  // parseAvahiBrowseOutput must handle partial/incomplete output gracefully
-  // so the resolved record before the truncation point is still returned cleanly.
   test('returns empty array for empty output', () => {
     assert.deepEqual(parseAvahiBrowseOutput(''), []);
   });
@@ -86,12 +81,37 @@ describe('parseAvahiBrowseOutput', () => {
     assert.deepEqual(parseAvahiBrowseOutput(output), []);
   });
 
+  // Regression: discoverViaAvahi previously returned null on ANY non-zero exit,
+  // discarding valid devices. avahi-browse can exit non-zero (e.g. SIGTERM from
+  // our timeout) after fully resolving all records. The correct behaviour:
+  //   non-zero + devices parsed  → use the devices, skip Bonjour fallback
+  //   non-zero + no devices      → return null so Bonjour runs
+  // This is tested via parseAvahiBrowseOutput: if it returns ≥1 device from the
+  // stdout string, discoverViaAvahi will use those results even on non-zero exit.
+  test('non-zero exit with usable stdout: parsed devices are non-empty so caller should use them', () => {
+    // Simulate stdout from a non-zero-exit avahi-browse that still resolved one device
+    const stdout = makeAvahiRecord({ serviceName: 'FF1-Office', hostname: 'ff1-office.local.' });
+    const devices = parseAvahiBrowseOutput(stdout);
+    assert.equal(
+      devices.length,
+      1,
+      'parsed result is usable — discoverViaAvahi must not discard it'
+    );
+  });
+
+  test('non-zero exit with unusable stdout: parsed devices are empty so caller should fall back', () => {
+    // Only announcement lines, no resolved records
+    const stdout = '+  wlan0 IPv4 FF1-Office _ff1._tcp local\n';
+    const devices = parseAvahiBrowseOutput(stdout);
+    assert.equal(devices.length, 0, 'no usable devices — discoverViaAvahi must return null');
+  });
+
   test('recovers the complete record before a truncated second record', () => {
     const complete = makeAvahiRecord({ serviceName: 'FF1-AAA', hostname: 'ff1-aaa.local.' });
     // Truncated second record — only the header line, no hostname/port/txt
     const truncated = '=  wlan0 IPv4 FF1-BBB _ff1._tcp local';
     const devices = parseAvahiBrowseOutput(`${complete}\n${truncated}`);
-    // Only the complete record should be returned
+    // The complete record is still returned; the truncated one is silently dropped
     assert.equal(devices.length, 1);
     assert.equal(devices[0].name, 'FF1-AAA');
   });
