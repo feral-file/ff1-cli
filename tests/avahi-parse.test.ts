@@ -121,6 +121,32 @@ describe('parseAvahiBrowseOutput', () => {
     assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 address must be present');
   });
 
+  // Regression: a partial record that has txt=[] emits {} which is truthy, blocking a later
+  // complete TXT payload from being used. The fix treats {} as absent.
+  test('merge uses complete TXT from later record when earlier record had empty txt', () => {
+    // Partial first: txt = [] → {}
+    const partial = [
+      '=  wlan0 IPv4 FF1-HH9JSNOC _ff1._tcp local',
+      '   hostname = [ff1-hh9jsnoc.local.]',
+      '   address = [192.168.1.10]',
+      '   port = [1111]',
+      '   txt = []',
+    ].join('\n');
+    // Complete second: txt with name and id
+    const complete = [
+      '=  wlan0 IPv6 FF1-HH9JSNOC _ff1._tcp local',
+      '   hostname = [ff1-hh9jsnoc.local.]',
+      '   address = [fe80::1]',
+      '   port = [1111]',
+      '   txt = ["name=kitchen" "id=ff1-hh9jsnoc"]',
+    ].join('\n');
+    const devices = parseAvahiBrowseOutput(`${partial}\n${complete}`);
+    assert.equal(devices.length, 1);
+    assert.equal(devices[0].name, 'kitchen', 'TXT name from later complete record must be used');
+    assert.ok(devices[0].addresses?.includes('192.168.1.10'), 'IPv4 address must be present');
+    assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 address must be present');
+  });
+
   // Regression: a later partial record (e.g. a second IPv6 interface record with no TXT)
   // must not clobber the name/id/txt from the earlier complete record.
   test('merge preserves name and txt from earlier complete record when later record is partial', () => {

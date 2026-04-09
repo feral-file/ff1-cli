@@ -96,6 +96,29 @@ describe('upsertDevice', () => {
     assert.equal(devices[1].name, 'office');
   });
 
+  // Regression: addresses must be merged (not replaced) on update so a later discovery
+  // reporting only a subset does not shrink the stored set and break the reverse IP lookup.
+  test('merges addresses on update rather than replacing them', () => {
+    const existing = [
+      {
+        name: 'kitchen',
+        host: 'http://ff1-hh9jsnoc.local:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['192.168.1.10', 'fe80::1'],
+      },
+    ];
+    // Re-add with only the IPv4 address (e.g. an IPv4-only discovery run)
+    const { devices } = upsertDevice(existing, {
+      name: 'kitchen',
+      host: 'http://ff1-hh9jsnoc.local:1111',
+      id: 'ff1-hh9jsnoc',
+      addresses: ['192.168.1.10'],
+    });
+    assert.equal(devices.length, 1);
+    assert.ok(devices[0].addresses?.includes('192.168.1.10'), 'IPv4 must be preserved');
+    assert.ok(devices[0].addresses?.includes('fe80::1'), 'IPv6 must not be lost on partial update');
+  });
+
   // Regression: device with stored id was not matched when it moved to a new host+name,
   // causing a duplicate entry to be appended.
   test('updates in-place when same id is found even if host changed', () => {

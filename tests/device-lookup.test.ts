@@ -110,6 +110,28 @@ describe('findExistingDeviceEntry', () => {
     assert.equal(result?.name, 'kitchen');
   });
 
+  // Regression: IPv6 hosts use colons, not dots; the /^[0-9.]+$/ guard must not
+  // skip them for the stored-address fallback.
+  test('IPv6 host with no discoveredAddresses matches stored .local entry via stored addresses', () => {
+    const devices = [
+      {
+        name: 'kitchen',
+        host: 'http://ff1-hh9jsnoc.local:1111',
+        id: 'ff1-hh9jsnoc',
+        addresses: ['fe80::1'],
+      },
+    ];
+    // URL.hostname strips brackets: 'http://[fe80::1]:1111' → hostname 'fe80::1'
+    const result = findExistingDeviceEntry(
+      devices,
+      'http://[fe80::1]:1111',
+      '',
+      undefined,
+      undefined
+    );
+    assert.equal(result?.name, 'kitchen');
+  });
+
   // Confirm address-based matching does not shadow an entry that already has an id.
   test('address match is skipped for entries that have a stored id', () => {
     const devices = [

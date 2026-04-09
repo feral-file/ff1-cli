@@ -123,13 +123,25 @@ export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
       (addr, i, arr) => arr.indexOf(addr) === i
     ); // deduplicate
 
-    // For name: prefer TXT-sourced name from either record; fall back to header name.
+    // Select the richer txt: ignore empty objects (avahi emits txt=[] → {}) so a
+    // partial record with no real TXT data does not block a later complete payload.
+    const existingTxtContent =
+      existing?.txt && Object.keys(existing.txt).length > 0 ? existing.txt : undefined;
+    const currentTxtContent =
+      current.txt && Object.keys(current.txt).length > 0 ? current.txt : undefined;
+    // Prefer whichever txt is non-empty; if both are non-empty, keep the first seen.
+    const mergedTxt = existingTxtContent ?? currentTxtContent;
+
+    // For name: prefer TXT-sourced name from whichever record has content.
     const mergedName =
-      existing?.txt?.name || current.txt?.name || existing?.name || current.name || id || host;
+      existingTxtContent?.name ||
+      currentTxtContent?.name ||
+      existing?.name ||
+      current.name ||
+      id ||
+      host;
     // For id: prefer existing id (already validated) over newly derived id.
     const mergedId = existing?.id || id;
-    // For txt: prefer whichever record has txt metadata.
-    const mergedTxt = existing?.txt || current.txt;
 
     devices.set(key, {
       name: mergedName,

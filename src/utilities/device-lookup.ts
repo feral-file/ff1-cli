@@ -64,6 +64,10 @@ export function findExistingDeviceEntry(
     }
   }
 
+  // Node.js URL.hostname wraps IPv6 addresses in brackets: [fe80::1].
+  // Strip them so comparisons work against the bracket-free strings stored in addresses[].
+  const stripBrackets = (h: string) => (h.startsWith('[') && h.endsWith(']') ? h.slice(1, -1) : h);
+
   // 4a. Discovered IP → stored IP: mDNS reported addresses include the stored entry's IP.
   //     Only matches entries without a stored id (handled above by step 1).
   if (discoveredAddresses && discoveredAddresses.length > 0) {
@@ -72,7 +76,7 @@ export function findExistingDeviceEntry(
         return false; // already handled by the id check above
       }
       try {
-        const storedIp = new URL(d.host || '').hostname;
+        const storedIp = stripBrackets(new URL(d.host || '').hostname);
         return discoveredAddresses.includes(storedIp);
       } catch {
         return false;
@@ -83,11 +87,13 @@ export function findExistingDeviceEntry(
     }
   }
 
-  // 4b. New-host IP → stored addresses: the new host is an IP URL and a stored
-  //     entry has that IP in its stored addresses list (populated from prior mDNS
-  //     discoveries). This bridges --host <ip> → existing .local entry.
-  if (newHostname && /^[0-9.]+$/.test(newHostname)) {
-    const byStoredAddress = existingDevices.find((d) => d.addresses?.includes(newHostname));
+  // 4b. New-host IP → stored addresses: the new host is an IP URL (IPv4 or IPv6)
+  //     and a stored entry has that IP in its stored addresses list (populated from
+  //     prior mDNS discoveries). This bridges --host <ip/ipv6> → existing .local entry.
+  //     Strip IPv6 brackets before comparing (Node URL.hostname returns '[fe80::1]').
+  const rawHostname = stripBrackets(newHostname);
+  if (rawHostname && (/^[0-9.]+$/.test(rawHostname) || rawHostname.includes(':'))) {
+    const byStoredAddress = existingDevices.find((d) => d.addresses?.includes(rawHostname));
     if (byStoredAddress) {
       return byStoredAddress;
     }
