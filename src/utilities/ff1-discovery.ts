@@ -1,4 +1,5 @@
 import { Bonjour } from 'bonjour-service';
+import { execFile } from 'child_process';
 
 export interface FF1DiscoveredDevice {
   name: string;
@@ -7,6 +8,8 @@ export interface FF1DiscoveredDevice {
   id?: string;
   fqdn?: string;
   txt?: Record<string, string>;
+  /** Resolved IP addresses reported by mDNS (used to correlate .local ↔ IP stored entries). */
+  addresses?: string[];
 }
 
 export interface FF1DiscoveryResult {
@@ -14,11 +17,11 @@ export interface FF1DiscoveryResult {
   error?: string;
 }
 
-interface DiscoveryOptions {
+export interface DiscoveryOptions {
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 2000;
+const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Normalize mDNS TXT records to string values.
@@ -88,18 +91,226 @@ function getHostnameId(host: string): string {
 }
 
 /**
+ * Parse avahi-browse -t -r output into FF1DiscoveredDevice list.
+ * Handles resolved records (lines starting with '=') with hostname/address/port/txt fields.
+ * Exported for testing.
+ */
+export function parseAvahiBrowseOutput(output: string): FF1DiscoveredDevice[] {
+  const devices = new Map<string, FF1DiscoveredDevice>();
+  const lines = output.split('\n');
+  let current:
+    | (Partial<FF1DiscoveredDevice> & {
+        rawHost?: string;
+        rawAddresses?: string[];
+      })
+    | null = null;
+
+  const flushCurrent = () => {
+    if (!current?.rawHost) {
+      return;
+    }
+    const host = normalizeMdnsHost(current.rawHost).toLowerCase();
+    const key = `${host}:${current.port ?? 1111}`;
+    const id = getHostnameId(host) || current.id;
+    const newAddresses = current.rawAddresses ?? [];
+
+    // Merge with an existing entry for the same key (e.g. IPv4 + IPv6 records
+    // for the same .local hostname both resolve to the same host:port key).
+    // Prefer TXT-sourced metadata from whichever record has it; a later partial
+    // record must not clobber a previously complete name/id/txt.
+    const existing = devices.get(key);
+    const mergedAddresses = [...(existing?.addresses ?? []), ...newAddresses].filter(
+      (addr, i, arr) => arr.indexOf(addr) === i
+    ); // deduplicate
+
+    // Select the richer txt: ignore empty objects (avahi emits txt=[] → {}) so a
+    // partial record with no real TXT data does not block a later complete payload.
+    const existingTxtContent =
+      existing?.txt && Object.keys(existing.txt).length > 0 ? existing.txt : undefined;
+    const currentTxtContent =
+      current.txt && Object.keys(current.txt).length > 0 ? current.txt : undefined;
+    // Prefer whichever txt is non-empty; if both are non-empty, keep the first seen.
+    const mergedTxt = existingTxtContent ?? currentTxtContent;
+
+    // For name: prefer TXT-sourced name from whichever record has content.
+    const mergedName =
+      existingTxtContent?.name ||
+      currentTxtContent?.name ||
+      existing?.name ||
+      current.name ||
+      id ||
+      host;
+    // For id: prefer existing id (already validated) over newly derived id.
+    const mergedId = existing?.id || id;
+
+    devices.set(key, {
+      name: mergedName,
+      host,
+      port: current.port ?? 1111,
+      id: mergedId,
+      txt: mergedTxt,
+      addresses: mergedAddresses.length > 0 ? mergedAddresses : undefined,
+    });
+  };
+
+  for (const line of lines) {
+    // Resolved record header: "=  wlan0 IPv4 FF1-HH9JSNOC   _ff1._tcp   local"
+    if (/^=\s/.test(line)) {
+      flushCurrent();
+      const parts = line.trim().split(/\s+/);
+      // parts: ['=', 'wlan0', 'IPv4', 'My Device Name', '_ff1._tcp', 'local']
+      // Service name may be multi-word; find the type token to bound the slice.
+      // Use a prefix regex so "_ff1._tcp.local" and "_ff1._tcp" both match.
+      // Preserve original case — resolveConfiguredDevice does exact-match lookups.
+      const typeIndex = parts.findIndex((p) => /^_ff1\._tcp/.test(p));
+      const serviceName = typeIndex > 3 ? parts.slice(3, typeIndex).join(' ') : parts[3] || '';
+      current = { name: serviceName };
+      continue;
+    }
+
+    if (!current) {
+      continue;
+    }
+
+    const hostnameMatch = line.match(/^\s+hostname\s*=\s*\[(.+)\]/);
+    if (hostnameMatch) {
+      current.rawHost = hostnameMatch[1];
+      continue;
+    }
+
+    const addressMatch = line.match(/^\s+address\s*=\s*\[(.+)\]/);
+    if (addressMatch) {
+      if (!current.rawAddresses) {
+        current.rawAddresses = [];
+      }
+      current.rawAddresses.push(addressMatch[1].trim());
+      continue;
+    }
+
+    const portMatch = line.match(/^\s+port\s*=\s*\[(\d+)\]/);
+    if (portMatch) {
+      current.port = parseInt(portMatch[1], 10);
+      continue;
+    }
+
+    const txtMatch = line.match(/^\s+txt\s*=\s*\[(.+)\]/);
+    if (txtMatch) {
+      const txt: Record<string, string> = {};
+      const pairs = txtMatch[1].matchAll(/"([^=]+)=([^"]*)"/g);
+      for (const [, k, v] of pairs) {
+        txt[k] = v;
+      }
+      current.txt = txt;
+      if (txt.name) {
+        current.name = txt.name;
+      }
+      if (txt.id) {
+        current.id = txt.id;
+      }
+      continue;
+    }
+  }
+
+  // Flush last record
+  flushCurrent();
+
+  return Array.from(devices.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Resolve the result of an avahi-browse subprocess call into an FF1DiscoveryResult
+ * or null (which triggers the Bonjour fallback).
+ *
+ * Rules:
+ *  - Clean exit (error === null): parse stdout and return whatever was found.
+ *  - Non-zero exit + usable stdout: avahi-browse can be killed by the execFile
+ *    timeout after emitting fully resolved records. Use the parsed devices if
+ *    ≥1 was found; otherwise return empty result (avahi is present but slow —
+ *    do NOT fall back to Bonjour, which is less reliable on Linux).
+ *  - Timeout (error.killed === true) + no usable stdout: avahi is present but
+ *    the scan produced nothing before the deadline. Return empty rather than
+ *    falling back to Bonjour.
+ *  - Command not found (ENOENT): avahi-browse is not installed — return null
+ *    so the caller falls back to Bonjour.
+ *  - Other error + no usable stdout: treat as unavailable — null.
+ *
+ * Exported for unit testing.
+ */
+export function resolveAvahiResult(error: Error | null, stdout: string): FF1DiscoveryResult | null {
+  if (error) {
+    if (stdout) {
+      try {
+        const devices = parseAvahiBrowseOutput(stdout);
+        if (devices.length > 0) {
+          return { devices };
+        }
+      } catch {
+        // unparseable output — fall through
+      }
+    }
+    // Timeout: avahi is present but the scan was slow. Return empty rather than
+    // falling back to Bonjour, which is unreliable on Linux.
+    if ((error as NodeJS.ErrnoException & { killed?: boolean }).killed) {
+      return { devices: [], error: 'avahi-browse timed out before finding any devices' };
+    }
+    // ENOENT: avahi-browse not installed — fall back to Bonjour.
+    // All other errors with no usable output: also fall back.
+    return null;
+  }
+  try {
+    return { devices: parseAvahiBrowseOutput(stdout) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Discover FF1 devices using avahi-browse (Linux).
+ * Returns null if avahi-browse is not available.
+ */
+function discoverViaAvahi(options: DiscoveryOptions): Promise<FF1DiscoveryResult | null> {
+  return new Promise((resolve) => {
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    execFile(
+      'avahi-browse',
+      ['-t', '-r', '_ff1._tcp'],
+      { timeout: timeoutMs },
+      (error, stdout, _stderr) => {
+        resolve(resolveAvahiResult(error, stdout));
+      }
+    );
+  });
+}
+
+/**
  * Discover FF1 devices via mDNS using the `_ff1._tcp` service.
+ * On Linux, uses avahi-browse for reliable multi-device discovery.
+ * Falls back to bonjour-service on other platforms or if avahi is unavailable.
  *
  * @param {Object} [options] - Discovery options
- * @param {number} [options.timeoutMs] - How long to browse before returning results
+ * @param {number} [options.timeoutMs] - How long to browse before returning results (bonjour fallback only)
  * @returns {Promise<FF1DiscoveryResult>} Discovered FF1 devices and optional error
  * @throws {Error} Never throws; returns empty list on errors
  * @example
- * const result = await discoverFF1Devices({ timeoutMs: 2000 });
+ * const result = await discoverFF1Devices();
  */
 export async function discoverFF1Devices(
-  options: DiscoveryOptions = {}
+  options: DiscoveryOptions = {},
+  // Injectable for testing — callers should omit these; defaults use the real implementations.
+  _avahiDiscovery: (o: DiscoveryOptions) => Promise<FF1DiscoveryResult | null> = discoverViaAvahi,
+  _bonjourDiscovery: (o: DiscoveryOptions) => Promise<FF1DiscoveryResult> = discoverViaBonjour
 ): Promise<FF1DiscoveryResult> {
+  if (process.platform === 'linux') {
+    const avahiResult = await _avahiDiscovery(options);
+    if (avahiResult !== null) {
+      return avahiResult;
+    }
+  }
+
+  return _bonjourDiscovery(options);
+}
+
+function discoverViaBonjour(options: DiscoveryOptions): Promise<FF1DiscoveryResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return new Promise((resolve) => {
@@ -145,6 +356,11 @@ export async function discoverFF1Devices(
         const id = hostId || txt.id || undefined;
         const key = `${host}:${port}`;
 
+        const addresses =
+          Array.isArray(service.addresses) && service.addresses.length > 0
+            ? (service.addresses as string[])
+            : undefined;
+
         devices.set(key, {
           name,
           host,
@@ -152,6 +368,7 @@ export async function discoverFF1Devices(
           id,
           fqdn: service.fqdn,
           txt,
+          addresses,
         });
       });
 

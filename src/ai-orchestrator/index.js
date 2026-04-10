@@ -605,7 +605,25 @@ async function buildPlaylistWithAI(params, options = {}) {
     outputPath = 'playlist.json',
     interactive = false,
     conversationContext = null,
+    defaultDeviceName,
   } = options;
+
+  // Apply CLI --device fallback when the intent parser detected a send intent
+  // (playlistSettings.deviceName !== undefined) but could not resolve the device
+  // name from the user's text (null / empty / "null" sentinel).
+  // If deviceName is undefined, no send was intended — ignore the CLI flag to
+  // prevent implicit sends on every build-only `chat --device` invocation.
+  if (
+    params.playlistSettings &&
+    params.playlistSettings.deviceName !== undefined &&
+    (!params.playlistSettings.deviceName || params.playlistSettings.deviceName === 'null') &&
+    defaultDeviceName
+  ) {
+    params = {
+      ...params,
+      playlistSettings: { ...params.playlistSettings, deviceName: defaultDeviceName },
+    };
+  }
 
   const OpenAI = require('openai');
   const { getModelConfig } = require('../config');

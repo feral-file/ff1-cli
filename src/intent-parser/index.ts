@@ -23,6 +23,8 @@ interface ConversationContext {
 interface IntentParserOptions {
   modelName?: string;
   conversationContext?: ConversationContext;
+  /** CLI --device flag value; used as fallback when the model omits deviceName. */
+  defaultDeviceName?: string;
 }
 
 interface IntentParserResult {
@@ -784,7 +786,7 @@ export async function processIntentParserRequest(
   userRequest: string,
   options: IntentParserOptions = {}
 ): Promise<IntentParserResult> {
-  const { modelName, conversationContext } = options;
+  const { modelName, conversationContext, defaultDeviceName } = options;
   const userDomains = extractDomains(userRequest);
   const client = createIntentParserClient(modelName);
   const modelConfig = getModelConfig(modelName);
@@ -1235,8 +1237,12 @@ export async function processIntentParserRequest(
         const args = JSON.parse(toolCall.function.arguments);
         const { confirmPlaylistForSending } = await import('../utilities/playlist-send');
 
-        // Validate and confirm the playlist
-        const confirmation = await confirmPlaylistForSending(args.filePath, args.deviceName);
+        // Validate and confirm the playlist.
+        // args.deviceName may be null/undefined/"null" when the model omits it;
+        // fall back to the CLI --device flag so `ff1 chat --device kitchen` works.
+        const resolvedDeviceName =
+          args.deviceName && args.deviceName !== 'null' ? args.deviceName : defaultDeviceName;
+        const confirmation = await confirmPlaylistForSending(args.filePath, resolvedDeviceName);
 
         if (!confirmation.success) {
           const toolResultMessages = buildToolResponseMessages(message.tool_calls, {

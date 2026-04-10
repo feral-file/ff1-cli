@@ -27,7 +27,7 @@ ff1 setup
 
 See the full configuration reference here: `./CONFIGURATION.md`.
 
-During setup, you can pick a default FF1 device, so later `send`/`play` commands can run without `-d`.
+During setup, you can pick FF1 devices to add. Use `ff1 device add` to add more devices later, and `ff1 device list` to see what's configured. The first device is the default for `send`/`play` commands (override with `-d`).
 
 Manual config path:
 
@@ -70,9 +70,7 @@ ff1 config validate
     "devices": [
       {
         "name": "Living Room Display",
-        "host": "http://192.168.1.100:1111",
-        "apiKey": "",
-        "topicID": ""
+        "host": "http://192.168.1.100:1111"
       }
     ]
   }
@@ -131,7 +129,7 @@ Notes:
 ## Commands (cheat sheet)
 
 - `chat [content]` – AI-driven natural language playlists
-  - Options: `-o, --output <file>`, `-m, --model <name>`, `-v, --verbose`
+  - Options: `-o, --output <file>`, `-m, --model <name>`, `-d, --device <name>`, `-v, --verbose`
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `play <url>` – Send a media URL directly to an FF1 device
@@ -145,6 +143,10 @@ Notes:
   - Options: `-s, --server <index>` (server index if multiple configured)
 - `ssh <enable|disable>` – Manage SSH access on an FF1 device
   - Options: `-d, --device <name>`, `--pubkey <path>`, `--ttl <duration>`
+- `device list` – List all configured FF1 devices
+- `device add` – Add a new FF1 device (with mDNS discovery)
+  - Options: `--host <host>`, `--name <name>`
+- `device remove <name>` – Remove a configured FF1 device
 - `config <init|show|validate>` – Manage configuration
 
 ## Usage Highlights
@@ -293,9 +295,23 @@ Configure feed servers in `config.json`:
 }
 ```
 
-### FF1 device configuration
+### FF1 device management
 
-See selection rules and examples in `./CONFIGURATION.md`.
+```bash
+# List configured devices
+ff1 device list
+
+# Add a device (interactive with mDNS discovery)
+ff1 device add
+
+# Add a device non-interactively
+ff1 device add --host 192.168.1.100 --name kitchen
+
+# Remove a device by name
+ff1 device remove kitchen
+```
+
+Setup preserves existing devices when adding new ones. See selection rules and examples in `./CONFIGURATION.md`.
 
 ### Playlist signing (optional)
 

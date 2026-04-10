@@ -118,6 +118,14 @@ Configure devices you want to send playlists to.
 
 During `ff1 setup`, the CLI will attempt local discovery via mDNS (`_ff1._tcp`). If devices are found, you can pick one and the host will be filled in automatically. If discovery returns nothing, setup falls back to manual entry.
 
+You can also manage devices independently with:
+
+- `ff1 device add` – Add a device interactively (with mDNS discovery), or non-interactively with `--host` and `--name`.
+- `ff1 device list` – Show all configured devices.
+- `ff1 device remove <name>` – Remove a device by name.
+
+Setup and `device add` both preserve existing devices. Adding a device with the same host as an existing one updates it in place.
+
 Selection rules when sending:
 
 - If you omit `-d`, the first configured device is used.

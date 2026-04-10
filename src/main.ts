@@ -40,6 +40,57 @@ const getIntentParser = () => require('./intent-parser');
 const getAIOrchestrator = () => require('./ai-orchestrator');
 
 /**
+ * Regex that matches the inline "send last / send playlist / send to <device>"
+ * shortcut inside the chat flow. Exported for testing.
+ */
+export const SEND_SHORTCUT_PATTERN =
+  /^send(?:\s+(?:last|playlist|the playlist))?(?:\s+to\s+(.+))?$/i;
+
+/**
+ * Extract the target device from a sendMatch result, falling back to the CLI
+ * --device flag. Exported for testing.
+ */
+export function resolveSendShortcutDevice(
+  match: RegExpMatchArray,
+  cliDefault: string | undefined
+): string | undefined {
+  return match[1]?.trim() || cliDefault;
+}
+
+/**
+ * Resolve the effective device name for a send operation.
+ * The intent (from NL parsing) takes precedence; CLI flag is the fallback.
+ * Exported for testing.
+ */
+export function resolveEffectiveDeviceName(
+  fromIntent: string | undefined,
+  fromCLI: string | undefined
+): string | undefined {
+  return fromIntent || fromCLI;
+}
+
+/**
+ * Sanitize and resolve the device name for the direct send_playlist action path.
+ *
+ * The intent parser can emit literal "null" or "" as a device name string; these
+ * must be treated as absent so the CLI --device fallback is used instead.
+ * Exported for testing — mirrors the sanitization in confirmPlaylistForSending().
+ */
+export function resolveSendPlaylistDeviceName(
+  intentDeviceName: string | null | undefined,
+  cliDeviceName: string | undefined
+): string | undefined {
+  const sanitized =
+    intentDeviceName === 'null' ||
+    intentDeviceName === '' ||
+    intentDeviceName === null ||
+    intentDeviceName === undefined
+      ? undefined
+      : intentDeviceName;
+  return resolveEffectiveDeviceName(sanitized, cliDeviceName);
+}
+
+/**
  * Validate and apply constraints to requirements
  *
  * @param {Array<Object>} requirements - Array of requirements
@@ -184,7 +235,13 @@ export async function buildPlaylist(
   userRequest: string,
   options: BuildPlaylistOptions = {}
 ): Promise<BuildPlaylistResult | null> {
-  const { verbose = false, outputPath = 'playlist.json', modelName, interactive = true } = options;
+  const {
+    verbose = false,
+    outputPath = 'playlist.json',
+    modelName,
+    interactive = true,
+    deviceName: defaultDeviceName,
+  } = options;
 
   // Enable verbose logging if requested
   if (verbose) {
@@ -203,7 +260,7 @@ export async function buildPlaylist(
     );
 
     if (sendMatch) {
-      const deviceName = sendMatch[1]?.trim();
+      const deviceName = sendMatch[1]?.trim() || defaultDeviceName;
       const { confirmPlaylistForSending } = await import('./utilities/playlist-send');
       const confirmation = await confirmPlaylistForSending(outputPath, deviceName);
       if (!confirmation.success) {
@@ -255,6 +312,7 @@ export async function buildPlaylist(
 
     let intentParserResult = await processIntentParserRequest(userRequest, {
       modelName,
+      defaultDeviceName,
     });
 
     // Handle interactive clarification loop
@@ -300,6 +358,7 @@ export async function buildPlaylist(
       // Continue intent parser conversation
       intentParserResult = await processIntentParserRequest(userResponse, {
         modelName,
+        defaultDeviceName,
         conversationContext: {
           messages: intentParserResult.messages,
         },
@@ -313,6 +372,13 @@ export async function buildPlaylist(
 
     const params = intentParserResult.params;
 
+    // NOTE: do NOT merge defaultDeviceName into playlistSettings here.
+    // buildPlaylistDirect (src/utilities/index.js) sends whenever
+    // playlistSettings.deviceName is defined, so setting it here would turn
+    // every build-only `chat --device` invocation into an implicit network send.
+    // The CLI --device flag is used only in the two explicit send paths below
+    // (sendMatch shortcut and send_playlist action) via resolveEffectiveDeviceName.
+
     // Check if this is a send_playlist action
     if (params && (params as Record<string, unknown>).action === 'send_playlist') {
       // Handle playlist sending directly
@@ -324,7 +390,10 @@ export async function buildPlaylist(
 
       const sendResult = await utilities.sendToDevice(
         sendParams.playlist as Playlist,
-        sendParams.deviceName as string | undefined
+        resolveSendPlaylistDeviceName(
+          sendParams.deviceName as string | null | undefined,
+          defaultDeviceName
+        )
       );
 
       if (sendResult.success) {
@@ -384,6 +453,7 @@ export async function buildPlaylist(
       verbose,
       outputPath,
       interactive,
+      defaultDeviceName,
     });
 
     // Handle confirmation loop in interactive mode
@@ -416,6 +486,7 @@ export async function buildPlaylist(
         verbose,
         outputPath,
         interactive,
+        defaultDeviceName,
         conversationContext: {
           messages: result.messages,
           userResponse,
