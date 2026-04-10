@@ -549,10 +549,12 @@ program
         let deviceName = nameAnswer || defaultName || 'ff1';
 
         // Same name-collision guard as device add: reject names that would clobber
-        // a different device entry (one that the lookup did not identify as this device).
-        const setupNameConflict = existingDevices.find(
-          (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
-        );
+        // a different device entry. Only fires when existingIndex !== -1 (we know the row);
+        // when existingIndex === -1, a same-name entry is the case-3 migration path.
+        const setupNameConflict =
+          existingIndex !== -1
+            ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
+            : undefined;
         if (setupNameConflict) {
           console.log(
             chalk.yellow(
@@ -561,9 +563,10 @@ program
           );
           const retryAnswer = await ask('Device name: ');
           deviceName = retryAnswer || 'ff1';
-          const retryConflict = existingDevices.find(
-            (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
-          );
+          const retryConflict =
+            existingIndex !== -1
+              ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
+              : undefined;
           if (retryConflict) {
             console.log(chalk.yellow(`"${deviceName}" is also taken. Skipping device.`));
             config.ff1Devices = { devices: existingDevices };
@@ -572,12 +575,16 @@ program
           }
         }
 
-        const result = upsertDevice(existingDevices, {
-          name: deviceName,
-          host: selection.hostValue,
-          id: selection.discoveredId,
-          addresses: selection.discoveredAddresses,
-        });
+        const result = upsertDevice(
+          existingDevices,
+          {
+            name: deviceName,
+            host: selection.hostValue,
+            id: selection.discoveredId,
+            addresses: selection.discoveredAddresses,
+          },
+          existingIndex !== -1 ? existingIndex : undefined
+        );
         console.log(chalk.dim(`${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
         config.ff1Devices = { devices: result.devices };
       } else if (existingDevices.length > 0) {
@@ -1488,12 +1495,15 @@ deviceCommand
       }
 
       // Reject a name that is already used by a DIFFERENT device (not the one being updated).
-      // upsertDevice case-3 (same-name replace) is correct when the caller has confirmed
-      // the match via lookup; using it for an accidental name collision would silently
-      // overwrite the wrong entry and make the previous device unreachable.
-      const nameConflict = existingDevices.find(
-        (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
-      );
+      // Only applies when existingIndex !== -1: we know exactly which row to update, so a
+      // same-name entry at a different index is provably a different device.
+      // When existingIndex === -1 (no confirmed match, e.g. manual IP → .local migration),
+      // a same-name entry is the upsertDevice case-3 migration path — blocking it would
+      // prevent the user from retaining their existing device name during host migration.
+      const nameConflict =
+        existingIndex !== -1
+          ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
+          : undefined;
       if (nameConflict) {
         if (options.name) {
           // Non-interactive flag path: hard error so scripts don't silently clobber.
@@ -1516,9 +1526,10 @@ deviceCommand
         );
         const retryAnswer = await ask('Device name: ');
         deviceName = retryAnswer || 'ff1';
-        const retryConflict = existingDevices.find(
-          (d, i) => d.name === deviceName && (existingIndex === -1 || i !== existingIndex)
-        );
+        const retryConflict =
+          existingIndex !== -1
+            ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
+            : undefined;
         if (retryConflict) {
           console.error(chalk.red(`\nName "${deviceName}" is also taken. No changes made.`));
           if (rl) {
@@ -1528,12 +1539,11 @@ deviceCommand
         }
       }
 
-      const result = upsertDevice(existingDevices, {
-        name: deviceName,
-        host: hostValue,
-        id: discoveredId,
-        addresses: discoveredAddresses,
-      });
+      const result = upsertDevice(
+        existingDevices,
+        { name: deviceName, host: hostValue, id: discoveredId, addresses: discoveredAddresses },
+        existingIndex !== -1 ? existingIndex : undefined
+      );
       console.log(chalk.green(`\n${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
 
       config.ff1Devices = { devices: result.devices };

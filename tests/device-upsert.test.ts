@@ -241,6 +241,27 @@ describe('upsertDevice', () => {
     assert.equal(devices[0].id, 'ff1-hh9jsnoc', 'id must be preserved');
   });
 
+  // Regression: rename + host-change with no id — without matchedIndex, none of the
+  // id/name/host heuristics match and a duplicate is created. Callers that have already
+  // resolved the row via findExistingDeviceEntry must pass matchedIndex to update directly.
+  test('matchedIndex: updates correct row when name and host both changed (no id)', () => {
+    const existing = [
+      { name: 'kitchen', host: 'http://192.168.1.10:1111', apiKey: 'key-k' },
+      { name: 'office', host: 'http://192.168.1.11:1111' },
+    ];
+    const { devices, updated } = upsertDevice(
+      existing,
+      { name: 'my-display', host: 'http://ff1-abc123.local:1111' },
+      0 // row 0 was identified by findExistingDeviceEntry
+    );
+    assert.equal(devices.length, 2, 'must not create a duplicate');
+    assert.equal(devices[0].name, 'my-display', 'name must be updated');
+    assert.equal(devices[0].host, 'http://ff1-abc123.local:1111', 'host must be updated');
+    assert.equal(devices[0].apiKey, 'key-k', 'apiKey must be preserved');
+    assert.equal(devices[1].name, 'office', 'other device must be unchanged');
+    assert.equal(updated, false, 'host changed so not "updated" in same-host sense');
+  });
+
   // Regression: callers pass id: undefined when discoveredId is absent; spreads with undefined
   // values used to overwrite a previously stored id with undefined.
   test('does not erase a stored id when caller passes id: undefined', () => {

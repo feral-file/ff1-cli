@@ -51,6 +51,9 @@ function applyPatch(existing: DeviceEntry, patch: Partial<DeviceEntry>): DeviceE
  * Insert or update a device in the configured device list.
  *
  * Priority:
+ * 0. matchedIndex provided — caller already resolved the row via findExistingDeviceEntry;
+ *    update that position directly. Handles rename + host-change combos where none of
+ *    the id/name/host heuristics below would find the correct row.
  * 1. Same mDNS device ID → update in-place (preserves position, handles host change).
  * 2. Same host → update in-place (preserves position and metadata).
  * 3. Same name, different host → replace in-place (preserves position so that
@@ -66,10 +69,20 @@ export function upsertDevice(
     apiKey?: string;
     topicID?: string;
     addresses?: string[];
-  }
+  },
+  /** Pre-resolved row index from findExistingDeviceEntry. When provided, the
+   *  heuristics below are skipped and this row is updated directly. */
+  matchedIndex?: number
 ): { devices: DeviceEntry[]; updated: boolean } {
   const devices = [...existingDevices];
   const patch = withoutUndefined(newDevice);
+
+  // Case 0: caller already resolved the match — update directly.
+  if (matchedIndex !== undefined && matchedIndex >= 0 && matchedIndex < devices.length) {
+    const isSameHost = devices[matchedIndex].host === newDevice.host;
+    devices[matchedIndex] = applyPatch(devices[matchedIndex], patch);
+    return { devices, updated: isSameHost };
+  }
 
   // Case 1: same mDNS device ID — update in-place even when host changed.
   if (newDevice.id) {
