@@ -49,7 +49,7 @@ Notes enforced by the orchestrator:
 Located in `src/utilities/` and wired in `src/ai-orchestrator/index.js`:
 
 - `buildDP1Playlist({ items, title, slug })` → `src/utilities/playlist-builder.js`
-- `sendPlaylistToDevice({ playlist, deviceName })` → `src/utilities/ff1-device.ts`
+- `sendPlaylistToDevice({ playlist, deviceName, playlistUrl? })` → `src/utilities/ff1-device.ts` (optional `playlistUrl` for hosted playlists: cast sends the URL instead of embedding `dp1_call` JSON)
 - `resolveDomains({ domains, displayResults })` → `src/utilities/domain-resolver.ts`
 - `verifyPlaylist({ playlist })` → `src/utilities/playlist-verifier.ts`
 - `verifyAddresses({ addresses })` → `src/utilities/functions.js` (uses `address-validator.ts`)

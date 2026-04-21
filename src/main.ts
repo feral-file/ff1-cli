@@ -30,6 +30,7 @@ import type {
   BuildPlaylistResult,
   Playlist,
 } from './types';
+import { isPlaylistSourceUrl } from './utilities/playlist-source';
 
 // Lazy load utilities and orchestrator to avoid circular dependencies
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -275,9 +276,15 @@ export async function buildPlaylist(
         };
       }
 
+      const sendSource =
+        typeof confirmation.filePath === 'string' ? confirmation.filePath.trim() : '';
+      const playlistUrlForCast =
+        sendSource && isPlaylistSourceUrl(sendSource) ? sendSource : undefined;
+
       const sendResult = await utilities.sendToDevice(
         confirmation.playlist as Playlist,
-        confirmation.deviceName
+        confirmation.deviceName,
+        playlistUrlForCast
       );
 
       if (sendResult.success) {
@@ -388,12 +395,18 @@ export async function buildPlaylist(
       console.log();
       console.log(chalk.cyan('Sending to device'));
 
+      const sendFilePath =
+        typeof sendParams.filePath === 'string' ? sendParams.filePath.trim() : '';
+      const playlistUrlForCast =
+        sendFilePath && isPlaylistSourceUrl(sendFilePath) ? sendFilePath : undefined;
+
       const sendResult = await utilities.sendToDevice(
         sendParams.playlist as Playlist,
         resolveSendPlaylistDeviceName(
           sendParams.deviceName as string | null | undefined,
           defaultDeviceName
-        )
+        ),
+        playlistUrlForCast
       );
 
       if (sendResult.success) {

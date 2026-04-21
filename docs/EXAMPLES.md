@@ -174,7 +174,7 @@ npm run dev -- validate "https://cdn.example.com/playlist.json"
 # Sign playlist
 npm run dev -- sign playlist.json -o signed.json
 
-# Send to device
+# Send to device (local file: inline JSON; URL: device receives playlistUrl after local verify)
 npm run dev -- send playlist.json -d "Living Room Display"
 npm run dev -- send "https://cdn.example.com/playlist.json" -d "Living Room Display"
 ```
