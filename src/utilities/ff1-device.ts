@@ -193,7 +193,6 @@ export async function sendPlaylistToDevice({
     let requestBody: DisplayPlaylistCastRequestBody | DisplayPlaylistUrlCastRequestBody;
     try {
       requestBody = buildDisplayPlaylistCastRequestBody(playlist, playlistUrl);
-      console.log('requestBody', requestBody);
     } catch (formatError) {
       return {
         success: false,
