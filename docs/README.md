@@ -147,6 +147,7 @@ Notes:
 - `device add` – Add a new FF1 device (with mDNS discovery)
   - Options: `--host <host>`, `--name <name>`
 - `device remove <name>` – Remove a configured FF1 device
+- `device default <name>` – Set the default FF1 device (used when `-d` is omitted)
 - `config <init|show|validate>` – Manage configuration
 
 ## Usage Highlights
@@ -309,6 +310,9 @@ ff1 device add --host 192.168.1.100 --name kitchen
 
 # Remove a device by name
 ff1 device remove kitchen
+
+# Set the default device (used when -d is omitted)
+ff1 device default office
 ```
 
 Setup preserves existing devices when adding new ones. See selection rules and examples in `./CONFIGURATION.md`.
