@@ -30,6 +30,7 @@ import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlis
 import { upsertDevice } from './src/utilities/device-upsert';
 import { findExistingDeviceEntry } from './src/utilities/device-lookup';
 import { normalizeDeviceHost, normalizeDeviceIdToHost } from './src/utilities/device-normalize';
+import { promoteDeviceToDefault } from './src/utilities/device-default';
 
 // Load version from package.json
 // Try built location first (dist/index.js -> ../package.json)
@@ -1611,6 +1612,56 @@ deviceCommand
       await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
       console.log(chalk.green(`\nRemoved device: ${removed.name || removed.host}`));
       console.log(chalk.dim(`Remaining devices: ${updatedDevices.length}\n`));
+    } catch (error) {
+      console.error(chalk.red('\nError:'), (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+deviceCommand
+  .command('default')
+  .description('Set the default FF1 device (reorders so this device is used when -d is omitted)')
+  .argument('<name>', 'Device name or host to promote to default')
+  .action(async (name: string) => {
+    try {
+      const configPath = await resolveExistingConfigPath();
+      if (!configPath) {
+        console.log(chalk.red('config.json not found'));
+        console.log(chalk.dim('Run: ff1 setup'));
+        process.exit(1);
+      }
+
+      const config = await readConfigFile(configPath);
+      const existingDevices = config.ff1Devices?.devices || [];
+
+      if (existingDevices.length === 0) {
+        console.log(chalk.yellow('\nNo devices configured'));
+        console.log(chalk.dim('Run: ff1 device add\n'));
+        process.exit(1);
+      }
+
+      let result;
+      try {
+        result = promoteDeviceToDefault(existingDevices, name);
+      } catch (error) {
+        console.error(chalk.red(`\n${(error as Error).message}`));
+        const names = existingDevices.map((d) => d.name || d.host).join(', ');
+        console.log(chalk.dim(`Available devices: ${names}\n`));
+        process.exit(1);
+      }
+
+      const label = result.promoted.name || result.promoted.host;
+
+      if (result.alreadyDefault) {
+        console.log(chalk.dim(`\n"${label}" is already the default.\n`));
+        return;
+      }
+
+      config.ff1Devices = { devices: result.devices };
+      await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+
+      console.log(chalk.green(`\nDefault device: ${label}`));
+      console.log(chalk.dim('Other commands now target this device when -d is omitted.\n'));
     } catch (error) {
       console.error(chalk.red('\nError:'), (error as Error).message);
       process.exit(1);

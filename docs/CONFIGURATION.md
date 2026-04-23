@@ -123,6 +123,7 @@ You can also manage devices independently with:
 - `ff1 device add` – Add a device interactively (with mDNS discovery), or non-interactively with `--host` and `--name`.
 - `ff1 device list` – Show all configured devices.
 - `ff1 device remove <name>` – Remove a device by name.
+- `ff1 device default <name>` – Promote a device to the top of the list so it is used when `-d` is omitted.
 
 Setup and `device add` both preserve existing devices. Adding a device with the same host as an existing one updates it in place.
 
