@@ -33,20 +33,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build TypeScript
-        run: npm run build
-
-      - name: Smoke test playlist validation
-        run: node dist/index.js validate examples/sample-playlist.json
-
-      - name: Smoke test config validation
-        run: node dist/index.js config validate
+      - name: Verify
+        run: npm run verify
