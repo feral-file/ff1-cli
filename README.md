@@ -47,7 +47,7 @@ ff1 config validate
 **Set your LLM API key first (default Grok):** `export GROK_API_KEY='xai-your-api-key-here'`
 
 ```bash
-npm install
+npm ci
 npm run dev -- setup
 npm run dev -- chat
 npm run dev -- play "https://example.com/video.mp4" --skip-verify
@@ -61,14 +61,32 @@ npm run dev -- play "https://example.com/video.mp4" --skip-verify
 - Examples: `./docs/EXAMPLES.md`
 - SSH access: `ff1 ssh enable|disable` in `./docs/README.md`
 
+## Verification
+
+GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main`/`master`, and reusable `workflow_call` jobs. CI uses Node.js 22, installs dependencies with `npm ci`, sets `GROK_API_KEY=dummy`, and runs the repo-wide verification entrypoint:
+
+```bash
+GROK_API_KEY=dummy npm run verify
+```
+
+Run the same command locally before opening a PR. It checks formatting, lint, tests, TypeScript build, playlist validation smoke, and config validation smoke without mutating source files.
+
+Other GitHub Actions workflows:
+
+- `.github/workflows/build.yml` builds release assets when called by release automation or manually dispatched.
+- `.github/workflows/release.yml` reuses CI, verifies the release version, publishes npm, uploads assets, and checks the published release.
+- `.github/workflows/dependency-review.yml` reviews dependency changes on pull requests.
+- `.github/workflows/codeql.yml` runs CodeQL analysis on pull requests and pushes to `main`/`master`.
+
 ## Scripts
 
 ```bash
 npm run dev            # Run CLI in dev (tsx)
 npm run build          # Build TypeScript
-npm run lint:fix       # Lint + fix
+npm run check          # Format check + lint + tests
 npm run smoke          # Build + CLI smoke checks
-npm run verify         # Format + lint + test + smoke
+npm run verify         # CI-equivalent validation entrypoint
+npm run lint:fix       # Optional mutating lint fix; review changes before committing
 ```
 
 ## License

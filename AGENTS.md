@@ -85,12 +85,10 @@ For behavior changes:
 Required verification commands:
 
 ```bash
-npm run lint:fix
-npm test
-npm run build
-GROK_API_KEY=dummy node dist/index.js validate examples/sample-playlist.json
-GROK_API_KEY=dummy node dist/index.js config validate
+GROK_API_KEY=dummy npm run verify
 ```
+
+This is the same non-mutating entrypoint used by `.github/workflows/ci.yml` after `npm ci` on Node.js 22. Use `npm run lint:fix` only as an optional mutating cleanup step, then review and verify the resulting edits before committing.
 
 If strict test-first sequencing is not practical, call out the reason in the handoff or final summary.
 
