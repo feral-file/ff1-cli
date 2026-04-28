@@ -6,6 +6,7 @@
 import * as logger from '../logger';
 import type { Playlist } from '../types';
 import { assertFF1CommandCompatibility, resolveConfiguredDevice } from './ff1-compatibility';
+import { isPlaylistSourceUrl } from './playlist-source';
 
 const SEND_RETRY_ATTEMPTS = 3;
 const SEND_RETRY_BASE_DELAY_MS = 750;
@@ -13,6 +14,11 @@ const SEND_RETRY_BASE_DELAY_MS = 750;
 interface SendPlaylistParams {
   playlist: Playlist;
   deviceName?: string;
+  /**
+   * When set, the cast request uses `playlistUrl` so the device fetches the playlist;
+   * the CLI still loads and verifies the JSON locally first.
+   */
+  playlistUrl?: string;
 }
 
 interface SendPlaylistResult {
@@ -87,6 +93,57 @@ export function isTransientDeviceNetworkError(error: unknown): boolean {
   return Boolean(causeCode && networkCodes.has(causeCode));
 }
 
+type DisplayPlaylistCastRequestBody = {
+  command: 'displayPlaylist';
+  request: {
+    dp1_call: Playlist;
+    intent: { action: 'now_display' };
+  };
+};
+
+type DisplayPlaylistUrlCastRequestBody = {
+  command: 'displayPlaylist';
+  request: {
+    playlistUrl: string;
+    intent: { action: 'now_display' };
+  };
+};
+
+/**
+ * buildDisplayPlaylistCastRequestBody builds the JSON body for `displayPlaylist` casts.
+ * Hosted playlists use `playlistUrl` on the wire; local sends embed `dp1_call`.
+ *
+ * @param {Object} playlist - Verified DP-1 playlist (always passed for validation/logging callers)
+ * @param {string} [playlistUrl] - Optional http(s) URL; when set, `dp1_call` is omitted
+ * @returns {Object} Cast request body for POST /api/cast
+ */
+export function buildDisplayPlaylistCastRequestBody(
+  playlist: Playlist,
+  playlistUrl?: string
+): DisplayPlaylistCastRequestBody | DisplayPlaylistUrlCastRequestBody {
+  const trimmed = playlistUrl?.trim();
+  if (trimmed) {
+    if (!isPlaylistSourceUrl(trimmed)) {
+      throw new Error('playlistUrl must be an http(s) URL');
+    }
+    return {
+      command: 'displayPlaylist',
+      request: {
+        playlistUrl: trimmed,
+        intent: { action: 'now_display' },
+      },
+    };
+  }
+
+  return {
+    command: 'displayPlaylist',
+    request: {
+      dp1_call: playlist,
+      intent: { action: 'now_display' },
+    },
+  };
+}
+
 /**
  * Send a DP1 playlist to an FF1 device using the cast API
  *
@@ -98,6 +155,7 @@ export function isTransientDeviceNetworkError(error: unknown): boolean {
  * @param {Object} params - Function parameters
  * @param {Object} params.playlist - Complete DP1 v1.0.0 playlist object to send
  * @param {string} [params.deviceName] - Name of the device to send to (exact match required)
+ * @param {string} [params.playlistUrl] - When set, send this URL in the cast request instead of embedding `dp1_call` JSON
  * @returns {Promise<Object>} Result object
  * @returns {boolean} returns.success - Whether the cast was successful
  * @returns {string} [returns.device] - Device host that received the playlist
@@ -121,6 +179,7 @@ export function isTransientDeviceNetworkError(error: unknown): boolean {
 export async function sendPlaylistToDevice({
   playlist,
   deviceName,
+  playlistUrl,
 }: SendPlaylistParams): Promise<SendPlaylistResult> {
   try {
     // Validate input
@@ -128,6 +187,16 @@ export async function sendPlaylistToDevice({
       return {
         success: false,
         error: 'Invalid playlist: must provide a valid DP1 playlist object',
+      };
+    }
+
+    let requestBody: DisplayPlaylistCastRequestBody | DisplayPlaylistUrlCastRequestBody;
+    try {
+      requestBody = buildDisplayPlaylistCastRequestBody(playlist, playlistUrl);
+    } catch (formatError) {
+      return {
+        success: false,
+        error: (formatError as Error).message,
       };
     }
 
@@ -149,7 +218,11 @@ export async function sendPlaylistToDevice({
       };
     }
 
-    logger.info(`Sending playlist to FF1 device: ${device.host}`);
+    if (requestBody.request && 'playlistUrl' in requestBody.request) {
+      logger.info(`Sending playlist URL to FF1 device: ${device.host}`);
+    } else {
+      logger.info(`Sending playlist to FF1 device: ${device.host}`);
+    }
 
     // Construct API URL with optional topicID
     let apiUrl = `${device.host}/api/cast`;
@@ -157,15 +230,6 @@ export async function sendPlaylistToDevice({
       apiUrl += `?topicID=${encodeURIComponent(device.topicID)}`;
       logger.debug(`Using topicID: ${device.topicID}`);
     }
-
-    // Wrap playlist in required structure
-    const requestBody = {
-      command: 'displayPlaylist',
-      request: {
-        dp1_call: playlist,
-        intent: { action: 'now_display' },
-      },
-    };
 
     // Prepare headers
     const headers: Record<string, string> = {

@@ -101,6 +101,8 @@ npm run build
 node dist/index.js chat
 ```
 
+The `ff1` command runs compiled `dist/index.js`. After pulling or editing code, run `npm run build` again so installs that point at `dist/` pick up changes; `npm run dev` runs TypeScript directly and does not update `dist/`.
+
 If you're running from source without a build, use:
 
 ```bash
@@ -242,7 +244,7 @@ npm run dev -- send playlist.json -d "Living Room Display"
 # a clear version message before any cast request is sent.
 # The send path also retries transient local-network errors (for example intermittent
 # mDNS/Wi-Fi resolver failures) with a short backoff before returning a final error.
-# Send a hosted DP-1 playlist
+# Send a hosted DP-1 playlist (verified locally first; device cast uses playlistUrl, not inline JSON)
 npm run dev -- send "https://cdn.example.com/playlist.json"
 
 # Play a direct URL

@@ -36,6 +36,7 @@ async function buildDP1Playlist(params) {
  * @param {Object} params - Send parameters
  * @param {Object} params.playlist - DP1 playlist
  * @param {string} [params.deviceName] - Device name (null for first device)
+ * @param {string} [params.playlistUrl] - When set, cast uses playlist URL instead of dp1_call JSON
  * @returns {Promise<Object>} Result
  * @returns {boolean} returns.success - Whether send succeeded
  * @returns {string} [returns.deviceHost] - Device host address
@@ -45,11 +46,12 @@ async function buildDP1Playlist(params) {
  * const result = await sendPlaylistToDevice({ playlist, deviceName: 'MyDevice' });
  */
 async function sendPlaylistToDevice(params) {
-  const { playlist, deviceName } = params;
+  const { playlist, deviceName, playlistUrl } = params;
 
   const result = await ff1Device.sendPlaylistToDevice({
     playlist,
     deviceName,
+    playlistUrl,
   });
 
   if (result.success) {

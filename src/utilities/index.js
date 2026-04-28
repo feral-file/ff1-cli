@@ -436,11 +436,12 @@ async function buildDP1Playlist(items, title, slug) {
  *
  * @param {Object} playlist - DP1 playlist
  * @param {string} [deviceName] - Device name
+ * @param {string} [playlistUrl] - When set, cast uses this URL instead of embedding playlist JSON
  * @returns {Promise<Object>} Result
  */
-async function sendToDevice(playlist, deviceName) {
+async function sendToDevice(playlist, deviceName, playlistUrl) {
   const { sendPlaylistToDevice } = require('./functions');
-  return await sendPlaylistToDevice({ playlist, deviceName });
+  return await sendPlaylistToDevice({ playlist, deviceName, playlistUrl });
 }
 
 /**

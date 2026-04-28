@@ -1019,10 +1019,20 @@ program
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { sendPlaylistToDevice } = require('./src/utilities/ff1-device');
 
-      // Send the playlist
+      // Hosted http(s) sources: cast uses `playlistUrl` so the device fetches JSON (CLI still verified above).
+      // Use `isPlaylistSourceUrl` on the resolved source, not only sourceType, so behavior stays correct if metadata drifts.
+      const castPlaylistUrl = isPlaylistSourceUrl(playlistResult.source.trim())
+        ? playlistResult.source.trim()
+        : undefined;
+
+      if (castPlaylistUrl) {
+        console.log(chalk.dim('Cast: device will load playlist from URL (not inline JSON)\n'));
+      }
+
       const result = await sendPlaylistToDevice({
         playlist,
         deviceName: options.device,
+        playlistUrl: castPlaylistUrl,
       });
 
       if (result.success) {
