@@ -122,6 +122,7 @@ export async function sendPlaylistToDevice({
   playlist,
   deviceName,
 }: SendPlaylistParams): Promise<SendPlaylistResult> {
+  let device: { host: string; name?: string; apiKey?: string; topicID?: string } | undefined;
   try {
     // Validate input
     if (!playlist || typeof playlist !== 'object') {
@@ -138,7 +139,7 @@ export async function sendPlaylistToDevice({
         error: resolved.error || 'FF1 device is not configured correctly',
       };
     }
-    const device = resolved.device;
+    device = resolved.device;
 
     const compatibility = await assertFF1CommandCompatibility(device, 'displayPlaylist');
     if (!compatibility.compatible) {
@@ -242,11 +243,11 @@ export async function sendPlaylistToDevice({
     const errorMessage = (error as Error).message;
     logger.error(`Error sending playlist to device: ${errorMessage}`);
 
-    if (isTransientDeviceNetworkError(error)) {
-      const deviceLabel = device!.name || device!.host;
+    if (device && isTransientDeviceNetworkError(error)) {
+      const deviceLabel = device.name || device.host;
       return {
         success: false,
-        error: `Could not reach device "${deviceLabel}" at ${device!.host}`,
+        error: `Could not reach device "${deviceLabel}" at ${device.host}`,
         details:
           'Check that the device is powered on and reachable on your network. ' +
           'If the device IP changed (e.g. after a factory reset), run: ff1 setup',

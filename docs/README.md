@@ -27,7 +27,7 @@ ff1 setup
 
 See the full configuration reference here: `./CONFIGURATION.md`.
 
-During setup, you can pick FF1 devices to add. Use `ff1 device add` to add more devices later, and `ff1 device list` to see what's configured. The first device is the default for `send`/`play` commands (override with `-d`).
+During setup, you can pick FF1 devices to add. Use `ff1 device add` to add more devices later, and `ff1 device list` to see what's configured. The first device is the default for `send` commands (override with `-d`).
 
 Manual config path:
 
@@ -132,12 +132,10 @@ Notes:
   - Options: `-o, --output <file>`, `-m, --model <name>`, `-d, --device <name>`, `-v, --verbose`
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
-- `play <url>` – Send a media URL directly to an FF1 device
-  - Options: `-d, --device <name>`, `--skip-verify`
 - `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 playlist file
 - `sign <file>` – Sign playlist with Ed25519
   - Options: `-k, --key <base64>`, `-o, --output <file>`
-- `send <file>` – Send a local or hosted DP-1 playlist to an FF1 device
+- `send <source>` – Send a playlist file, playlist URL, or media URL to an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
   - Options: `-s, --server <index>` (server index if multiple configured)
@@ -245,7 +243,8 @@ npm run dev -- send playlist.json -d "Living Room Display"
 npm run dev -- send "https://cdn.example.com/playlist.json"
 
 # Play a direct URL
-npm run dev -- play "https://example.com/video.mp4" --skip-verify
+# Send a media URL directly
+npm run dev -- send "https://example.com/video.mp4" --skip-verify
 ```
 
 ### SSH access

@@ -916,39 +916,67 @@ program
   });
 
 program
-  .command('play')
-  .description('Play a media URL on an FF1 device')
-  .argument('<url>', 'Media URL to play')
+  .command('send')
+  .description('Send a playlist or media URL to an FF1 device')
+  .argument('<source>', 'Playlist file, playlist URL, or media URL')
   .option('-d, --device <name>', 'Device name (uses first device if not specified)')
   .option('--skip-verify', 'Skip playlist verification before sending')
-  .action(async (url: string, options: { device?: string; skipVerify?: boolean }) => {
+  .action(async (source: string, options: { device?: string; skipVerify?: boolean }) => {
     try {
-      console.log(chalk.blue('\nPlay on FF1\n'));
+      let playlist: Playlist;
+      let sourceLabel = source;
 
-      try {
-        new URL(url);
-      } catch (error) {
-        console.error(chalk.red('\nInvalid URL:'), (error as Error).message);
-        process.exit(1);
+      const isUrl = isPlaylistSourceUrl(source);
+      const isFile = !isUrl;
+
+      if (isFile) {
+        console.log(chalk.blue('\nSend playlist to FF1\n'));
+        const playlistResult = await loadPlaylistSource(source);
+        playlist = playlistResult.playlist;
+        sourceLabel = `${playlistResult.sourceType}: ${playlistResult.source}`;
+      } else {
+        // URL: try loading as a playlist first, fall back to media URL
+        let loadedAsPlaylist = false;
+        try {
+          const playlistResult = await loadPlaylistSource(source);
+          playlist = playlistResult.playlist;
+          sourceLabel = `${playlistResult.sourceType}: ${playlistResult.source}`;
+          loadedAsPlaylist = true;
+          console.log(chalk.blue('\nSend playlist to FF1\n'));
+        } catch {
+          // Not valid playlist JSON — treat as a direct media URL
+          console.log(chalk.blue('\nPlay on FF1\n'));
+          const config = getConfig();
+          const duration = config.defaultDuration || 10;
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { buildUrlItem, buildDP1Playlist } = require('./src/utilities/playlist-builder');
+
+          const item = buildUrlItem(source, duration);
+          playlist = await buildDP1Playlist({ items: [item], title: item.title });
+        }
+
+        if (!loadedAsPlaylist) {
+          sourceLabel = source;
+        }
       }
 
-      const config = getConfig();
-      const duration = config.defaultDuration || 10;
-
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { buildUrlItem, buildDP1Playlist } = require('./src/utilities/playlist-builder');
-
-      const item = buildUrlItem(url, duration);
-      const playlist = await buildDP1Playlist({ items: [item], title: item.title });
-
       if (!options.skipVerify) {
+        if (isFile) {
+          console.log(chalk.cyan(`Verify playlist (${sourceLabel})`));
+        }
+
         const verifier = await import('./src/utilities/playlist-verifier');
         const { verifyPlaylist } = verifier;
         const verifyResult = verifyPlaylist(playlist);
 
         if (!verifyResult.valid) {
-          printPlaylistVerificationFailure(verifyResult);
+          printPlaylistVerificationFailure(verifyResult, isFile ? `source: ${sourceLabel}` : undefined);
           process.exit(1);
+        }
+
+        if (isFile) {
+          console.log(chalk.green('✓ Verified\n'));
         }
       }
 
@@ -977,73 +1005,24 @@ program
         process.exit(1);
       }
     } catch (error) {
-      console.error(chalk.red('\nError:'), (error as Error).message);
+      if (isPlaylistSourceUrl(source)) {
+        printPlaylistSourceLoadFailure(source, error as Error);
+      } else {
+        console.error(chalk.red('\nError:'), (error as Error).message);
+      }
       process.exit(1);
     }
   });
 
+// Keep `play` as a hidden alias for backwards compatibility
 program
-  .command('send')
-  .description('Send a playlist to an FF1 device')
-  .argument('<file>', 'Playlist file path or hosted playlist URL')
+  .command('play', { hidden: true })
+  .argument('<url>', 'Media URL to play')
   .option('-d, --device <name>', 'Device name (uses first device if not specified)')
   .option('--skip-verify', 'Skip playlist verification before sending')
-  .action(async (file: string, options: { device?: string; skipVerify?: boolean }) => {
-    try {
-      console.log(chalk.blue('\nSend playlist to FF1\n'));
-
-      const playlistResult = await loadPlaylistSource(file);
-      const playlist = playlistResult.playlist;
-
-      // Verify playlist before sending (unless skipped)
-      if (!options.skipVerify) {
-        console.log(
-          chalk.cyan(`Verify playlist (${playlistResult.sourceType}: ${playlistResult.source})`)
-        );
-
-        const verifier = await import('./src/utilities/playlist-verifier');
-        const { verifyPlaylist } = verifier;
-
-        const verifyResult = verifyPlaylist(playlist);
-
-        if (!verifyResult.valid) {
-          printPlaylistVerificationFailure(verifyResult, `source: ${playlistResult.source}`);
-          process.exit(1);
-        }
-
-        console.log(chalk.green('✓ Verified\n'));
-      }
-
-      // Import the sending utility
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { sendPlaylistToDevice } = require('./src/utilities/ff1-device');
-
-      // Send the playlist
-      const result = await sendPlaylistToDevice({
-        playlist,
-        deviceName: options.device,
-      });
-
-      if (result.success) {
-        console.log(chalk.green('✓ Sent'));
-        if (result.deviceName) {
-          console.log(chalk.dim(`  Device: ${result.deviceName}`));
-        }
-        if (result.device) {
-          console.log(chalk.dim(`  Host: ${result.device}`));
-        }
-        console.log();
-      } else {
-        console.error(chalk.red('\nSend failed:'), result.error);
-        if (result.details) {
-          console.error(chalk.dim(`  Details: ${result.details}`));
-        }
-        process.exit(1);
-      }
-    } catch (error) {
-      console.error(chalk.red('\nError:'), (error as Error).message);
-      process.exit(1);
-    }
+  .action(async (url: string, options: { device?: string; skipVerify?: boolean }) => {
+    // Delegate to send
+    await program.parseAsync(['node', 'ff1', 'send', url, ...(options.device ? ['-d', options.device] : []), ...(options.skipVerify ? ['--skip-verify'] : [])]);
   });
 
 program
