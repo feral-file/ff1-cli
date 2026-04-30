@@ -203,9 +203,13 @@ export async function sendPlaylistToDevice({
     }
 
     if (!response) {
+      const deviceLabel = device.name || device.host;
       return {
         success: false,
-        error: 'Failed to send playlist to device after retries',
+        error: `Could not reach device "${deviceLabel}" at ${device.host}`,
+        details:
+          'Check that the device is powered on and reachable on your network. ' +
+          'If the device IP changed (e.g. after a factory reset), run: ff1 setup',
       };
     }
 
@@ -235,10 +239,23 @@ export async function sendPlaylistToDevice({
       message: 'Playlist successfully sent to FF1 device',
     };
   } catch (error) {
-    logger.error(`Error sending playlist to device: ${(error as Error).message}`);
+    const errorMessage = (error as Error).message;
+    logger.error(`Error sending playlist to device: ${errorMessage}`);
+
+    if (isTransientDeviceNetworkError(error)) {
+      const deviceLabel = device!.name || device!.host;
+      return {
+        success: false,
+        error: `Could not reach device "${deviceLabel}" at ${device!.host}`,
+        details:
+          'Check that the device is powered on and reachable on your network. ' +
+          'If the device IP changed (e.g. after a factory reset), run: ff1 setup',
+      };
+    }
+
     return {
       success: false,
-      error: (error as Error).message,
+      error: errorMessage,
     };
   }
 }
