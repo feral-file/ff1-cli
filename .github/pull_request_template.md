@@ -12,6 +12,12 @@ Why should we land this now?
 - [ ] Check 2
 - [ ] Check 3
 
+## Documentation impact
+
+- [ ] CLI surface changed (added/removed/renamed a command, flag, or argument) → updated [`feral-file/docs`](https://github.com/feral-file/docs) (`docs/api-reference/cli.md`, and any mentions under `docs/dp1-protocol/`, `docs/llm-agents/`)
+- [ ] Config schema changed → updated `docs/CONFIGURATION.md` and the public docs as needed
+- [ ] No user-facing change — docs updates not required
+
 ## Human Owner
 
 Who owns the task outcome?
