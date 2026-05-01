@@ -42,10 +42,18 @@ echo "==> Running verify"
 npm run verify
 
 # `npm version` updates package.json + package-lock.json, commits, and tags.
+# .npmrc pins `tag-version-prefix=` so the tag matches this repo's existing
+# unprefixed history (e.g. `1.0.17`, not `v1.0.17`).
 echo "==> Bumping version ($BUMP)"
 NEW_VERSION="$(npm version "$BUMP" -m "chore(release): %s")"
 NEW_VERSION="${NEW_VERSION#v}"
 TAG="$NEW_VERSION"
+# Belt-and-braces: if .npmrc was overridden and npm tagged with a v prefix,
+# rename the local tag to the unprefixed form before pushing.
+if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1 && ! git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+  git tag "$NEW_VERSION" "v$NEW_VERSION"
+  git tag -d "v$NEW_VERSION"
+fi
 
 echo "==> Pushing commit and tag $TAG"
 git push origin main
