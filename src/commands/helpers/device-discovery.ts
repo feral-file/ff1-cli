@@ -1,0 +1,143 @@
+import chalk from 'chalk';
+import { discoverFF1Devices } from '../../utilities/ff1-discovery';
+import { findExistingDeviceEntry } from '../../utilities/device-lookup';
+import { normalizeDeviceHost, normalizeDeviceIdToHost } from '../../utilities/device-normalize';
+
+export interface DeviceDiscoverySelection {
+  hostValue: string;
+  discoveredName: string;
+  /** mDNS device ID (e.g. 'ff1-hh9jsnoc'). Used to match a device when its host URL changes. */
+  discoveredId?: string;
+  /** Resolved IP addresses from mDNS. Used to match pre-id configs stored with an IP host. */
+  discoveredAddresses?: string[];
+  skipped: boolean;
+}
+
+/**
+ * Run mDNS discovery and prompt the user to pick a device, fall back to
+ * manual entry, or skip when an existing device is already configured.
+ *
+ * Shared between `ff1 setup` and `ff1 device add` so both flows present
+ * the same selection UX and matching rules.
+ */
+export async function discoverAndSelectDevice(
+  ask: (question: string) => Promise<string>,
+  existingDevices: Array<{ host: string; name?: string; id?: string }>,
+  options?: { allowSkip?: boolean }
+): Promise<DeviceDiscoverySelection> {
+  const allowSkip = options?.allowSkip && existingDevices.length > 0;
+
+  const discoveryResult = await discoverFF1Devices();
+  const discoveredDevices = discoveryResult.devices;
+
+  if (discoveryResult.error && discoveredDevices.length === 0) {
+    const errorMessage = discoveryResult.error.endsWith('.')
+      ? discoveryResult.error
+      : `${discoveryResult.error}.`;
+    console.log(chalk.dim(`mDNS discovery failed: ${errorMessage} Continuing with manual entry.`));
+  } else if (discoveryResult.error) {
+    console.log(chalk.dim(`mDNS discovery warning: ${discoveryResult.error}`));
+  }
+
+  if (discoveredDevices.length > 0) {
+    console.log(chalk.green('\nFF1 devices on your network:'));
+    discoveredDevices.forEach((device, index) => {
+      const displayId = device.id || device.name || device.host;
+      const normalizedHost = normalizeDeviceHost(`${device.host}:${device.port}`);
+      const alreadyConfigured = !!findExistingDeviceEntry(
+        existingDevices,
+        normalizedHost,
+        device.name || device.id || '',
+        device.id,
+        device.addresses
+      );
+      const suffix = alreadyConfigured ? chalk.dim(' (already configured)') : '';
+      console.log(chalk.dim(`  ${index + 1}) ${displayId}${suffix}`));
+    });
+
+    const skipHint = allowSkip ? ', press Enter to skip' : '';
+    const prompt = `Select device [1-${discoveredDevices.length}], enter ID/host${skipHint}, or type m for manual entry: `;
+
+    while (true) {
+      const selectionAnswer = (await ask(prompt)).trim();
+
+      if (!selectionAnswer) {
+        if (allowSkip) {
+          console.log(chalk.dim('Keeping existing devices.'));
+          return { hostValue: '', discoveredName: '', skipped: true };
+        }
+        break;
+      }
+
+      const normalizedSelection = selectionAnswer.toLowerCase();
+      if (normalizedSelection === 'm') {
+        break;
+      }
+
+      const parsedIndex = Number.parseInt(selectionAnswer, 10);
+      if (
+        !Number.isNaN(parsedIndex) &&
+        `${parsedIndex}` === selectionAnswer &&
+        parsedIndex >= 1 &&
+        parsedIndex <= discoveredDevices.length
+      ) {
+        const selected = discoveredDevices[parsedIndex - 1];
+        return {
+          hostValue: normalizeDeviceHost(`${selected.host}:${selected.port}`),
+          discoveredName: selected.name || selected.id || '',
+          discoveredId: selected.id,
+          discoveredAddresses: selected.addresses,
+          skipped: false,
+        };
+      }
+
+      const normalizedWithPrefix = normalizedSelection.startsWith('ff1-')
+        ? normalizedSelection
+        : `ff1-${normalizedSelection}`;
+      // Also normalize the answer as a URL-form host so pasted URLs like
+      // "http://ff1-hh9jsnoc.local:1111" match the device's normalized host.
+      let normalizedSelectionAsHost = '';
+      try {
+        normalizedSelectionAsHost = normalizeDeviceHost(selectionAnswer).toLowerCase();
+      } catch {
+        // not a valid URL — skip URL-form matching
+      }
+      const matched = discoveredDevices.find((device) => {
+        const deviceNormalizedHost = normalizeDeviceHost(
+          `${device.host}:${device.port}`
+        ).toLowerCase();
+        const candidates = [device.id, device.name, device.host, `${device.host}:${device.port}`]
+          .filter((value): value is string => Boolean(value))
+          .map((value) => value.toLowerCase());
+        return (
+          candidates.includes(normalizedSelection) ||
+          candidates.includes(normalizedWithPrefix) ||
+          (normalizedSelectionAsHost !== '' && normalizedSelectionAsHost === deviceNormalizedHost)
+        );
+      });
+
+      if (matched) {
+        return {
+          hostValue: normalizeDeviceHost(`${matched.host}:${matched.port}`),
+          discoveredName: matched.name || matched.id || '',
+          discoveredId: matched.id,
+          discoveredAddresses: matched.addresses,
+          skipped: false,
+        };
+      }
+
+      console.log(
+        chalk.red('Invalid selection. Enter a number, m, or a discovered device ID/host.')
+      );
+    }
+  } else if (!discoveryResult.error) {
+    console.log(chalk.dim('No FF1 devices found via mDNS. Continuing with manual entry.'));
+  }
+
+  // Manual entry fallback
+  const idAnswer = await ask('Device ID or host (e.g. ff1-ABCD1234): ');
+  if (!idAnswer) {
+    return { hostValue: '', discoveredName: '', skipped: false };
+  }
+  return { hostValue: normalizeDeviceIdToHost(idAnswer), discoveredName: '', skipped: false };
+}
