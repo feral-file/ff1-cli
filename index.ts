@@ -981,7 +981,10 @@ program
         const verifyResult = verifyPlaylist(playlist);
 
         if (!verifyResult.valid) {
-          printPlaylistVerificationFailure(verifyResult, isFile ? `source: ${sourceLabel}` : undefined);
+          printPlaylistVerificationFailure(
+            verifyResult,
+            isFile ? `source: ${sourceLabel}` : undefined
+          );
           process.exit(1);
         }
 
