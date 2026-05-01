@@ -159,8 +159,7 @@ Today the CLI groups into these workflow areas:
 
 ### Delivery
 
-- `send`
-- `play`
+- `send` (handles playlist files, playlist URLs, and media URLs)
 - `publish`
 
 ### Device operations

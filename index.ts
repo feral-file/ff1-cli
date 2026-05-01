@@ -1015,17 +1015,6 @@ program
     }
   });
 
-// Keep `play` as a hidden alias for backwards compatibility
-program
-  .command('play', { hidden: true })
-  .argument('<url>', 'Media URL to play')
-  .option('-d, --device <name>', 'Device name (uses first device if not specified)')
-  .option('--skip-verify', 'Skip playlist verification before sending')
-  .action(async (url: string, options: { device?: string; skipVerify?: boolean }) => {
-    // Delegate to send
-    await program.parseAsync(['node', 'ff1', 'send', url, ...(options.device ? ['-d', options.device] : []), ...(options.skipVerify ? ['--skip-verify'] : [])]);
-  });
-
 program
   .command('publish')
   .description('Publish a playlist to a feed server')
