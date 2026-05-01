@@ -27,7 +27,7 @@ ff1 setup
 
 See the full configuration reference here: `./CONFIGURATION.md`.
 
-During setup, you can pick FF1 devices to add. Use `ff1 device add` to add more devices later, and `ff1 device list` to see what's configured. The first device is the default for `send` commands (override with `-d`).
+During setup, you can pick FF1 devices to add. Use `ff1 device add` to add more devices later, and `ff1 device list` to see what's configured. The first device is the default for `play` commands (override with `-d`).
 
 Manual config path:
 
@@ -135,7 +135,7 @@ Notes:
 - `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 playlist file
 - `sign <file>` – Sign playlist with Ed25519
   - Options: `-k, --key <base64>`, `-o, --output <file>`
-- `send <source>` – Send a playlist file, playlist URL, or media URL to an FF1 device
+- `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
   - Options: `-s, --server <index>` (server index if multiple configured)
@@ -220,7 +220,7 @@ cat params.json | npm run dev -- build -o playlist.json
 
 `params.json` should include `requirements` and optional `playlistSettings`. See `examples/params-example.json`.
 
-### Validate, sign, and send
+### Validate, sign, and play
 
 ```bash
 # Optional explicit validation (build flows already validate)
@@ -229,23 +229,23 @@ npm run dev -- validate playlist.json
 # Sign (uses key from config or override via --key)
 npm run dev -- sign playlist.json -o signed.json
 
-# Send to configured default device (verifies by default)
-npm run dev -- send playlist.json
+# Play on configured default device (verifies by default)
+npm run dev -- play playlist.json
 
-# Send to a specific named device
-npm run dev -- send playlist.json -d "Living Room Display"
+# Play on a specific named device
+npm run dev -- play playlist.json -d "Living Room Display"
 
-# The send path now performs a compatibility preflight check against the target FF1.
+# The play path performs a compatibility preflight check against the target FF1.
 # If the device reports an unsupported FF1 OS version, the command fails with
 # a clear version message before any cast request is sent.
-# The send path also retries transient local-network errors (for example intermittent
+# It also retries transient local-network errors (for example intermittent
 # mDNS/Wi-Fi resolver failures) with a short backoff before returning a final error.
-# Send a hosted DP-1 playlist
-npm run dev -- send "https://cdn.example.com/playlist.json"
 
-# Play a direct URL
-# Send a media URL directly
-npm run dev -- send "https://example.com/video.mp4" --skip-verify
+# Play a hosted DP-1 playlist
+npm run dev -- play "https://cdn.example.com/playlist.json"
+
+# Play a media URL directly
+npm run dev -- play "https://example.com/video.mp4" --skip-verify
 ```
 
 ### SSH access
@@ -257,7 +257,7 @@ ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
 # Disable SSH access
 ff1 ssh disable -d "Living Room Display"
 
-# `ff1 ssh` also performs the same FF1 OS compatibility preflight used by `send`.
+# `ff1 ssh` also performs the same FF1 OS compatibility preflight used by `play`.
 ```
 
 ### Publish to feed server

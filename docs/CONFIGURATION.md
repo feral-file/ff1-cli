@@ -110,7 +110,7 @@ FEED_BASE_URLS=https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/ap
 
 ## ff1Devices
 
-Configure devices you want to send playlists to.
+Configure devices you want to play content on.
 
 - `ff1Devices.devices` (array of objects):
   - `name` (string): Friendly device label. Free‑form; pick anything memorable.
@@ -134,11 +134,11 @@ Selection rules when sending:
 
 Compatibility checks:
 
-- `send` and `ssh` perform a compatibility preflight before sending commands to FF1. The CLI gets the device version by calling `POST /api/cast` with `{ "command": "getDeviceStatus", "request": {} }` and reads `message.installedVersion` from the response.
+- `play` and `ssh` perform a compatibility preflight before sending commands to FF1. The CLI gets the device version by calling `POST /api/cast` with `{ "command": "getDeviceStatus", "request": {} }` and reads `message.installedVersion` from the response.
 
 - Minimum supported FF1 OS versions:
 
-  - `send` (`displayPlaylist`): `1.0.0` or newer
+  - `play` (`displayPlaylist`): `1.0.0` or newer
   - `ssh` (`sshAccess`): `1.0.9` or newer
 
 - If the CLI cannot get a version from the device (e.g. network or malformed response), it continues and sends the command.
@@ -152,10 +152,10 @@ Examples:
 
 ```bash
 # Send to first device
-npm run dev -- send playlist.json
+npm run dev -- play playlist.json
 
-# Send to a specific device by exact name
-npm run dev -- send playlist.json -d "Living Room Display"
+# Play on a specific device by exact name
+npm run dev -- play playlist.json -d "Living Room Display"
 ```
 
  Minimal `config.json` example (selected fields):

@@ -56,7 +56,7 @@ const placeholderPattern = /YOUR_|your_/;
 function displayPlaylistSummary(playlist: Playlist, outputPath: string) {
   console.log(chalk.green('\nPlaylist saved'));
   console.log(chalk.dim(`  Output: ./${outputPath}`));
-  console.log(chalk.dim('  Next: send last | publish playlist'));
+  console.log(chalk.dim('  Next: play last | publish playlist'));
   console.log();
 }
 
@@ -326,7 +326,7 @@ function printPlaylistVerificationFailure(
     });
   }
 
-  console.log(chalk.yellow('\n   Use --skip-verify to send anyway (not recommended)\n'));
+  console.log(chalk.yellow('\n   Use --skip-verify to play anyway (not recommended)\n'));
 }
 
 /**
@@ -917,11 +917,11 @@ program
   });
 
 program
-  .command('send')
-  .description('Send a playlist or media URL to an FF1 device')
+  .command('play')
+  .description('Play a playlist or media URL on an FF1 device')
   .argument('<source>', 'Playlist file, playlist URL, or media URL')
   .option('-d, --device <name>', 'Device name (uses first device if not specified)')
-  .option('--skip-verify', 'Skip playlist verification before sending')
+  .option('--skip-verify', 'Skip playlist verification before playing')
   .action(async (source: string, options: { device?: string; skipVerify?: boolean }) => {
     try {
       let playlist: Playlist;
@@ -931,22 +931,18 @@ program
       const isFile = !isUrl;
 
       if (isFile) {
-        console.log(chalk.blue('\nSend playlist to FF1\n'));
+        console.log(chalk.blue('\nPlay on FF1\n'));
         const playlistResult = await loadPlaylistSource(source);
         playlist = playlistResult.playlist;
         sourceLabel = `${playlistResult.sourceType}: ${playlistResult.source}`;
       } else {
-        // URL: try loading as a playlist first, fall back to media URL
         let loadedAsPlaylist = false;
         try {
           const playlistResult = await loadPlaylistSource(source);
           playlist = playlistResult.playlist;
           sourceLabel = `${playlistResult.sourceType}: ${playlistResult.source}`;
           loadedAsPlaylist = true;
-          console.log(chalk.blue('\nSend playlist to FF1\n'));
         } catch {
-          // Not valid playlist JSON — treat as a direct media URL
-          console.log(chalk.blue('\nPlay on FF1\n'));
           const config = getConfig();
           const duration = config.defaultDuration || 10;
 
@@ -956,6 +952,8 @@ program
           const item = buildUrlItem(source, duration);
           playlist = await buildDP1Playlist({ items: [item], title: item.title });
         }
+
+        console.log(chalk.blue('\nPlay on FF1\n'));
 
         if (!loadedAsPlaylist) {
           sourceLabel = source;
@@ -990,7 +988,7 @@ program
       });
 
       if (result.success) {
-        console.log(chalk.green('✓ Sent'));
+        console.log(chalk.green('✓ Playing'));
         if (result.deviceName) {
           console.log(chalk.dim(`  Device: ${result.deviceName}`));
         }
@@ -999,7 +997,7 @@ program
         }
         console.log();
       } else {
-        console.error(chalk.red('\nSend failed:'), result.error);
+        console.error(chalk.red('\nPlay failed:'), result.error);
         if (result.details) {
           console.error(chalk.dim(`  Details: ${result.details}`));
         }
