@@ -12,7 +12,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const projectRoot = resolve(__dirname, '..');
-const tsxBin = resolve(projectRoot, 'node_modules/.bin/tsx');
+// Spawn node directly with tsx's JS entry to avoid Windows .cmd shim
+// limitations in spawnSync (Node refuses to execute .bat/.cmd without shell).
+const tsxCli = resolve(projectRoot, 'node_modules/tsx/dist/cli.mjs');
 const cliEntry = resolve(projectRoot, 'index.ts');
 
 interface TestConfig {
@@ -59,7 +61,7 @@ function runDeviceDefault(
   cwd: string,
   ...args: string[]
 ): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync(tsxBin, [cliEntry, 'device', 'default', ...args], {
+  const result = spawnSync(process.execPath, [tsxCli, cliEntry, 'device', 'default', ...args], {
     cwd,
     // XDG_CONFIG_HOME is redirected so the user's real ~/.config/ff1 is never touched
     // even if cwd-based local config resolution ever changes.
