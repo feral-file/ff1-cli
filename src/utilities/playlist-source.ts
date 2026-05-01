@@ -1,6 +1,10 @@
 import { promises as fs } from 'fs';
 import type { Playlist } from '../types';
 
+// playlist-builder is still CommonJS; require keeps the interop simple.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { buildUrlItem, buildDP1Playlist } = require('./playlist-builder');
+
 /**
  * Parsed playlist source metadata.
  */
@@ -86,5 +90,81 @@ export async function loadPlaylistSource(source: string): Promise<LoadedPlaylist
     };
   } catch (error) {
     throw new Error(`Invalid JSON in ${trimmedSource}: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Resolved source for the `play` command.
+ *
+ * `playlist` — the source loaded as a DP-1 playlist (a local file or a
+ *   hosted playlist URL).
+ * `media` — the source is a direct media URL; a single-item DP-1 playlist
+ *   was synthesized around it.
+ *
+ * The kind is what callers branch on to decide whether to print
+ * playlist-style verification messages.
+ */
+export type PlaySource =
+  | {
+      kind: 'playlist';
+      playlist: Playlist;
+      sourceType: 'file' | 'url';
+      source: string;
+    }
+  | {
+      kind: 'media';
+      playlist: Playlist;
+      source: string;
+    };
+
+/**
+ * Resolve a `play` command argument to a playable source.
+ *
+ * Files are always treated as playlists. URLs are tried as playlists first;
+ * if loading fails (network, non-JSON, etc.), the URL is wrapped in a
+ * synthesized single-item playlist so direct media URLs still work.
+ *
+ * The "URL → playlist or media" path uses throw-and-fallback because there
+ * is no cheap way to distinguish a 200-OK media file from a malformed
+ * playlist response without trying to parse it. Keeping the fallback
+ * scoped to one helper means the play action no longer carries the
+ * `loadedAsPlaylist` boolean dance.
+ *
+ * @param source - User-supplied path or URL
+ * @param defaultDuration - Duration (seconds) for the synthesized media item
+ * @returns Resolved playlist + metadata describing how it was loaded
+ * @throws Error When `source` is empty, or is a non-URL file path that cannot be loaded
+ */
+export async function resolvePlaySource(
+  source: string,
+  defaultDuration: number
+): Promise<PlaySource> {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    throw new Error('Playlist source is required');
+  }
+
+  if (!isPlaylistSourceUrl(trimmed)) {
+    const loaded = await loadPlaylistSource(trimmed);
+    return {
+      kind: 'playlist',
+      playlist: loaded.playlist,
+      sourceType: loaded.sourceType,
+      source: loaded.source,
+    };
+  }
+
+  try {
+    const loaded = await loadPlaylistSource(trimmed);
+    return {
+      kind: 'playlist',
+      playlist: loaded.playlist,
+      sourceType: loaded.sourceType,
+      source: loaded.source,
+    };
+  } catch {
+    const item = buildUrlItem(trimmed, defaultDuration);
+    const playlist = (await buildDP1Playlist({ items: [item], title: item.title })) as Playlist;
+    return { kind: 'media', playlist, source: trimmed };
   }
 }

@@ -26,7 +26,11 @@ import {
 import { buildPlaylist, buildPlaylistDirect } from './src/main';
 import type { Config, Playlist } from './src/types';
 import { discoverFF1Devices } from './src/utilities/ff1-discovery';
-import { isPlaylistSourceUrl, loadPlaylistSource } from './src/utilities/playlist-source';
+import {
+  isPlaylistSourceUrl,
+  loadPlaylistSource,
+  resolvePlaySource,
+} from './src/utilities/playlist-source';
 import { upsertDevice } from './src/utilities/device-upsert';
 import { findExistingDeviceEntry } from './src/utilities/device-lookup';
 import { normalizeDeviceHost, normalizeDeviceIdToHost } from './src/utilities/device-normalize';
@@ -935,63 +939,40 @@ program
   .option('--skip-verify', 'Skip playlist verification before playing')
   .action(async (source: string, options: { device?: string; skipVerify?: boolean }) => {
     try {
-      let playlist: Playlist;
-      let sourceLabel = source;
+      const config = getConfig();
+      const resolved = await resolvePlaySource(source, config.defaultDuration || 10);
+      const isPlaylistSource = resolved.kind === 'playlist';
+      const sourceLabel = isPlaylistSource
+        ? `${resolved.sourceType}: ${resolved.source}`
+        : resolved.source;
 
-      const isUrl = isPlaylistSourceUrl(source);
-      const isFile = !isUrl;
-
-      if (isFile) {
-        console.log(chalk.blue('\nPlay on FF1\n'));
-        const playlistResult = await loadPlaylistSource(source);
-        playlist = playlistResult.playlist;
-        sourceLabel = `${playlistResult.sourceType}: ${playlistResult.source}`;
-      } else {
-        let loadedAsPlaylist = false;
-        try {
-          const playlistResult = await loadPlaylistSource(source);
-          playlist = playlistResult.playlist;
-          sourceLabel = `${playlistResult.sourceType}: ${playlistResult.source}`;
-          loadedAsPlaylist = true;
-        } catch {
-          const config = getConfig();
-          const duration = config.defaultDuration || 10;
-
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { buildUrlItem, buildDP1Playlist } = require('./src/utilities/playlist-builder');
-
-          const item = buildUrlItem(source, duration);
-          playlist = await buildDP1Playlist({ items: [item], title: item.title });
-        }
-
-        console.log(chalk.blue('\nPlay on FF1\n'));
-
-        if (!loadedAsPlaylist) {
-          sourceLabel = source;
-        }
-      }
+      console.log(chalk.blue('\nPlay on FF1\n'));
 
       if (!options.skipVerify) {
-        if (isFile) {
+        // Synthesized media-URL playlists are trivially valid by construction;
+        // only print the verify lines when the user supplied a real playlist.
+        if (isPlaylistSource) {
           console.log(chalk.cyan(`Verify playlist (${sourceLabel})`));
         }
 
         const verifier = await import('./src/utilities/playlist-verifier');
         const { verifyPlaylist } = verifier;
-        const verifyResult = verifyPlaylist(playlist);
+        const verifyResult = verifyPlaylist(resolved.playlist);
 
         if (!verifyResult.valid) {
           printPlaylistVerificationFailure(
             verifyResult,
-            isFile ? `source: ${sourceLabel}` : undefined
+            isPlaylistSource ? `source: ${sourceLabel}` : undefined
           );
           process.exit(1);
         }
 
-        if (isFile) {
+        if (isPlaylistSource) {
           console.log(chalk.green('✓ Verified\n'));
         }
       }
+
+      const playlist = resolved.playlist;
 
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { sendPlaylistToDevice } = require('./src/utilities/ff1-device');
