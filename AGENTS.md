@@ -125,6 +125,10 @@ Tool mappings:
 - Prefer separate commits for large legacy removal when that clarifies review.
 - PR or handoff summaries should include goal, scope, decisions, tests, and remaining risks.
 
+## Cutting a release
+
+Always use `./scripts/release/cut-release.sh <patch|minor|major|x.y.z>` from a clean `main` checked out at `origin/main`. The script bumps `package.json` + `package-lock.json`, commits, tags, pushes, and creates the GitHub Release in one atomic flow. The GitHub Release event is what triggers `release.yml` and the npm publish — pushing a tag without creating a Release will silently skip the publish.
+
 ## Authoritative tool-specific files
 
 - Cursor rules: `.cursor/rules/`
