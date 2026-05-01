@@ -1,0 +1,16 @@
+# Force LF line endings for all text files on every platform.
+# Windows runners default to CRLF on checkout via core.autocrlf, which causes
+# prettier (configured with endOfLine: "lf") to flag every file as needing
+# reformatting. This pins the working-tree to LF regardless of OS.
+* text=auto eol=lf
+
+# Binary files: do not normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
