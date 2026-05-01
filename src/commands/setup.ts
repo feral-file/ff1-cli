@@ -1,0 +1,230 @@
+import { Command } from 'commander';
+import chalk from 'chalk';
+import crypto from 'crypto';
+import { promises as fs } from 'fs';
+import { findExistingDeviceEntry } from '../utilities/device-lookup';
+import { upsertDevice } from '../utilities/device-upsert';
+import { ensureConfigFile, isMissingConfigValue, readConfigFile } from './helpers/config-files';
+import { discoverAndSelectDevice } from './helpers/device-discovery';
+import { createPrompt, promptYesNo } from './helpers/prompt';
+
+export const setupCommand = new Command('setup')
+  .description('Guided setup for config, signing key, and device')
+  .action(async () => {
+    let prompt: ReturnType<typeof createPrompt> | null = null;
+    try {
+      const { path: configPath, created } = await ensureConfigFile();
+      if (created) {
+        console.log(chalk.green(`Created ${configPath}`));
+      }
+
+      const config = await readConfigFile(configPath);
+      const modelNames = Object.keys(config.models || {});
+
+      if (modelNames.length === 0) {
+        console.error(chalk.red('No models found in config.json'));
+        process.exit(1);
+      }
+
+      console.log(chalk.blue('\nFF1 Setup\n'));
+
+      prompt = createPrompt();
+      const ask = prompt.ask;
+
+      const currentModel =
+        config.defaultModel && modelNames.includes(config.defaultModel)
+          ? config.defaultModel
+          : modelNames[0];
+
+      let selectedModel = currentModel;
+      while (true) {
+        const modelAnswer = await ask(
+          `Default model (${modelNames.join(', ')}) [${currentModel}]: `
+        );
+        if (!modelAnswer) {
+          selectedModel = currentModel;
+          break;
+        }
+        if (modelNames.includes(modelAnswer)) {
+          selectedModel = modelAnswer;
+          break;
+        }
+        console.log(chalk.red(`Unknown model: ${modelAnswer}`));
+      }
+
+      config.defaultModel = selectedModel;
+      const selectedModelConfig = config.models[selectedModel] || {
+        apiKey: '',
+        baseURL: '',
+        model: '',
+        timeout: 0,
+        maxRetries: 0,
+        temperature: 0,
+        maxTokens: 0,
+        supportsFunctionCalling: true,
+      };
+
+      const hasApiKeyForModel = !isMissingConfigValue(selectedModelConfig.apiKey);
+      const keyHelpUrls: Record<string, string> = {
+        grok: 'https://console.x.ai/',
+        gpt: 'https://platform.openai.com/api-keys',
+        gemini: 'https://aistudio.google.com/app/apikey',
+      };
+      if (!hasApiKeyForModel) {
+        const helpUrl = keyHelpUrls[selectedModel];
+        if (helpUrl) {
+          console.log(chalk.dim(helpUrl));
+        }
+      }
+
+      const apiKeyPrompt = hasApiKeyForModel
+        ? `API key for ${selectedModel} (leave blank to keep current): `
+        : `API key for ${selectedModel} (optional, only needed for chat): `;
+      const apiKeyAnswer = await ask(apiKeyPrompt);
+      if (apiKeyAnswer) {
+        selectedModelConfig.apiKey = apiKeyAnswer;
+      }
+      config.models[selectedModel] = selectedModelConfig;
+
+      const currentKey = config.playlist?.privateKey || '';
+      let signingKey = currentKey;
+
+      if (isMissingConfigValue(currentKey)) {
+        const keyPair = crypto.generateKeyPairSync('ed25519');
+        signingKey = keyPair.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+      } else {
+        const keepKey = await promptYesNo(ask, 'Keep existing signing key?', true);
+        if (!keepKey) {
+          const keyAnswer = await ask(
+            'Paste signing key (base64 or hex), or leave blank to regenerate: '
+          );
+          if (keyAnswer) {
+            signingKey = keyAnswer;
+          } else {
+            const keyPair = crypto.generateKeyPairSync('ed25519');
+            signingKey = keyPair.privateKey
+              .export({ format: 'der', type: 'pkcs8' })
+              .toString('base64');
+          }
+        }
+      }
+
+      if (signingKey) {
+        config.playlist = {
+          ...(config.playlist || {}),
+          privateKey: signingKey,
+        };
+      }
+
+      const existingDevices = config.ff1Devices?.devices || [];
+
+      if (existingDevices.length > 0) {
+        console.log(
+          chalk.dim(
+            `\nConfigured devices: ${existingDevices.map((d) => d.name || d.host).join(', ')}`
+          )
+        );
+      }
+
+      const selection = await discoverAndSelectDevice(ask, existingDevices, { allowSkip: true });
+
+      if (selection.hostValue) {
+        // Prefer the already-stored label so re-running setup (or re-adding a device
+        // that returned on a new IP) doesn't clobber the friendly name.
+        const existingEntry = findExistingDeviceEntry(
+          existingDevices,
+          selection.hostValue,
+          selection.discoveredName,
+          selection.discoveredId,
+          selection.discoveredAddresses
+        );
+        const existingIndex = existingEntry
+          ? existingDevices.findIndex((d) => d === existingEntry)
+          : -1;
+        const existingName = existingEntry?.name || '';
+        const defaultName = existingName || selection.discoveredName || 'ff1';
+        const namePrompt =
+          defaultName !== 'ff1'
+            ? `Device name (kitchen, office, etc.) [${defaultName}]: `
+            : 'Device name (kitchen, office, etc.): ';
+        const nameAnswer = await ask(namePrompt);
+        let deviceName = nameAnswer || defaultName || 'ff1';
+
+        // Same name-collision guard as `device add`: reject names that would
+        // clobber a different device entry. Only fires when existingIndex !== -1
+        // (we know the row); when existingIndex === -1, a same-name entry is the
+        // case-3 migration path.
+        const setupNameConflict =
+          existingIndex !== -1
+            ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
+            : undefined;
+        if (setupNameConflict) {
+          console.log(
+            chalk.yellow(
+              `"${deviceName}" is already used by another device. Please choose a different name.`
+            )
+          );
+          const retryAnswer = await ask('Device name: ');
+          deviceName = retryAnswer || 'ff1';
+          const retryConflict =
+            existingIndex !== -1
+              ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
+              : undefined;
+          if (retryConflict) {
+            console.log(chalk.yellow(`"${deviceName}" is also taken. Skipping device.`));
+            config.ff1Devices = { devices: existingDevices };
+            await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+            return;
+          }
+        }
+
+        const result = upsertDevice(
+          existingDevices,
+          {
+            name: deviceName,
+            host: selection.hostValue,
+            id: selection.discoveredId,
+            addresses: selection.discoveredAddresses,
+          },
+          existingIndex !== -1 ? existingIndex : undefined
+        );
+        console.log(chalk.dim(`${result.updated ? 'Updated' : 'Added'} device: ${deviceName}`));
+        config.ff1Devices = { devices: result.devices };
+      } else if (existingDevices.length > 0) {
+        config.ff1Devices = { devices: existingDevices };
+      }
+
+      await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+      prompt.close();
+      prompt = null;
+
+      console.log(chalk.green('\nSetup complete'));
+      console.log(chalk.dim(`   Config: ${configPath}`));
+
+      const hasApiKey = !isMissingConfigValue(config.models[selectedModel]?.apiKey);
+      const hasSigningKey = !isMissingConfigValue(config.playlist?.privateKey || '');
+      const hasDevice = Boolean(config.ff1Devices?.devices?.[0]?.host);
+
+      if (!hasSigningKey || !hasDevice) {
+        console.log(chalk.yellow('\nNext steps:'));
+        if (!hasSigningKey) {
+          console.log(chalk.yellow('  • Add a playlist signing key'));
+        }
+        if (!hasDevice) {
+          console.log(chalk.yellow('  • Add an FF1 device host'));
+        }
+      }
+      if (!hasApiKey) {
+        console.log(chalk.dim(`\nTo use ff1 chat, add an API key for ${selectedModel}`));
+      }
+
+      console.log(chalk.dim('\nRun: ff1 play'));
+    } catch (error) {
+      console.error(chalk.red('\nSetup failed:'), (error as Error).message);
+      process.exit(1);
+    } finally {
+      if (prompt) {
+        prompt.close();
+      }
+    }
+  });
