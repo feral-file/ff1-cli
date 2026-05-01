@@ -478,7 +478,7 @@ program
 
       const apiKeyPrompt = hasApiKeyForModel
         ? `API key for ${selectedModel} (leave blank to keep current): `
-        : `API key for ${selectedModel}: `;
+        : `API key for ${selectedModel} (optional, only needed for chat): `;
       const apiKeyAnswer = await ask(apiKeyPrompt);
       if (apiKeyAnswer) {
         selectedModelConfig.apiKey = apiKeyAnswer;
@@ -603,11 +603,8 @@ program
       const hasSigningKey = !isMissingConfigValue(config.playlist?.privateKey || '');
       const hasDevice = Boolean(config.ff1Devices?.devices?.[0]?.host);
 
-      if (!hasApiKey || !hasSigningKey || !hasDevice) {
+      if (!hasSigningKey || !hasDevice) {
         console.log(chalk.yellow('\nNext steps:'));
-        if (!hasApiKey) {
-          console.log(chalk.yellow(`  • Add API key for ${selectedModel}`));
-        }
         if (!hasSigningKey) {
           console.log(chalk.yellow('  • Add a playlist signing key'));
         }
@@ -615,8 +612,11 @@ program
           console.log(chalk.yellow('  • Add an FF1 device host'));
         }
       }
+      if (!hasApiKey) {
+        console.log(chalk.dim(`\nTo use ff1 chat, add an API key for ${selectedModel}`));
+      }
 
-      console.log(chalk.dim('\nRun: ff1 chat'));
+      console.log(chalk.dim('\nRun: ff1 play'));
     } catch (error) {
       console.error(chalk.red('\nSetup failed:'), (error as Error).message);
       process.exit(1);
@@ -648,6 +648,8 @@ program
       const defaultModelLabel = defaultModel || 'unknown';
       const defaultModelConfig = defaultModel ? config.models?.[defaultModel] : undefined;
 
+      const hasApiKey = defaultModel ? !isMissingConfigValue(defaultModelConfig?.apiKey) : false;
+
       const statuses = [
         {
           label: 'Config file',
@@ -656,7 +658,8 @@ program
         },
         {
           label: `Default model (${defaultModelLabel}) API key`,
-          ok: defaultModel ? !isMissingConfigValue(defaultModelConfig?.apiKey) : false,
+          ok: hasApiKey,
+          optional: true,
         },
         {
           label: 'Playlist signing key',
@@ -676,13 +679,21 @@ program
 
       console.log(chalk.blue('\n🔎 FF1 Status\n'));
       statuses.forEach((status) => {
-        const label = status.ok ? chalk.green('OK') : chalk.red('Missing');
+        let label: string;
+        if (status.ok) {
+          label = chalk.green('OK');
+        } else if (status.optional) {
+          label = chalk.yellow('Not set');
+        } else {
+          label = chalk.red('Missing');
+        }
         const detail = status.detail ? chalk.dim(` (${status.detail})`) : '';
-        console.log(`${label} ${status.label}${detail}`);
+        const hint = !status.ok && status.optional ? chalk.dim(' (only needed for chat)') : '';
+        console.log(`${label} ${status.label}${detail}${hint}`);
       });
 
-      const hasMissing = statuses.some((status) => !status.ok);
-      if (hasMissing) {
+      const hasRequired = statuses.some((status) => !status.ok && !status.optional);
+      if (hasRequired) {
         console.log(chalk.dim('\nRun: ff1 setup'));
         process.exit(1);
       }
