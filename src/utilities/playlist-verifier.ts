@@ -1,7 +1,7 @@
 /**
  * Playlist Verification Utility.
- * Validates playlists against the DP-1 v1.1.0 contract and accepts the
- * legacy `signature` field as part of that version's compatibility surface.
+ * Delegates signature-shape handling to dp1-js and keeps the CLI as a thin
+ * orchestration layer.
  */
 
 import type { Playlist } from '../types';
@@ -30,13 +30,30 @@ import { join } from 'path';
  *   console.error('Invalid:', result.error);
  * }
  */
-export async function verifyPlaylist(playlist: unknown): Promise<{
+export async function verifyPlaylist(
+  playlist: unknown,
+  publicKey?: string
+): Promise<{
   valid: boolean;
   error?: string;
   details?: Array<{ path: string; message: string }>;
 }> {
   try {
-    const result = await parseDp1Parse(playlist);
+    if (publicKey) {
+      const dp1 = await loadDp1();
+      const verifyFn = dp1.verifyPlaylist || dp1.VerifyPlaylist;
+
+      if (typeof verifyFn !== 'function') {
+        throw new Error('dp1-js does not expose verifyPlaylist');
+      }
+
+      const ok = await verifyFn(playlist, publicKey);
+      return ok
+        ? { valid: true }
+        : { valid: false, error: 'Playlist signature verification failed' };
+    }
+
+    const result = await parseDp1Playlist(playlist);
 
     if (result && 'error' in result && result.error) {
       return {
@@ -55,46 +72,33 @@ export async function verifyPlaylist(playlist: unknown): Promise<{
   }
 }
 
-async function parseDp1Parse(playlist: unknown): Promise<{
+async function parseDp1Playlist(playlist: unknown): Promise<{
   error?: { message: string; details?: Array<{ path: string; message: string }> };
 }> {
   const module = (await loadDp1()) as {
     parseDP1Playlist?: (input: unknown) => {
       error?: { message: string; details?: Array<{ path: string; message: string }> };
     };
-    parseDP1PlaylistWithOptions?: (
-      input: unknown,
-      options?: { allowUnsignedOpen?: boolean }
-    ) => {
-      error?: { message: string; details?: Array<{ path: string; message: string }> };
-    };
     default?: {
       parseDP1Playlist?: (input: unknown) => {
         error?: { message: string; details?: Array<{ path: string; message: string }> };
       };
-      parseDP1PlaylistWithOptions?: (
-        input: unknown,
-        options?: { allowUnsignedOpen?: boolean }
-      ) => {
-        error?: { message: string; details?: Array<{ path: string; message: string }> };
-      };
     };
   };
-  const parseDP1Playlist =
-    module.parseDP1Playlist || (module.default && module.default.parseDP1Playlist);
 
-  if (typeof parseDP1Playlist !== 'function') {
+  const parseFn = module.parseDP1Playlist || (module.default && module.default.parseDP1Playlist);
+  if (typeof parseFn !== 'function') {
     throw new Error('dp1-js does not expose parseDP1Playlist');
   }
 
-  return parseDP1Playlist(playlist);
+  return parseFn(playlist);
 }
 
 async function loadDp1(): Promise<Record<string, unknown>> {
   const spec = process.env.DP1_JS || 'dp1-js';
   if (spec.startsWith('file:')) {
     const repoDir = fileURLToPath(spec);
-    const entry = join(repoDir, 'dist', 'index.js');
+    const entry = join(repoDir, 'src', 'index.js');
     return import(pathToFileURL(entry).href);
   }
 

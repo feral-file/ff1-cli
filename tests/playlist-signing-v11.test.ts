@@ -9,7 +9,7 @@ import { verifyPlaylist } from '../src/utilities/playlist-verifier';
 const localDp1Js = `file:${resolve(__dirname, '../../dp1-js-private')}`;
 
 describe('DP-1 v1.1.0 signing', () => {
-  test('signPlaylist returns a legacy signature string', async () => {
+  test('signPlaylist returns a v1.1.0 multi-signature object', async () => {
     const { privateKey } = generateKeyPairSync('ed25519');
     const privateKeyBase64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
     const playlist = {
@@ -20,8 +20,13 @@ describe('DP-1 v1.1.0 signing', () => {
 
     const signature = await signPlaylist(playlist, privateKeyBase64);
 
-    assert.equal(typeof signature, 'string');
-    assert.match(signature, /^ed25519:[0-9a-f]+$/i);
+    assert.equal(typeof signature, 'object');
+    assert.ok(signature);
+    assert.equal(signature.alg, 'ed25519');
+    assert.equal(signature.role, 'curator');
+    assert.equal(signature.kid, 'did:key:zff1CliTestKey');
+    assert.equal(typeof signature.payload_hash, 'string');
+    assert.equal(typeof signature.sig, 'string');
   });
 
   test('verifyPlaylist accepts v1.1.0 multi-sig and legacy signature fields', async () => {
