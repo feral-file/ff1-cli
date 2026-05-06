@@ -1,12 +1,9 @@
-/**
- * Playlist Verification Utility
- * Uses dp1-js library for DP-1 specification-compliant playlist validation
- */
-
-import { parseDP1Playlist } from 'dp1-js';
 import type { Playlist } from '../types';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { createRequire } from 'module';
+import { join } from 'path';
 
 /**
  * Verify playlist structure and integrity
@@ -27,16 +24,15 @@ import { promises as fs } from 'fs';
  *   console.error('Invalid:', result.error);
  * }
  */
-export function verifyPlaylist(playlist: unknown): {
+export async function verifyPlaylist(playlist: unknown): Promise<{
   valid: boolean;
   error?: string;
   details?: Array<{ path: string; message: string }>;
-} {
+}> {
   try {
-    // Use dp1-js parseDP1Playlist for validation
-    const result = parseDP1Playlist(playlist);
+    const result = await parseDp1Parse(playlist);
 
-    if (result.error) {
+    if (result && 'error' in result && result.error) {
       return {
         valid: false,
         error: result.error.message,
@@ -44,16 +40,62 @@ export function verifyPlaylist(playlist: unknown): {
       };
     }
 
-    // Validation successful
-    return {
-      valid: true,
-    };
+    return { valid: true };
   } catch (error) {
     return {
       valid: false,
       error: `Verification failed: ${(error as Error).message}`,
     };
   }
+}
+
+async function parseDp1Parse(playlist: unknown): Promise<{
+  error?: { message: string; details?: Array<{ path: string; message: string }> };
+}> {
+  const module = (await loadDp1()) as {
+    parseDP1Playlist?: (input: unknown) => {
+      error?: { message: string; details?: Array<{ path: string; message: string }> };
+    };
+    parseDP1PlaylistWithOptions?: (
+      input: unknown,
+      options?: { allowUnsignedOpen?: boolean }
+    ) => {
+      error?: { message: string; details?: Array<{ path: string; message: string }> };
+    };
+    default?: {
+      parseDP1Playlist?: (input: unknown) => {
+        error?: { message: string; details?: Array<{ path: string; message: string }> };
+      };
+      parseDP1PlaylistWithOptions?: (
+        input: unknown,
+        options?: { allowUnsignedOpen?: boolean }
+      ) => {
+        error?: { message: string; details?: Array<{ path: string; message: string }> };
+      };
+    };
+  };
+  const parseDP1Playlist =
+    module.parseDP1Playlist || (module.default && module.default.parseDP1Playlist);
+
+  if (typeof parseDP1Playlist !== 'function') {
+    throw new Error('dp1-js does not expose parseDP1Playlist');
+  }
+
+  return parseDP1Playlist(playlist);
+}
+
+async function loadDp1(): Promise<Record<string, unknown>> {
+  const spec = process.env.DP1_JS || 'dp1-js';
+  if (spec.startsWith('file:')) {
+    const repoDir = fileURLToPath(spec);
+    const entry = join(repoDir, 'dist', 'index.js');
+    return import(pathToFileURL(entry).href);
+  }
+
+  // `DP1_JS` may point at a local checkout (`file:`) or a published package.
+  // The default keeps the historical in-repo dependency path working.
+  const require = createRequire(__filename);
+  return require(spec);
 }
 
 /**
@@ -104,7 +146,7 @@ export async function verifyPlaylistFile(playlistPath: string): Promise<{
     }
 
     // Verify using dp1-js
-    const result = verifyPlaylist(playlistData);
+    const result = await verifyPlaylist(playlistData);
 
     if (result.valid) {
       return {

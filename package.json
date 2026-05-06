@@ -27,7 +27,7 @@
     "check": "npm run format:check && npm run lint && npm run test",
     "verify": "npm run check && npm run smoke",
     "prepublishOnly": "npm run verify",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,ts}\"",

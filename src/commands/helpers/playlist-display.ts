@@ -76,7 +76,7 @@ export async function verifyPlaylistSource(source: string): Promise<PlaylistVeri
 
   const verifier = await import('../../utilities/playlist-verifier');
   const { verifyPlaylist } = verifier;
-  const verifyResult = verifyPlaylist(loaded.playlist);
+  const verifyResult = await verifyPlaylist(loaded.playlist);
 
   return {
     ...verifyResult,

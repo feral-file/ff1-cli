@@ -58,7 +58,7 @@ export async function publishPlaylist(
 
     // Step 2: Validate playlist
     const { verifyPlaylist } = await import('./playlist-verifier');
-    const validationResult = verifyPlaylist(playlist);
+    const validationResult = await verifyPlaylist(playlist);
 
     if (!validationResult.valid) {
       return {

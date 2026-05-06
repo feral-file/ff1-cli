@@ -36,7 +36,7 @@ export const playCommand = new Command('play')
 
         const verifier = await import('../utilities/playlist-verifier');
         const { verifyPlaylist } = verifier;
-        const verifyResult = verifyPlaylist(resolved.playlist);
+        const verifyResult = await verifyPlaylist(resolved.playlist);
 
         if (!verifyResult.valid) {
           printPlaylistVerificationFailure(

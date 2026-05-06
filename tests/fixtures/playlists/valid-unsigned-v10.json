@@ -1,0 +1,35 @@
+{
+  "dpVersion": "1.0.0",
+  "id": "d2d4f9b0-7f01-4c26-9c10-1c4d7477f5de",
+  "title": "Sample NFT Collection",
+  "created": "2026-02-06T00:00:00.000Z",
+  "items": [
+    {
+      "id": "ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b",
+      "source": "https://example.com/nft1.png",
+      "duration": 10,
+      "license": "open",
+      "created": "2026-02-06T00:00:00.000Z",
+      "title": "Cool NFT #1",
+      "provenance": {
+        "type": "onChain",
+        "contract": {
+          "chain": "evm",
+          "standard": "other",
+          "address": "0x1234567890123456789012345678901234567890",
+          "tokenId": "1"
+        }
+      }
+    }
+  ],
+  "defaults": {
+    "display": {
+      "scaling": "fit",
+      "background": "#111",
+      "margin": 0
+    },
+    "license": "token",
+    "duration": 10
+  },
+  "slug": "sample-nft-collection"
+}

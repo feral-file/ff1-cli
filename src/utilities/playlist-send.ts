@@ -148,7 +148,7 @@ export async function confirmPlaylistForSending(
 
     // Dynamic import to avoid circular dependency
     const { verifyPlaylist } = await import('./playlist-verifier');
-    const verifyResult = verifyPlaylist(playlist);
+    const verifyResult = await verifyPlaylist(playlist);
 
     if (!verifyResult.valid) {
       console.log(chalk.red('Playlist validation failed'));
