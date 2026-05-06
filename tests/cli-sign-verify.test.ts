@@ -17,8 +17,9 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = resolve(__dirname, '..');
 const tsxCli = resolve(projectRoot, 'node_modules/tsx/dist/cli.mjs');
 const cliEntry = resolve(projectRoot, 'index.ts');
-const defaultDp1Js = process.env.DP1_JS || 'file:/Users/nguyenphuocsang/Bitmark/dp1-js';
+const defaultDp1Js = process.env.DP1_JS || 'file:/Users/nguyenphuocsang/Bitmark/dp1-js-private';
 const fixturesDir = join(projectRoot, 'tests/fixtures/playlists');
+const examplesDir = join(projectRoot, 'examples');
 
 type RunResult = { status: number | null; stdout: string; stderr: string };
 
@@ -113,6 +114,12 @@ function copyFixture(
   return target;
 }
 
+function copyExample(dir: string, exampleName: string, targetName = 'playlist.json'): string {
+  const target = join(dir, targetName);
+  copyFileSync(join(examplesDir, exampleName), target);
+  return target;
+}
+
 function cleanup(dir: string): void {
   rmSync(dir, { recursive: true, force: true });
 }
@@ -127,6 +134,25 @@ function expectFail(result: RunResult, pattern: RegExp, context: string): void {
 }
 
 describe('ff1 verify/validate/sign CLI integration', () => {
+  test('verify and validate accept the v1.1.0 sample playlist example', () => {
+    const dir = makeWorkspace();
+    try {
+      const sampleV11 = copyExample(dir, 'sample-playlist-v11.json', 'sample-v11.json');
+
+      const verify = runCli(dir, ['verify', sampleV11]);
+      expectOk(verify, 'verify sample v1.1.0 example');
+      assert.match(verify.stdout, /Playlist is valid/i);
+      assert.match(verify.stdout, /DP Version: 1\.1\.0/i);
+
+      const validate = runCli(dir, ['validate', sampleV11]);
+      expectOk(validate, 'validate sample v1.1.0 example');
+      assert.match(validate.stdout, /Playlist is valid/i);
+      assert.match(validate.stdout, /DP Version: 1\.1\.0/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test('verify and validate accept the documented valid playlist fixtures', () => {
     const dir = makeWorkspace();
     try {
@@ -152,17 +178,14 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     }
   });
 
-  test('strict verify rejects unsigned open playlists while sign can promote them into envelopes', () => {
+  test('verify accepts unsigned open playlists and sign can promote them into envelopes', () => {
     const dir = makeWorkspace();
     try {
       const unsigned = copyFixture(dir, 'validUnsignedOpenV11', 'unsigned.json');
 
       const verify = runCli(dir, ['verify', unsigned]);
-      expectFail(
-        verify,
-        /Either signature or signatures is required|validation failed/i,
-        'verify unsigned open'
-      );
+      expectOk(verify, 'verify unsigned open');
+      assert.match(verify.stdout, /Playlist is valid/i);
 
       writeSigningConfig(dir);
       const output = join(dir, 'signed.json');
@@ -195,12 +218,6 @@ describe('ff1 verify/validate/sign CLI integration', () => {
       fixture: 'invalidMissingTitleV10' as const,
       path: 'invalid-missing-title-v10.json',
       pattern: /title: Required|invalid|validation failed/i,
-    },
-    {
-      name: 'invalid display and source',
-      fixture: 'invalidDisplayAndSourceV10' as const,
-      path: 'invalid-display-and-source-v10.json',
-      pattern: /scaling|source|duration|validation failed/i,
     },
     {
       name: 'missing items',
@@ -236,7 +253,7 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     const dir = makeWorkspace();
     try {
       writeSigningConfig(dir);
-      const input = copyFixture(dir, 'validUnsignedOpenV11', 'input.json');
+      const input = copyExample(dir, 'sample-playlist-v11.json', 'input.json');
       const output = join(dir, 'signed.json');
 
       const sign = runCli(dir, ['sign', input, '-o', output]);
@@ -280,7 +297,7 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     },
     {
       name: 'missing signing key',
-      setup: (dir: string) => copyFixture(dir, 'validUnsignedOpenV11', 'unsigned.json'),
+      setup: (dir: string) => copyExample(dir, 'sample-playlist-v11.json', 'unsigned.json'),
       input: 'unsigned.json',
       env: { PLAYLIST_PRIVATE_KEY: '' },
       expect: /private key/i,

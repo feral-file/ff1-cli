@@ -422,7 +422,7 @@ async function executeFunction(functionName, args) {
         itemCount: playlist.items.length,
         title: playlist.title,
         dpVersion: playlist.dpVersion,
-        hasSigned: !!playlist.signature,
+        hasSigned: !!playlist.signature || Array.isArray(playlist.signatures),
         slug: playlist.slug,
       };
     }

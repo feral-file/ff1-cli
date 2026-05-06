@@ -6,7 +6,7 @@ import chalk from 'chalk';
 const { signPlaylistFile } = require('../utilities/playlist-signer');
 
 export const signCommand = new Command('sign')
-  .description('Sign a DP1 playlist file with Ed25519 signature')
+  .description('Sign a DP1 playlist file with DP-1 v1.1.0 multi-signatures')
   .argument('<file>', 'Path to the playlist file to sign')
   .option('-k, --key <privateKey>', 'Ed25519 private key in base64 format (overrides config)')
   .option('-o, --output <file>', 'Output file path (defaults to overwriting input file)')
@@ -18,7 +18,9 @@ export const signCommand = new Command('sign')
 
       if (result.success) {
         console.log(chalk.green('\nPlaylist signed'));
-        if (result.playlist?.signature) {
+        if (Array.isArray(result.playlist?.signatures)) {
+          console.log(chalk.dim(`  Signatures: ${result.playlist.signatures.length}`));
+        } else if (result.playlist?.signature) {
           console.log(chalk.dim(`  Signature: ${result.playlist.signature.substring(0, 30)}...`));
         }
         console.log();

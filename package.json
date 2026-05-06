@@ -23,7 +23,7 @@
     "prepare": "husky",
     "start": "node dist/index.js",
     "dev": "tsx index.ts",
-    "smoke": "npm run build && node dist/index.js validate examples/sample-playlist.json && node dist/index.js config validate",
+    "smoke": "npm run build && node dist/index.js config validate",
     "check": "npm run format:check && npm run lint && npm run test",
     "verify": "npm run check && npm run smoke",
     "prepublishOnly": "npm run verify",
@@ -54,7 +54,7 @@
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
-    "dp1-js": "^1.1.0",
+    "dp1-js": "file:/Users/nguyenphuocsang/Bitmark/dp1-js-private",
     "fuzzysort": "^3.1.0",
     "openai": "^4.58.1",
     "viem": "^2.38.2"

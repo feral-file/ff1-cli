@@ -155,7 +155,7 @@ async function verifyPlaylist(params) {
     };
   }
 
-  const result = verify(playlist);
+  const result = await verify(playlist);
 
   if (result.valid) {
     logger.verbose(chalk.green('Playlist looks good'));

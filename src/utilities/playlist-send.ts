@@ -160,7 +160,7 @@ export async function confirmPlaylistForSending(
 
       if (detailPaths.some((path) => path.includes('signature'))) {
         hints.push(
-          'Add `playlist.privateKey` (or `PLAYLIST_PRIVATE_KEY`) and rebuild the playlist to include a signature.'
+          'Add `playlist.privateKey` (or `PLAYLIST_PRIVATE_KEY`) and rebuild the playlist to include signatures.'
         );
       }
 

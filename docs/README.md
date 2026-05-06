@@ -132,8 +132,8 @@ Notes:
   - Options: `-o, --output <file>`, `-m, --model <name>`, `-d, --device <name>`, `-v, --verbose`
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
-- `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 playlist file
-- `sign <file>` – Sign playlist with Ed25519
+- `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 v1.1.0 playlist file
+- `sign <file>` – Sign playlist with DP-1 v1.1.0 multi-signatures
   - Options: `-k, --key <base64>`, `-o, --output <file>`
 - `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`

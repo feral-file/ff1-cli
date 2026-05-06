@@ -1,3 +1,9 @@
+/**
+ * Playlist Verification Utility.
+ * Validates playlists against the DP-1 v1.1.0 contract and accepts the
+ * legacy `signature` field as part of that version's compatibility surface.
+ */
+
 import type { Playlist } from '../types';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
@@ -192,7 +198,9 @@ export function printVerificationResult(
       console.log(chalk.dim(`  Title: ${result.playlist.title}`));
       console.log(chalk.dim(`  Items: ${result.playlist.items?.length || 0}`));
       console.log(chalk.dim(`  DP Version: ${result.playlist.dpVersion}`));
-      if (result.playlist.signature && typeof result.playlist.signature === 'string') {
+      if (Array.isArray(result.playlist.signatures)) {
+        console.log(chalk.dim(`  Signatures: ${result.playlist.signatures.length}`));
+      } else if (result.playlist.signature && typeof result.playlist.signature === 'string') {
         console.log(chalk.dim(`  Signature: ${result.playlist.signature.substring(0, 30)}...`));
       }
     }

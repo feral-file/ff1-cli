@@ -1,7 +1,7 @@
 {
   "dpVersion": "1.1.0",
   "id": "d2d4f9b0-7f01-4c26-9c10-1c4d7477f5de",
-  "title": "Sample NFT Collection",
+  "title": "Sample NFT Collection v1.1.0",
   "created": "2026-02-06T00:00:00.000Z",
   "items": [
     {
@@ -10,16 +10,7 @@
       "duration": 10,
       "license": "open",
       "created": "2026-02-06T00:00:00.000Z",
-      "title": "Cool NFT #1",
-      "provenance": {
-        "type": "onChain",
-        "contract": {
-          "chain": "evm",
-          "standard": "other",
-          "address": "0x1234567890123456789012345678901234567890",
-          "tokenId": "1"
-        }
-      }
+      "title": "Cool NFT #1"
     },
     {
       "id": "5f741f4c-8a2a-489f-8b0c-d6a2e3b7c5f9",
@@ -27,16 +18,7 @@
       "duration": 10,
       "license": "open",
       "created": "2026-02-06T00:00:00.000Z",
-      "title": "Cool NFT #2",
-      "provenance": {
-        "type": "onChain",
-        "contract": {
-          "chain": "evm",
-          "standard": "other",
-          "address": "0x1234567890123456789012345678901234567890",
-          "tokenId": "2"
-        }
-      }
+      "title": "Cool NFT #2"
     }
   ],
   "defaults": {
@@ -45,9 +27,19 @@
       "background": "#111111",
       "margin": 0
     },
-    "license": "token",
+    "license": "open",
     "duration": 10
   },
-  "slug": "sample-nft-collection",
+  "slug": "sample-nft-collection-v11",
+  "signatures": [
+    {
+      "alg": "ed25519",
+      "kid": "did:key:z6Mkexample",
+      "ts": "2026-01-01T00:00:00Z",
+      "payload_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "role": "curator",
+      "sig": "abc"
+    }
+  ],
   "signature": "ed25519:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 }

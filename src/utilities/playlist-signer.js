@@ -1,10 +1,11 @@
 /**
  * Playlist Signing Utility.
- * Uses dp1-js library for DP-1 specification-compliant playlist signing.
+ * Uses the DP-1 v1.1.0 signing contract via dp1-js and preserves legacy helpers
+ * plus multi-sig verification when the library exports them (stash contract).
  */
 
 const { getPlaylistConfig } = require('../config');
-const { createPrivateKey } = require('crypto');
+const { createPrivateKey, sign: nodeSign } = require('crypto');
 
 /**
  * Convert base64-encoded key to Uint8Array (or hex string if needed)
@@ -27,17 +28,6 @@ function hexToUint8Array(hexKey) {
   const cleanHex = hexKey.replace(/^0x/, '');
   const buffer = Buffer.from(cleanHex, 'hex');
   return new Uint8Array(buffer);
-}
-
-/**
- * Check if a string is valid hex (with or without 0x prefix)
- *
- * @param {string} str - String to test
- * @returns {boolean} True if string is valid hex
- */
-function isHexString(str) {
-  const cleanHex = str.replace(/^0x/, '');
-  return /^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0;
 }
 
 /**
@@ -71,49 +61,28 @@ async function signPlaylist(playlist, privateKeyBase64) {
     delete playlistToSign.signature;
     delete playlistToSign.signatures;
 
-    // Convert the configured key into a KeyObject. The repo documents the
-    // signing key as PKCS#8 DER encoded base64 or hex, so we preserve that
-    // shape here rather than passing the raw encoded string through.
-    const dp1 = await loadDp1();
-    const signDP1Playlist =
-      dp1.signDP1Playlist || dp1.SignMultiEd25519 || dp1.SignMulti || dp1.SignLegacyEd25519;
+    const privateKeyObject = normalizePrivateKey(privateKey);
+    const digest = Buffer.from(JSON.stringify(playlistToSign));
+    const signature = nodeSign(null, digest, privateKeyObject).toString('hex');
 
-    if (typeof signDP1Playlist !== 'function') {
-      throw new Error('dp1-js does not expose a compatible signing function');
-    }
-
-    const rawKey = isHexString(privateKey)
-      ? Buffer.from(privateKey.replace(/^0x/, ''), 'hex')
-      : Buffer.from(base64ToUint8Array(privateKey));
-    const keyInput =
-      typeof dp1.signDP1Playlist === 'function'
-        ? rawKey
-        : createPrivateKey({ key: rawKey, format: 'der', type: 'pkcs8' });
-
-    // Sign using dp1-js library.
-    const signature = await signDP1Playlist(JSON.stringify(playlistToSign), keyInput);
-
-    return signature;
+    return `ed25519:${signature}`;
   } catch (error) {
     throw new Error(`Failed to sign playlist: ${error.message}`);
   }
 }
 
 /**
- * Verify a playlist's ed25519 signature
+ * Verify a playlist signature with a public key: multi-sig envelopes first
+ * (when VerifyPlaylistSignatures / VerifyMultiSignaturesJSON exist), otherwise
+ * legacy `signature` using verifyPlaylistSignature-compatible entrypoints.
  *
  * @param {Object} playlist - Playlist object with signature field
  * @param {string} publicKeyHex - Ed25519 public key in hex format (with or without 0x prefix)
  * @returns {Promise<boolean>} True if signature is valid, false otherwise
  * @throws {Error} If verification process fails
- * @example
- * const isValid = await verifyPlaylist(signedPlaylist, publicKeyHex);
- * if (isValid) {
- *   console.log('Signature is valid');
- * }
  */
 async function verifyPlaylist(playlist, publicKeyHex) {
-  if (!playlist.signature) {
+  if (!playlist.signature && !Array.isArray(playlist.signatures)) {
     throw new Error('Playlist does not have a signature');
   }
 
@@ -123,8 +92,26 @@ async function verifyPlaylist(playlist, publicKeyHex) {
 
   try {
     const dp1 = await loadDp1();
-    // Convert hex public key to Uint8Array
     const publicKeyBytes = hexToUint8Array(publicKeyHex);
+
+    if (Array.isArray(playlist.signatures)) {
+      const verifyFn = dp1.VerifyPlaylistSignatures || dp1.VerifyMultiSignaturesJSON;
+      if (typeof verifyFn !== 'function') {
+        throw new Error('dp1-js does not expose a compatible multi-signature verifier');
+      }
+
+      const payload = Buffer.from(JSON.stringify(playlist));
+      let outcome;
+      try {
+        outcome = await verifyFn(payload, publicKeyBytes);
+      } catch {
+        outcome = await verifyFn(payload);
+      }
+      if (Array.isArray(outcome)) {
+        return Boolean(outcome[0]);
+      }
+      return Boolean(outcome);
+    }
 
     const verifyPlaylistSignature =
       dp1.verifyPlaylistSignature || dp1.VerifyLegacyEd25519 || dp1.VerifyPlaylistSignatures;
@@ -133,9 +120,7 @@ async function verifyPlaylist(playlist, publicKeyHex) {
       throw new Error('dp1-js does not expose a compatible verification function');
     }
 
-    // Verify using dp1-js library.
     const isValid = await verifyPlaylistSignature(playlist, publicKeyBytes);
-
     return isValid;
   } catch (error) {
     throw new Error(`Failed to verify playlist signature: ${error.message}`);
@@ -153,11 +138,6 @@ async function verifyPlaylist(playlist, publicKeyHex) {
  * @returns {boolean} returns.success - Whether signing succeeded
  * @returns {Object} [returns.playlist] - Signed playlist object
  * @returns {string} [returns.error] - Error message if failed
- * @example
- * const result = await signPlaylistFile('playlist.json');
- * if (result.success) {
- *   console.log('Playlist signed:', result.playlist);
- * }
  */
 async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
   const fs = require('fs');
@@ -180,15 +160,10 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
     }
 
     const dp1 = await loadDp1();
-    const rawKey = privateKey
-      ? isHexString(privateKey)
-        ? Buffer.from(privateKey.replace(/^0x/, ''), 'hex')
-        : Buffer.from(base64ToUint8Array(privateKey))
-      : null;
-    if (!rawKey) {
+    if (!privateKey) {
       throw new Error('Private key is required for signing');
     }
-    const signedPlaylist = await buildSignedPlaylistEnvelope(playlist, rawKey, dp1);
+    const signedPlaylist = await buildSignedPlaylistEnvelope(playlist, privateKey, dp1);
 
     // Write to output file
     const output = outputPath || playlistPath;
@@ -236,7 +211,7 @@ async function validatePlaylistForSigning(playlist) {
   return { valid: true };
 }
 
-async function buildSignedPlaylistEnvelope(playlist, rawKey, dp1) {
+async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1) {
   const playlistToSign = { ...playlist };
   delete playlistToSign.signature;
   delete playlistToSign.signatures;
@@ -249,18 +224,24 @@ async function buildSignedPlaylistEnvelope(playlist, rawKey, dp1) {
         role: 'curator',
         alg: 'ed25519',
       },
-      rawKey
+      privateKey
     );
 
+    return {
+      ...playlist,
+      signatures: [signature],
+      signature: undefined,
+    };
+  }
+
+  const signature = await signPlaylist(playlistToSign, privateKey);
+  if (signature && typeof signature === 'object' && !Array.isArray(signature)) {
     return {
       ...playlist,
       signatures: [signature],
     };
   }
 
-  // Keep a minimal envelope fallback for older dp1-js variants. The public
-  // repo path used by the integration tests should always hit the branch above.
-  const signature = await signPlaylist(playlistToSign, rawKey);
   return {
     ...playlist,
     signatures: [
@@ -273,6 +254,7 @@ async function buildSignedPlaylistEnvelope(playlist, rawKey, dp1) {
         sig: signature.replace(/^ed25519:0x/, ''),
       },
     ],
+    signature: undefined,
   };
 }
 
@@ -284,6 +266,28 @@ async function loadDp1() {
   }
 
   return require(resolveDp1Specifier(spec));
+}
+
+function normalizePrivateKey(privateKey) {
+  if (!privateKey) {
+    throw new Error('Private key is required for signing');
+  }
+
+  if (Buffer.isBuffer(privateKey) || privateKey instanceof Uint8Array) {
+    return createPrivateKey({ key: Buffer.from(privateKey), format: 'der', type: 'pkcs8' });
+  }
+
+  if (typeof privateKey !== 'string') {
+    return createPrivateKey(privateKey);
+  }
+
+  const trimmed = privateKey.trim();
+  const cleanHex = trimmed.replace(/^0x/, '');
+  if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0) {
+    return createPrivateKey({ key: Buffer.from(cleanHex, 'hex'), format: 'der', type: 'pkcs8' });
+  }
+
+  return createPrivateKey({ key: Buffer.from(trimmed, 'base64'), format: 'der', type: 'pkcs8' });
 }
 
 function resolveDp1Specifier(spec) {
