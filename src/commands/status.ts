@@ -44,6 +44,11 @@ export const statusCommand = new Command('status')
           ok: !isMissingConfigValue(config.playlist?.privateKey || ''),
         },
         {
+          label: 'Playlist signing role',
+          ok: !isMissingConfigValue(config.playlist?.role || ''),
+          optional: true,
+        },
+        {
           label: `FF1 devices (${config.ff1Devices?.devices?.length || 0})`,
           ok:
             (config.ff1Devices?.devices?.length || 0) > 0 &&

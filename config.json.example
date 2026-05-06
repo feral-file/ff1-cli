@@ -51,7 +51,8 @@
     }
   ],
   "playlist": {
-    "privateKey": "YOUR_ED25519_PRIVATE_KEY_BASE64_OR_HEX"
+    "privateKey": "YOUR_ED25519_PRIVATE_KEY_BASE64_OR_HEX",
+    "role": "curator"
   },
   "ff1Devices": {
     "devices": [

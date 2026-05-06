@@ -36,10 +36,11 @@ function hexToUint8Array(hexKey) {
  *
  * @param {Object} playlist - Playlist object without signature
  * @param {string} [privateKeyBase64] - Ed25519 private key in hex or base64 format (optional, uses config if not provided)
+ * @param {string} [roleOverride] - DP-1 signing role override (optional, uses config if not provided)
  * @returns {Promise<string|Object>} Legacy signature string or multi-sig object
  * @throws {Error} If private key is invalid or signing fails
  */
-async function signPlaylist(playlist, privateKeyBase64) {
+async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
   // Get private key from config if not provided
   let privateKey = privateKeyBase64;
   if (!privateKey) {
@@ -51,6 +52,9 @@ async function signPlaylist(playlist, privateKeyBase64) {
     throw new Error('Private key is required for signing');
   }
 
+  const config = getPlaylistConfig();
+  const role = roleOverride || config.role || 'curator';
+
   try {
     const playlistToSign = { ...playlist };
     delete playlistToSign.signature;
@@ -60,13 +64,7 @@ async function signPlaylist(playlist, privateKeyBase64) {
     const raw = Buffer.from(JSON.stringify(playlistToSign));
 
     if (typeof dp1.SignMultiEd25519 === 'function') {
-      return dp1.SignMultiEd25519(
-        raw,
-        privateKey,
-        'curator',
-        currentTimestamp(),
-        'did:key:zff1CliTestKey'
-      );
+      return dp1.SignMultiEd25519(raw, privateKey, role, currentTimestamp());
     }
 
     throw new Error('dp1-js does not expose a compatible signing function');
@@ -116,7 +114,7 @@ async function verifyPlaylist(playlist, publicKeyHex) {
  * @returns {Object} [returns.playlist] - Signed playlist object
  * @returns {string} [returns.error] - Error message if failed
  */
-async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
+async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath, roleOverride) {
   const fs = require('fs');
   const path = require('path');
 
@@ -130,6 +128,7 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
     const playlist = JSON.parse(playlistContent);
     const config = getPlaylistConfig();
     const privateKey = privateKeyBase64 || config.privateKey;
+    const role = roleOverride || config.role || 'curator';
 
     const validation = await validatePlaylistForSigning(playlist);
     if (!validation.valid) {
@@ -140,7 +139,7 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
     if (!privateKey) {
       throw new Error('Private key is required for signing');
     }
-    const signedPlaylist = await buildSignedPlaylistEnvelope(playlist, privateKey, dp1);
+    const signedPlaylist = await buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role);
 
     // Write to output file
     const output = outputPath || playlistPath;
@@ -188,7 +187,7 @@ async function validatePlaylistForSigning(playlist) {
   return { valid: true };
 }
 
-async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1) {
+async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
   const playlistToSign = { ...playlist };
   delete playlistToSign.signature;
   delete playlistToSign.signatures;
@@ -197,13 +196,13 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1) {
     const signature = await dp1.SignMultiEd25519(
       Buffer.from(JSON.stringify(playlistToSign)),
       privateKey,
-      'curator',
-      currentTimestamp(),
-      'did:key:zff1CliTestKey'
+      role,
+      currentTimestamp()
     );
 
     return {
       ...playlist,
+      signature: undefined,
       signatures: [signature],
     };
   }
@@ -215,7 +214,7 @@ async function loadDp1() {
   const spec = process.env.DP1_JS || 'dp1-js';
   if (spec.startsWith('file:')) {
     const repoDir = fileURLToPath(spec);
-    return import(pathToFileURL(resolve(repoDir, 'src', 'index.js')).href);
+    return import(pathToFileURL(resolve(repoDir, 'dist', 'index.js')).href);
   }
 
   return require(resolveDp1Specifier(spec));

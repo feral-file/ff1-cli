@@ -165,10 +165,11 @@ export function getBrowserConfig(): { timeout: number; sanitizationLevel: number
 }
 
 /**
- * Get playlist configuration including private key for signing
+ * Get playlist configuration including signing private key and role.
  *
  * @returns {Object} Playlist configuration
  * @returns {string|null} returns.privateKey - Ed25519 private key in base64 or hex format (null if not configured)
+ * @returns {string|null} returns.role - DP-1 signing role (null if not configured)
  */
 export function getPlaylistConfig(): PlaylistConfig {
   const config = getConfig();
@@ -176,6 +177,7 @@ export function getPlaylistConfig(): PlaylistConfig {
 
   return {
     privateKey: playlistConfig.privateKey || process.env.PLAYLIST_PRIVATE_KEY || null,
+    role: playlistConfig.role || process.env.PLAYLIST_ROLE || null,
   };
 }
 
@@ -355,6 +357,10 @@ export function validateConfig(modelName?: string): ValidationResult {
           );
         }
       }
+    }
+
+    if (config.playlist?.role && typeof config.playlist.role !== 'string') {
+      errors.push('playlist.role must be a string');
     }
 
     return {

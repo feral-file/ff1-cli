@@ -318,8 +318,8 @@ Setup preserves existing devices when adding new ones. See selection rules and e
 
 ### Playlist signing (optional)
 
-- Add `playlist.privateKey` (base64 Ed25519) to `config.json` or set `PLAYLIST_PRIVATE_KEY`.
-- Signed playlists include a `signature` field compliant with DP1 (via `dp1-js`).
+- Add `playlist.privateKey` (base64 Ed25519) and, optionally, `playlist.role` to `config.json` or set `PLAYLIST_PRIVATE_KEY` and `PLAYLIST_ROLE`.
+- Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via `dp1-js`).
 
 ## Constraints
 

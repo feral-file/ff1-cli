@@ -98,7 +98,7 @@ async function loadDp1(): Promise<Record<string, unknown>> {
   const spec = process.env.DP1_JS || 'dp1-js';
   if (spec.startsWith('file:')) {
     const repoDir = fileURLToPath(spec);
-    const entry = join(repoDir, 'src', 'index.js');
+    const entry = join(repoDir, 'dist', 'index.js');
     return import(pathToFileURL(entry).href);
   }
 

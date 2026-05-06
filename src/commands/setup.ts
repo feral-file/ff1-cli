@@ -87,7 +87,9 @@ export const setupCommand = new Command('setup')
       config.models[selectedModel] = selectedModelConfig;
 
       const currentKey = config.playlist?.privateKey || '';
+      const currentRole = config.playlist?.role || '';
       let signingKey = currentKey;
+      let signingRole = currentRole;
 
       if (isMissingConfigValue(currentKey)) {
         const keyPair = crypto.generateKeyPairSync('ed25519');
@@ -110,9 +112,19 @@ export const setupCommand = new Command('setup')
       }
 
       if (signingKey) {
+        const roleAnswer = await ask(
+          `Signing role (curator, feed, agent, institution, licensor) [${currentRole || 'curator'}]: `
+        );
+        if (roleAnswer) {
+          signingRole = roleAnswer;
+        } else if (!signingRole) {
+          signingRole = 'curator';
+        }
+
         config.playlist = {
           ...(config.playlist || {}),
           privateKey: signingKey,
+          role: signingRole,
         };
       }
 
