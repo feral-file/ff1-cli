@@ -1,11 +1,15 @@
 {
-  "defaultModel": "chatgpt",
+  "defaultModel": "grok",
   "models": {
     "grok": {
       "apiKey": "YOUR_GROK_API_KEY_FROM_X_AI_CONSOLE",
       "baseURL": "https://api.x.ai/v1",
       "model": "grok-beta",
-      "availableModels": ["grok-beta", "grok-2-1212", "grok-2-vision-1212"],
+      "availableModels": [
+        "grok-beta",
+        "grok-2-1212",
+        "grok-2-vision-1212"
+      ],
       "timeout": 120000,
       "maxRetries": 3,
       "temperature": 0.3,
@@ -13,10 +17,16 @@
       "supportsFunctionCalling": true
     },
     "chatgpt": {
-      "apiKey": "YOUR_OPENAI_API_KEY",
+      "apiKey": "YOUR_OPENAI_API_KEY_FROM_PLATFORM_OPENAI_COM",
       "baseURL": "https://api.openai.com/v1",
       "model": "gpt-4.1",
-      "availableModels": ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+      "availableModels": [
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo"
+      ],
       "timeout": 30000,
       "maxRetries": 3,
       "temperature": 1,
@@ -24,10 +34,14 @@
       "supportsFunctionCalling": true
     },
     "gemini": {
-      "apiKey": "YOUR_GEMINI_API_KEY",
+      "apiKey": "YOUR_GOOGLE_AI_STUDIO_API_KEY_FROM_AISTUDIO_GOOGLE_COM",
       "baseURL": "https://generativelanguage.googleapis.com/v1beta/openai/",
       "model": "gemini-2.5-flash",
-      "availableModels": ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-flash-lite-latest"],
+      "availableModels": [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-flash-lite-latest"
+      ],
       "timeout": 30000,
       "maxRetries": 3,
       "temperature": 0.3,
