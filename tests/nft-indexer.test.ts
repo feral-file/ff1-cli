@@ -20,6 +20,36 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
   } as Response;
 }
 
+/** Parses POST body from fetch(init) in nft-indexer tests. */
+function graphqlRequestFromInit(init?: RequestInit): { query: string; variables?: unknown } {
+  const raw = init?.body;
+  const text =
+    typeof raw === 'string' ? raw : raw !== undefined && raw !== null ? String(raw) : '{}';
+  const parsed = JSON.parse(text) as { query?: string; variables?: unknown };
+  assert.ok(typeof parsed.query === 'string', 'expected GraphQL query string in fetch body');
+  return { query: parsed.query, variables: parsed.variables };
+}
+
+/** Minimal token row matching indexer `tokens.items` shape used by mocks. */
+function mockTokenRow(overrides: Record<string, unknown> = {}) {
+  return {
+    contract_address: '0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb',
+    token_number: '7804',
+    current_owner: '0x1111111111111111111111111111111111111111',
+    burned: false,
+    display: {
+      name: 'Punk 7804',
+      description: 'Mock',
+      mime_type: 'image/png',
+      image_url: 'https://example.com/punk.png',
+      animation_url: '',
+      artists: [{ name: 'Larva Labs' }],
+    },
+    media_assets: [{ source_url: 'https://cdn.example.com/punk.png', variants: {} }],
+    ...overrides,
+  };
+}
+
 test('getBestMediaUrl: display.animation_url takes precedence', () => {
   const { getBestMediaUrl } = nftIndexer;
   const media = getBestMediaUrl(
@@ -325,3 +355,225 @@ test('triggerIndexingAsync: returns error when no job_id in response', async () 
     global.fetch = originalFetch;
   }
 });
+
+// ——— GraphQL document shape (regression guard for ff-indexer-v2 contract) ———
+
+test('GraphQL documents: tokens list selects display + media_assets variants only', () => {
+  const { buildTokensListQuery } = nftIndexer;
+  const q = buildTokensListQuery({
+    token_cids: ['eip155:1:erc721:0xabc:1'],
+    limit: 10,
+    offset: 2,
+  });
+  assert.match(q, /tokens\s*\(\s*token_cids:/);
+  assert.match(q, /display\s*\{/);
+  assert.match(q, /\bname\b/);
+  assert.match(q, /\bdescription\b/);
+  assert.match(q, /\bmime_type\b/);
+  assert.match(q, /\bimage_url\b/);
+  assert.match(q, /\banimation_url\b/);
+  assert.match(q, /artists\s*\{\s*name\s*\}/);
+  assert.match(q, /media_assets\s*\{/);
+  assert.match(q, /variants\s*\(\s*keys:\s*\[\s*l,\s*m,\s*xl,\s*xxl,\s*preview\s*]\s*\)/);
+  assert.match(q, /\blimit:\s*10\b/);
+  assert.match(q, /\boffset:\s*2\b/);
+  assert.doesNotMatch(q, /\benrichment_source\b/);
+  assert.doesNotMatch(q, /\bmetadata\s*\{/);
+});
+
+test('GraphQL documents: triggerTokenIndexing mutation shape', () => {
+  const { TRIGGER_TOKEN_INDEXING_MUTATION } = nftIndexer;
+  assert.match(TRIGGER_TOKEN_INDEXING_MUTATION, /mutation\s+TriggerTokenIndexing/);
+  assert.match(TRIGGER_TOKEN_INDEXING_MUTATION, /\$token_cids:\s*\[String!\]!/);
+  assert.match(
+    TRIGGER_TOKEN_INDEXING_MUTATION,
+    /triggerTokenIndexing\s*\(\s*token_cids:\s*\$token_cids\s*\)/
+  );
+  assert.match(TRIGGER_TOKEN_INDEXING_MUTATION, /job_id/);
+});
+
+test('GraphQL documents: jobStatus query shape', () => {
+  const { JOB_STATUS_QUERY } = nftIndexer;
+  assert.match(JOB_STATUS_QUERY, /query\s+JobStatus/);
+  assert.match(JOB_STATUS_QUERY, /\$job_id:\s*Int!/);
+  assert.match(JOB_STATUS_QUERY, /jobStatus\s*\(\s*job_id:\s*\$job_id\s*\)/);
+  assert.match(JOB_STATUS_QUERY, /\bstatus\b/);
+  assert.match(JOB_STATUS_QUERY, /\blast_error\b/);
+});
+
+// ——— getNFTTokenInfoSingle ———
+
+test('getNFTTokenInfoSingle: mock single tokens response (already indexed)', async () => {
+  const { getNFTTokenInfoSingle } = nftIndexer;
+  const originalFetch = global.fetch;
+  const row = mockTokenRow();
+
+  global.fetch = async (_url: string, init?: RequestInit) => {
+    const { query } = graphqlRequestFromInit(init);
+    assert.ok(query.includes('tokens('), 'expected tokens query');
+    return jsonResponse({
+      data: {
+        tokens: { items: [row], total: 1 },
+      },
+    });
+  };
+
+  try {
+    const result = await getNFTTokenInfoSingle(
+      {
+        chain: 'ethereum',
+        contractAddress: row.contract_address as string,
+        tokenId: row.token_number as string,
+      },
+      10,
+      { jobPoll: { intervalMs: 0 }, mediaPoll: { intervalMs: 0 } }
+    );
+    assert.equal(result.success, true);
+    if (!result.success || !('item' in result) || !result.item) {
+      assert.fail('expected DP1 item');
+    }
+    assert.equal(result.item.source, 'https://cdn.example.com/punk.png');
+    assert.equal(result.item.title, 'Punk 7804');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('getNFTTokenInfoSingle: mock miss then trigger, job completed, then token with media', async () => {
+  const { getNFTTokenInfoSingle } = nftIndexer;
+  const originalFetch = global.fetch;
+  let tokenRound = 0;
+
+  global.fetch = async (_url: string, init?: RequestInit) => {
+    const { query } = graphqlRequestFromInit(init);
+    if (query.includes('triggerTokenIndexing')) {
+      return jsonResponse({
+        data: { triggerTokenIndexing: { job_id: 42 } },
+      });
+    }
+    if (query.includes('jobStatus')) {
+      return jsonResponse({
+        data: { jobStatus: { status: 'completed', last_error: null } },
+      });
+    }
+    if (query.includes('tokens(')) {
+      tokenRound += 1;
+      if (tokenRound === 1) {
+        return jsonResponse({ data: { tokens: { items: [], total: 0 } } });
+      }
+      return jsonResponse({
+        data: {
+          tokens: { items: [mockTokenRow()], total: 1 },
+        },
+      });
+    }
+    assert.fail(`unexpected fetch query: ${query.slice(0, 80)}`);
+  };
+
+  try {
+    const row = mockTokenRow();
+    const result = await getNFTTokenInfoSingle(
+      {
+        chain: 'ethereum',
+        contractAddress: row.contract_address as string,
+        tokenId: row.token_number as string,
+      },
+      10,
+      { jobPoll: { intervalMs: 0 }, mediaPoll: { intervalMs: 0 } }
+    );
+    assert.equal(result.success, true);
+    if (!result.success || !('item' in result) || !result.item) {
+      assert.fail('expected DP1 item');
+    }
+    assert.ok(result.item.source);
+    assert.equal(tokenRound, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('getNFTTokenInfoSingle: mock polls media_assets when first hit has empty list', async () => {
+  const { getNFTTokenInfoSingle } = nftIndexer;
+  const originalFetch = global.fetch;
+  let tokenCalls = 0;
+
+  global.fetch = async (_url: string, init?: RequestInit) => {
+    const { query } = graphqlRequestFromInit(init);
+    if (query.includes('tokens(')) {
+      tokenCalls += 1;
+      if (tokenCalls === 1) {
+        return jsonResponse({
+          data: {
+            tokens: {
+              items: [
+                mockTokenRow({
+                  media_assets: [],
+                  display: {
+                    name: 'Pending',
+                    description: '',
+                    mime_type: 'video/mp4',
+                    image_url: '',
+                    animation_url: '',
+                    artists: [],
+                  },
+                }),
+              ],
+              total: 1,
+            },
+          },
+        });
+      }
+      return jsonResponse({
+        data: {
+          tokens: {
+            items: [mockTokenRow()],
+            total: 1,
+          },
+        },
+      });
+    }
+    assert.fail('expected only tokens queries in this scenario');
+  };
+
+  try {
+    const row = mockTokenRow();
+    const result = await getNFTTokenInfoSingle(
+      {
+        chain: 'ethereum',
+        contractAddress: row.contract_address as string,
+        tokenId: row.token_number as string,
+      },
+      10,
+      { jobPoll: { intervalMs: 0 }, mediaPoll: { intervalMs: 0 } }
+    );
+    assert.equal(result.success, true);
+    assert.equal(tokenCalls, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test(
+  'getNFTTokenInfoSingle: integration when FF_INDEXER_INTEGRATION=1 (pre-indexed token only)',
+  { skip: process.env.FF_INDEXER_INTEGRATION !== '1' },
+  async (t) => {
+    const { getNFTTokenInfoSingle, queryTokens, buildTokenCID } = nftIndexer;
+    const chain = 'ethereum';
+    const contractAddress = '0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb';
+    const tokenId = '7804';
+    const tokenCID = String(buildTokenCID(chain, contractAddress, tokenId));
+
+    const existing = await queryTokens({ token_cids: [tokenCID], limit: 1 });
+    if (!Array.isArray(existing) || existing.length === 0) {
+      t.skip('Token not present in indexer yet; skipping to avoid async chain jobs in integration');
+      return;
+    }
+
+    const result = await getNFTTokenInfoSingle({ chain, contractAddress, tokenId }, 10);
+    assert.equal(result.success, true, JSON.stringify(result));
+    if (!result.success || !('item' in result)) {
+      assert.fail('expected success with item');
+    }
+    assert.ok(result.item?.source && result.item.source.length > 0, 'expected DP1 source URL');
+  }
+);

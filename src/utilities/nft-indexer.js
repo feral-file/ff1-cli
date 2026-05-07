@@ -12,6 +12,81 @@ const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds
 const POLLING_TIMEOUT_MS = 60000; // Max poll for 1 minute
 
 /**
+ * GraphQL mutation document for enqueueing token indexing (exposed for tests; must match runtime).
+ */
+const TRIGGER_TOKEN_INDEXING_MUTATION = `
+      mutation TriggerTokenIndexing($token_cids: [String!]!) {
+        triggerTokenIndexing(token_cids: $token_cids) {
+          job_id
+        }
+      }
+    `;
+
+/**
+ * GraphQL query document for job queue status (exposed for tests; must match runtime).
+ */
+const JOB_STATUS_QUERY = `
+      query JobStatus($job_id: Int!) {
+        jobStatus(job_id: $job_id) {
+          status
+          last_error
+        }
+      }
+    `;
+
+/**
+ * buildTokensListQuery builds the `tokens { items { ... } }` request body used by queryTokens.
+ *
+ * Selection uses only `display` and `media_assets`. The indexer merges metadata and enrichment
+ * into `display`; the client does not repeat that merge by fetching raw metadata fields.
+ *
+ * @param {Object} [params]
+ * @param {Array<string>} [params.token_cids]
+ * @param {Array<string>} [params.owners]
+ * @param {Array<string>} [params.contract_addresses]
+ * @param {number} [params.limit]
+ * @param {number} [params.offset]
+ * @returns {string} GraphQL query string (inline arguments, no variables)
+ */
+function buildTokensListQuery(params = {}) {
+  const { token_cids = [], owners = [], contract_addresses = [], limit = 50, offset = 0 } = params;
+
+  const ownerFilter = owners.length > 0 ? `owners: ${JSON.stringify(owners)},` : '';
+  const tokenCidsFilter = token_cids.length > 0 ? `token_cids: ${JSON.stringify(token_cids)},` : '';
+  const contractFilter =
+    contract_addresses.length > 0
+      ? `contract_addresses: ${JSON.stringify(contract_addresses)},`
+      : '';
+
+  return `
+      query {
+        tokens(${ownerFilter} ${tokenCidsFilter} ${contractFilter} limit: ${limit}, offset: ${offset}) {
+        items {
+          contract_address
+          token_number
+          current_owner
+          burned
+          display {
+            name
+            description
+            mime_type
+            image_url
+            animation_url
+            artists {
+              name
+            }
+          }
+          media_assets {
+            source_url
+            variants(keys: [l, m, xl, xxl, preview])
+          }
+        }
+      }
+    }
+  `;
+}
+
+/**
  * Initialize indexer (no-op for compatibility)
  *
  * The indexer endpoint is now hardcoded to the Feral File production endpoint.
@@ -111,43 +186,8 @@ function buildTokenCID(chain, contractAddress, tokenId) {
  * const tokens = await queryTokens({ token_cids: ['eip155:1:erc721:0xabc:123'], owners: ['0x1234...'] });
  */
 async function queryTokens(params = {}) {
-  const { token_cids = [], owners = [], contract_addresses = [], limit = 50, offset = 0 } = params;
-
-  // Build GraphQL query without variables - inline parameters
-  // (API expects inline parameters, not variables)
-  const ownerFilter = owners.length > 0 ? `owners: ${JSON.stringify(owners)},` : '';
-  const tokenCidsFilter = token_cids.length > 0 ? `token_cids: ${JSON.stringify(token_cids)},` : '';
-  const contractFilter =
-    contract_addresses.length > 0
-      ? `contract_addresses: ${JSON.stringify(contract_addresses)},`
-      : '';
-
-  const query = `
-      query {
-        tokens(${ownerFilter} ${tokenCidsFilter} ${contractFilter} limit: ${limit}, offset: ${offset}) {
-        items {
-          contract_address
-          token_number
-          current_owner
-          burned
-          display {
-            name
-            description
-            mime_type
-            image_url
-            animation_url
-            artists {
-              name
-            }
-          }
-          media_assets {
-            source_url
-            variants(keys: [l, m, xl, xxl, preview])
-          }
-        }
-      }
-    }
-  `;
+  const { token_cids = [], owners = [], limit = 50, offset = 0 } = params;
+  const query = buildTokensListQuery(params);
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -288,6 +328,10 @@ function getBestMediaUrl(display = {}, mediaAssets = []) {
 
 /**
  * Map indexer token row (GraphQL `display` + `media_assets`) to internal standard format.
+ *
+ * Treats `display` as the authoritative merged presentation from the server. When `display`
+ * is null or partial, we only use what is present (for example `Token #${token_number}` for name);
+ * we do not splice in raw `metadata` or enrichment because those are not selected from GraphQL.
  *
  * @param {Object} indexerData - Token fields from indexer GraphQL
  * @param {string} chain - Blockchain network
@@ -495,9 +539,12 @@ async function getNFTTokenInfo(params) {
  * @param {string} params.contractAddress - Contract address
  * @param {string} params.tokenId - Token ID
  * @param {number} duration - Display duration in seconds
+ * @param {Object} [options] - Optional overrides (for tests): polling intervals/timeouts
+ * @param {Object} [options.jobPoll] - Passed to pollForJobCompletion
+ * @param {Object} [options.mediaPoll] - Passed to pollForMediaAssets
  * @returns {Promise<Object>} DP1 item with success/error status
  */
-async function getNFTTokenInfoSingle(params, duration = 10) {
+async function getNFTTokenInfoSingle(params, duration = 10, options = {}) {
   let chain = params.chain;
   const { contractAddress, tokenId } = params;
 
@@ -549,7 +596,7 @@ async function getNFTTokenInfoSingle(params, duration = 10) {
       });
 
       // Poll for job completion (queue-backed jobs use job_id / jobStatus)
-      const pollResult = await pollForJobCompletion(indexResult.job_id);
+      const pollResult = await pollForJobCompletion(indexResult.job_id, options.jobPoll ?? {});
 
       if (!pollResult.success) {
         logger.error('[NFT Indexer] Job polling failed:', pollResult.error);
@@ -588,7 +635,7 @@ async function getNFTTokenInfoSingle(params, duration = 10) {
     // If token found but no media_assets yet, poll until indexer has renditions or timeout
     if (!Array.isArray(indexerData.media_assets) || indexerData.media_assets.length === 0) {
       logger.info('[NFT Indexer] Media assets not available, polling...');
-      indexerData = await pollForMediaAssets(tokenCID);
+      indexerData = await pollForMediaAssets(tokenCID, options.mediaPoll ?? {});
 
       if (!indexerData) {
         logger.warn('[NFT Indexer] Failed to retrieve token data during metadata polling');
@@ -725,13 +772,7 @@ async function triggerIndexingAsync(chain, contractAddress, tokenId) {
       tokenCID,
     });
 
-    const mutation = `
-      mutation TriggerTokenIndexing($token_cids: [String!]!) {
-        triggerTokenIndexing(token_cids: $token_cids) {
-          job_id
-        }
-      }
-    `;
+    const mutation = TRIGGER_TOKEN_INDEXING_MUTATION;
 
     const variables = {
       token_cids: [tokenCID],
@@ -798,14 +839,7 @@ async function queryJobStatus(jobId) {
       return { success: false, error: 'Invalid job_id' };
     }
 
-    const query = `
-      query JobStatus($job_id: Int!) {
-        jobStatus(job_id: $job_id) {
-          status
-          last_error
-        }
-      }
-    `;
+    const query = JOB_STATUS_QUERY;
 
     const variables = { job_id: id };
     const headers = { 'Content-Type': 'application/json' };
@@ -851,15 +885,20 @@ async function queryJobStatus(jobId) {
  * Poll until jobStatus reports a terminal state or timeout.
  *
  * @param {number|string} jobId - Job id from triggerTokenIndexing
+ * @param {Object} [options]
+ * @param {number} [options.intervalMs] - Delay between polls (default POLLING_INTERVAL_MS)
+ * @param {number} [options.timeoutMs] - Max wall time (default POLLING_TIMEOUT_MS)
  */
-async function pollForJobCompletion(jobId) {
+async function pollForJobCompletion(jobId, options = {}) {
+  const intervalMs = options.intervalMs ?? POLLING_INTERVAL_MS;
+  const timeoutMs = options.timeoutMs ?? POLLING_TIMEOUT_MS;
   const startTime = Date.now();
   let pollCount = 0;
 
   logger.debug('[NFT Indexer] Starting job polling...', {
     jobId,
-    timeoutMs: POLLING_TIMEOUT_MS,
-    intervalMs: POLLING_INTERVAL_MS,
+    timeoutMs,
+    intervalMs,
   });
 
   try {
@@ -904,7 +943,7 @@ async function pollForJobCompletion(jobId) {
       }
 
       const elapsedMs = Date.now() - startTime;
-      if (elapsedMs >= POLLING_TIMEOUT_MS) {
+      if (elapsedMs >= timeoutMs) {
         logger.warn(
           `[NFT Indexer] Job polling timed out after ${pollCount} polls (${elapsedMs}ms)`
         );
@@ -916,7 +955,7 @@ async function pollForJobCompletion(jobId) {
         };
       }
 
-      await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
   } catch (error) {
     logger.error('[NFT Indexer] Error during job polling:', error.message);
@@ -931,16 +970,21 @@ async function pollForJobCompletion(jobId) {
  * Poll until token has `media_assets` from the indexer (renditions) or timeout.
  *
  * @param {string} tokenCID - Token CID in CAIP-2 format
+ * @param {Object} [options]
+ * @param {number} [options.intervalMs] - Delay between polls (default POLLING_INTERVAL_MS)
+ * @param {number} [options.timeoutMs] - Max wall time (default POLLING_TIMEOUT_MS)
  * @returns {Promise<Object|null>} Token data when assets appear, null if timeout
  */
-async function pollForMediaAssets(tokenCID) {
+async function pollForMediaAssets(tokenCID, options = {}) {
+  const intervalMs = options.intervalMs ?? POLLING_INTERVAL_MS;
+  const timeoutMs = options.timeoutMs ?? POLLING_TIMEOUT_MS;
   const startTime = Date.now();
   let pollCount = 0;
 
   logger.debug('[NFT Indexer] Starting metadata assets polling...', {
     tokenCID,
-    timeoutMs: POLLING_TIMEOUT_MS,
-    intervalMs: POLLING_INTERVAL_MS,
+    timeoutMs,
+    intervalMs,
   });
 
   try {
@@ -960,7 +1004,7 @@ async function pollForMediaAssets(tokenCID) {
 
       // Check timeout
       const elapsedMs = Date.now() - startTime;
-      if (elapsedMs >= POLLING_TIMEOUT_MS) {
+      if (elapsedMs >= timeoutMs) {
         logger.warn(
           `[NFT Indexer] Media assets polling timed out after ${pollCount} polls (${elapsedMs}ms). Using fallback URLs.`
         );
@@ -968,7 +1012,7 @@ async function pollForMediaAssets(tokenCID) {
       }
 
       // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, POLLING_INTERVAL_MS));
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
   } catch (error) {
     logger.error('[NFT Indexer] Error during media assets polling:', error.message);
@@ -1115,4 +1159,8 @@ module.exports = {
   detectTokenStandard,
   extractArtistName,
   getBestMediaUrl,
+  // GraphQL documents (tests / contract stability)
+  buildTokensListQuery,
+  TRIGGER_TOKEN_INDEXING_MUTATION,
+  JOB_STATUS_QUERY,
 };
