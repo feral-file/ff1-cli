@@ -12,23 +12,17 @@ import { createRequire } from 'module';
 import { join } from 'path';
 
 /**
- * Verify playlist structure and integrity
+ * Cryptographically verify a playlist via dp1-js (after parsing succeeds).
  *
- * Validates playlist against DP-1 specification using dp1-js parser.
- * Returns detailed validation errors if playlist is invalid.
+ * Unlike {@link validatePlaylist}, this invokes the library’s `verifyPlaylist`
+ * implementation: unsigned playlists are rejected, while v1.1.0 `signatures[]`
+ * may succeed without a public key. Legacy single-signature playlists usually
+ * need a `publicKey` argument. Use {@link validatePlaylist} for structure-only
+ * checks (`validate` command).
  *
- * @param {Object} playlist - Playlist object to verify
- * @returns {Object} Verification result
- * @returns {boolean} returns.valid - Whether playlist is valid
- * @returns {string} [returns.error] - Error message if invalid
- * @returns {Array<Object>} [returns.details] - Detailed validation errors
- * @example
- * const result = verifyPlaylist(playlist);
- * if (result.valid) {
- *   console.log('Playlist is valid');
- * } else {
- *   console.error('Invalid:', result.error);
- * }
+ * @param playlist - Playlist object
+ * @param publicKey - Optional Ed25519 public key for legacy verification paths
+ * @returns Verification result with `valid` and optional `error` / `details`
  */
 export async function verifyPlaylist(
   playlist: unknown,

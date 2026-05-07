@@ -69,7 +69,10 @@ export function printPlaylistVerificationFailure(
 }
 
 /**
- * Load a playlist from a path or URL and run parse-only validation on it.
+ * Load a playlist from a path or URL and run parse-only validation (`validatePlaylist`).
+ *
+ * The `validate` command uses this as the full check. The `verify` command uses it
+ * for the structure pass only, then runs `verifyPlaylist` for cryptographic checks.
  */
 export async function validatePlaylistSource(source: string): Promise<PlaylistVerificationResult> {
   const loaded = await loadPlaylistSource(source);
@@ -109,9 +112,11 @@ export async function runValidateCommand(source: string): Promise<void> {
 }
 
 /**
- * Run the `verify` command flow. It validates structure and then verifies
- * cryptographic signatures. Legacy single-signature playlists require a
- * public key; unsigned playlists fail here by design.
+ * Run the `verify` command flow: same DP-1 structure checks as `validate`, then
+ * cryptographic verification via dp1-js. Unsigned playlists (no legacy `signature`
+ * and no `signatures[]` envelopes) fail at the crypto step. v1.1.0 `signatures[]`
+ * may verify without `--public-key` when the library supports it; legacy
+ * `signature` strings typically require `--public-key`.
  */
 export async function runVerifyCommand(source: string, publicKey?: string): Promise<void> {
   try {

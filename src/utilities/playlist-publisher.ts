@@ -15,7 +15,7 @@ interface PublishResult {
  *
  * Flow:
  * 1. Read and parse playlist file
- * 2. Validate playlist against DP-1 spec using verifyPlaylist
+ * 2. Parse and cryptographically verify via verifyPlaylist (dp1-js; not structure-only validate)
  * 3. If valid, send the original playlist to feed server
  * 4. Return result with playlist ID or error
  *

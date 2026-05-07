@@ -134,8 +134,8 @@ Notes:
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `validate <file-or-url>` – Validate playlist structure only
 - `verify <file-or-url>` – Validate structure and verify signatures; legacy `signature` playlists accept `--public-key`
-- `sign <file>` – Sign playlist with a DP-1 signature envelope
-  - Options: `-k, --key <base64>`, `-o, --output <file>`
+- `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope
+  - Options: `-k, --key <base64>`, `-r, --role <role>`, `-o, --output <file>`
 - `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device
   - Options: `-d, --device <name>`, `--skip-verify`
 - `publish <file>` – Publish a playlist to a feed server
@@ -227,7 +227,7 @@ cat params.json | npm run dev -- build -o playlist.json
 # Optional explicit validation (build flows already validate)
 npm run dev -- validate playlist.json
 
-# Sign (uses key from config or override via --key)
+# Sign (uses key and role from config, or overrides via --key / --role)
 npm run dev -- sign playlist.json -o signed.json
 
 # Play on configured default device (verifies by default)

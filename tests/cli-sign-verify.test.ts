@@ -17,7 +17,6 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = resolve(__dirname, '..');
 const tsxCli = resolve(projectRoot, 'node_modules/tsx/dist/cli.mjs');
 const cliEntry = resolve(projectRoot, 'index.ts');
-const defaultDp1Js = process.env.DP1_JS || 'file:/Users/nguyenphuocsang/Bitmark/dp1-js-private';
 const fixturesDir = join(projectRoot, 'tests/fixtures/playlists');
 const examplesDir = join(projectRoot, 'examples');
 
@@ -38,12 +37,17 @@ function runCli(
   args: string[],
   extraEnv: Record<string, string | undefined> = {}
 ): RunResult {
-  ensureDp1JsReady(defaultDp1Js);
+  const dp1JsOverride = extraEnv.DP1_JS;
+  const dp1Js =
+    dp1JsOverride !== undefined && dp1JsOverride !== '' ? dp1JsOverride : process.env.DP1_JS;
+  if (typeof dp1Js === 'string' && dp1Js.startsWith('file:')) {
+    ensureDp1JsReady(dp1Js);
+  }
+
   const result = spawnSync(process.execPath, [tsxCli, cliEntry, ...args], {
     cwd,
     env: {
       ...process.env,
-      DP1_JS: defaultDp1Js,
       XDG_CONFIG_HOME: join(cwd, '.xdg'),
       ...extraEnv,
     },
@@ -67,7 +71,8 @@ function ensureDp1JsReady(spec: string): void {
   const builtEntry = join(repoDir, 'dist', 'index.js');
 
   if (!existsSync(packageJson)) {
-    throw new Error(`DP1_JS points at a missing repo: ${repoDir}`);
+    // Let the CLI surface resolution errors (e.g. negative tests with bogus file: paths).
+    return;
   }
 
   if (existsSync(builtEntry)) {

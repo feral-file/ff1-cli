@@ -26,6 +26,23 @@ function stableStringify(value) {
 }
 
 /**
+ * Return whether a playlist object carries a non-empty legacy signature or
+ * at least one v1.1.0 signature envelope. Empty `signatures: []` is not
+ * treated as signed.
+ *
+ * @param {{ signature?: unknown; signatures?: unknown }} playlist - Playlist metadata from buildDP1Playlist
+ * @returns {boolean} True when a signature field is present and non-empty
+ */
+function playlistHasCryptographicSignature(playlist) {
+  const legacy = playlist.signature;
+  if (typeof legacy === 'string' && legacy.length > 0) {
+    return true;
+  }
+  const multi = playlist.signatures;
+  return Array.isArray(multi) && multi.length > 0;
+}
+
+/**
  * Infer a query_requirement tool call from plain-text assistant content.
  *
  * Some model providers occasionally return JSON arguments in message content
@@ -422,7 +439,7 @@ async function executeFunction(functionName, args) {
         itemCount: playlist.items.length,
         title: playlist.title,
         dpVersion: playlist.dpVersion,
-        hasSigned: !!playlist.signature || Array.isArray(playlist.signatures),
+        hasSigned: playlistHasCryptographicSignature(playlist),
         slug: playlist.slug,
       };
     }
