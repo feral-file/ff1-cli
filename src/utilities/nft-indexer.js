@@ -4,7 +4,7 @@
  * to retrieve comprehensive token information.
  */
 
-const GRAPHQL_ENDPOINT = 'https://indexer-v2.feralfile.com/graphql';
+const GRAPHQL_ENDPOINT = 'https://indexer.feralfile.com/graphql';
 const logger = require('../logger');
 
 // Polling configuration (in milliseconds)
