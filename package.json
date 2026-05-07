@@ -34,7 +34,7 @@
     "format:check": "prettier --check \"**/*.{js,ts}\""
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "publishConfig": {
     "access": "public"
@@ -54,7 +54,7 @@
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
-    "dp1-js": "^1.1.0",
+    "dp1-js": "file:../dp1-js-private",
     "fuzzysort": "^3.1.0",
     "openai": "^4.58.1",
     "viem": "^2.38.2"
