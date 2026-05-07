@@ -39,20 +39,6 @@ export async function verifyPlaylist(
   details?: Array<{ path: string; message: string }>;
 }> {
   try {
-    if (publicKey) {
-      const dp1 = await loadDp1();
-      const verifyFn = dp1.verifyPlaylist || dp1.VerifyPlaylist;
-
-      if (typeof verifyFn !== 'function') {
-        throw new Error('dp1-js does not expose verifyPlaylist');
-      }
-
-      const ok = await verifyFn(playlist, publicKey);
-      return ok
-        ? { valid: true }
-        : { valid: false, error: 'Playlist signature verification failed' };
-    }
-
     const result = await parseDp1Playlist(playlist);
 
     if (result && 'error' in result && result.error) {
@@ -63,13 +49,36 @@ export async function verifyPlaylist(
       };
     }
 
-    return { valid: true };
+    const dp1 = await loadDp1();
+    const verifyFn = dp1.verifyPlaylist;
+
+    if (typeof verifyFn !== 'function') {
+      throw new Error('dp1-js does not expose verifyPlaylist');
+    }
+
+    if (!hasSignatureFields(playlist)) {
+      return { valid: true };
+    }
+
+    const ok = await verifyFn(playlist, publicKey);
+    return ok ? { valid: true } : { valid: false, error: 'Playlist signature verification failed' };
   } catch (error) {
     return {
       valid: false,
       error: `Verification failed: ${(error as Error).message}`,
     };
   }
+}
+
+function hasSignatureFields(playlist: unknown): boolean {
+  if (!playlist || typeof playlist !== 'object') {
+    return false;
+  }
+
+  const value = playlist as { signature?: unknown; signatures?: unknown };
+  return (
+    Boolean(value.signature) || (Array.isArray(value.signatures) && value.signatures.length > 0)
+  );
 }
 
 async function parseDp1Playlist(playlist: unknown): Promise<{
@@ -86,7 +95,7 @@ async function parseDp1Playlist(playlist: unknown): Promise<{
     };
   };
 
-  const parseFn = module.parseDP1Playlist || (module.default && module.default.parseDP1Playlist);
+  const parseFn = module.parseDP1Playlist;
   if (typeof parseFn !== 'function') {
     throw new Error('dp1-js does not expose parseDP1Playlist');
   }
@@ -103,7 +112,6 @@ async function loadDp1(): Promise<Record<string, unknown>> {
   }
 
   // `DP1_JS` may point at a local checkout (`file:`) or a published package.
-  // The default keeps the historical in-repo dependency path working.
   const require = createRequire(__filename);
   return require(spec);
 }

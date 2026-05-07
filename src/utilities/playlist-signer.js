@@ -1,7 +1,6 @@
 /**
  * Playlist Signing Utility.
- * Uses the DP-1 v1.1.0 signing contract via dp1-js and preserves legacy helpers
- * plus multi-sig verification when the library exports them (stash contract).
+ * Uses the DP-1 v1.1.0 signing contract via dp1-js-private.
  */
 
 const { getPlaylistConfig } = require('../config');
@@ -37,7 +36,7 @@ function hexToUint8Array(hexKey) {
  * @param {Object} playlist - Playlist object without signature
  * @param {string} [privateKeyBase64] - Ed25519 private key in hex or base64 format (optional, uses config if not provided)
  * @param {string} [roleOverride] - DP-1 signing role override (optional, uses config if not provided)
- * @returns {Promise<string|Object>} Legacy signature string or multi-sig object
+ * @returns {Promise<Object>} DP-1 signature envelope
  * @throws {Error} If private key is invalid or signing fails
  */
 async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
@@ -67,7 +66,7 @@ async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
       return dp1.SignMultiEd25519(raw, privateKey, role, currentTimestamp());
     }
 
-    throw new Error('dp1-js does not expose a compatible signing function');
+    throw new Error('dp1-js does not expose SignMultiEd25519');
   } catch (error) {
     throw new Error(`Failed to sign playlist: ${error.message}`);
   }
@@ -75,8 +74,6 @@ async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
 
 /**
  * Verify a playlist signature with the DP-1 verification API.
- * Multi-sig envelopes are verified through the playlist envelope verifier and
- * legacy playlists use the legacy Ed25519 verifier.
  *
  * @param {Object} playlist - Playlist object with signature field
  * @param {string} publicKeyHex - Ed25519 public key in hex format (with or without 0x prefix)
@@ -169,16 +166,13 @@ module.exports = {
 
 async function validatePlaylistForSigning(playlist) {
   const dp1 = await loadDp1();
-  const parseFn = dp1.parseDP1PlaylistWithOptions || dp1.parseDP1Playlist;
+  const parseFn = dp1.parseDP1Playlist;
 
   if (typeof parseFn !== 'function') {
-    throw new Error('dp1-js does not expose a compatible parser');
+    throw new Error('dp1-js does not expose parseDP1Playlist');
   }
 
-  const result =
-    parseFn === dp1.parseDP1PlaylistWithOptions
-      ? parseFn(playlist, { allowUnsignedOpen: true })
-      : parseFn(playlist);
+  const result = parseFn(playlist);
 
   if (result && result.error) {
     return { valid: false, error: result.error.message };
@@ -207,7 +201,7 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
     };
   }
 
-  throw new Error('dp1-js does not expose a compatible signing function');
+  throw new Error('dp1-js does not expose SignMultiEd25519');
 }
 
 async function loadDp1() {

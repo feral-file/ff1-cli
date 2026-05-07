@@ -137,14 +137,18 @@ describe('ff1 verify/validate/sign CLI integration', () => {
   test('verify and validate accept the v1.1.0 sample playlist example', () => {
     const dir = makeWorkspace();
     try {
+      writeSigningConfig(dir);
       const sampleV11 = copyExample(dir, 'sample-playlist-v11.json', 'sample-v11.json');
+      const signedV11 = join(dir, 'sample-v11-signed.json');
+      const sign = runCli(dir, ['sign', sampleV11, '-o', signedV11]);
+      expectOk(sign, 'sign sample v1.1.0 example');
 
-      const verify = runCli(dir, ['verify', sampleV11]);
+      const verify = runCli(dir, ['verify', signedV11]);
       expectOk(verify, 'verify sample v1.1.0 example');
       assert.match(verify.stdout, /Playlist is valid/i);
       assert.match(verify.stdout, /DP Version: 1\.1\.0/i);
 
-      const validate = runCli(dir, ['validate', sampleV11]);
+      const validate = runCli(dir, ['validate', signedV11]);
       expectOk(validate, 'validate sample v1.1.0 example');
       assert.match(validate.stdout, /Playlist is valid/i);
       assert.match(validate.stdout, /DP Version: 1\.1\.0/i);
@@ -156,15 +160,11 @@ describe('ff1 verify/validate/sign CLI integration', () => {
   test('verify and validate accept the documented valid playlist fixtures', () => {
     const dir = makeWorkspace();
     try {
-      const signedV10 = copyFixture(dir, 'validSignedV10', 'signed-v10.json');
-      const signedV11 = copyFixture(dir, 'validSignedV11', 'signed-v11.json');
-      const verifySignedV10 = runCli(dir, ['verify', signedV10]);
-      expectOk(verifySignedV10, 'verify signed v1.0.0');
-      assert.match(verifySignedV10.stdout, /Playlist is valid/i);
-
-      const validateSignedV10 = runCli(dir, ['validate', signedV10]);
-      expectOk(validateSignedV10, 'validate signed v1.0.0');
-      assert.match(validateSignedV10.stdout, /Playlist is valid/i);
+      writeSigningConfig(dir);
+      const unsignedV11 = copyExample(dir, 'sample-playlist-v11.json', 'unsigned-v11.json');
+      const signedV11 = join(dir, 'signed-v11.json');
+      const signV11 = runCli(dir, ['sign', unsignedV11, '-o', signedV11]);
+      expectOk(signV11, 'sign sample v1.1.0 example');
 
       const verifySignedV11 = runCli(dir, ['verify', signedV11]);
       expectOk(verifySignedV11, 'verify signed v1.1.0');
@@ -173,6 +173,20 @@ describe('ff1 verify/validate/sign CLI integration', () => {
       const validateSignedV11 = runCli(dir, ['validate', signedV11]);
       expectOk(validateSignedV11, 'validate signed v1.1.0');
       assert.match(validateSignedV11.stdout, /Playlist is valid/i);
+
+      const tampered = JSON.parse(readFileSync(signedV11, 'utf-8')) as {
+        signatures?: Array<{ sig?: string }>;
+      };
+      assert.ok(Array.isArray(tampered.signatures) && tampered.signatures.length > 0);
+      tampered.signatures![0].sig = 'AAAA';
+      writeFileSync(signedV11, JSON.stringify(tampered, null, 2), 'utf-8');
+
+      const verifyTampered = runCli(dir, ['verify', signedV11]);
+      expectFail(
+        verifyTampered,
+        /signature verification failed|invalid/i,
+        'verify tampered v1.1.0'
+      );
     } finally {
       cleanup(dir);
     }

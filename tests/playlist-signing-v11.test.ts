@@ -43,11 +43,11 @@ describe('DP-1 v1.1.0 signing', () => {
     assert.equal(signature.role, 'feed');
   });
 
-  test('verifyPlaylist accepts v1.1.0 multi-sig and legacy signature fields', async () => {
+  test('verifyPlaylist accepts v1.1.0 multi-sig envelopes without a public key', async () => {
     const previousDp1Js = process.env.DP1_JS;
     process.env.DP1_JS = localDp1Js;
     try {
-      const multiSigPlaylist = {
+      const playlist = {
         dpVersion: '1.1.0',
         id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
         slug: 'test-playlist',
@@ -62,18 +62,26 @@ describe('DP-1 v1.1.0 signing', () => {
             created: '2026-02-06T00:00:00.000Z',
           },
         ],
-        signatures: [
-          {
-            alg: 'ed25519',
-            kid: 'did:key:z6Mkexample',
-            ts: '2026-01-01T00:00:00Z',
-            payload_hash: 'sha256:' + '0'.repeat(64),
-            role: 'curator',
-            sig: 'abc',
-          },
-        ],
       };
 
+      const signature = await signPlaylist(playlist, makePrivateKey());
+      const multiSigPlaylist = {
+        ...playlist,
+        signatures: [signature],
+      };
+
+      const multiResult = await verifyPlaylist(multiSigPlaylist);
+
+      assert.equal(multiResult.valid, true);
+    } finally {
+      process.env.DP1_JS = previousDp1Js;
+    }
+  });
+
+  test('verifyPlaylist does not accept legacy signature-only playlists without a public key', async () => {
+    const previousDp1Js = process.env.DP1_JS;
+    process.env.DP1_JS = localDp1Js;
+    try {
       const legacyPlaylist = {
         dpVersion: '1.1.0',
         id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
@@ -92,13 +100,16 @@ describe('DP-1 v1.1.0 signing', () => {
         signature: 'ed25519:' + 'a'.repeat(128),
       };
 
-      const multiResult = await verifyPlaylist(multiSigPlaylist);
       const legacyResult = await verifyPlaylist(legacyPlaylist);
 
-      assert.equal(multiResult.valid, true);
-      assert.equal(legacyResult.valid, true);
+      assert.equal(legacyResult.valid, false);
     } finally {
       process.env.DP1_JS = previousDp1Js;
     }
   });
 });
+
+function makePrivateKey(): string {
+  const { privateKey } = generateKeyPairSync('ed25519');
+  return privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+}
