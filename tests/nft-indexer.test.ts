@@ -408,7 +408,7 @@ test('getNFTTokenInfoSingle: mock single tokens response (already indexed)', asy
   const originalFetch = global.fetch;
   const row = mockTokenRow();
 
-  global.fetch = async (_url: string, init?: RequestInit) => {
+  global.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
     const { query } = graphqlRequestFromInit(init);
     assert.ok(query.includes('tokens('), 'expected tokens query');
     return jsonResponse({
@@ -444,7 +444,7 @@ test('getNFTTokenInfoSingle: mock miss then trigger, job completed, then token w
   const originalFetch = global.fetch;
   let tokenRound = 0;
 
-  global.fetch = async (_url: string, init?: RequestInit) => {
+  global.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
     const { query } = graphqlRequestFromInit(init);
     if (query.includes('triggerTokenIndexing')) {
       return jsonResponse({
@@ -497,7 +497,7 @@ test('getNFTTokenInfoSingle: mock polls media_assets when first hit has empty li
   const originalFetch = global.fetch;
   let tokenCalls = 0;
 
-  global.fetch = async (_url: string, init?: RequestInit) => {
+  global.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
     const { query } = graphqlRequestFromInit(init);
     if (query.includes('tokens(')) {
       tokenCalls += 1;
@@ -559,8 +559,9 @@ test(
   async (t) => {
     const { getNFTTokenInfoSingle, queryTokens, buildTokenCID } = nftIndexer;
     const chain = 'ethereum';
-    const contractAddress = '0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb';
-    const tokenId = '7804';
+    // Fixture must exist on https://indexer.feralfile.com (verified via tokens query by contract).
+    const contractAddress = '0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270';
+    const tokenId = '52000296';
     const tokenCID = String(buildTokenCID(chain, contractAddress, tokenId));
 
     const existing = await queryTokens({ token_cids: [tokenCID], limit: 1 });
