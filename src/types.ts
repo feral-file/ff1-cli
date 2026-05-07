@@ -137,16 +137,15 @@ export interface BuildPlaylistResult {
   [key: string]: unknown;
 }
 
-export interface WorkflowStatus {
-  workflow_id: string;
-  run_id: string;
-  status: string;
-  start_time?: string;
-  close_time?: string;
-  execution_time_ms?: number;
+/** Response shape from `triggerTokenIndexing` (ff-indexer GraphQL; job queue). */
+export interface IndexerIndexingTriggerResult {
+  success: boolean;
+  job_id?: number;
+  error?: string;
 }
 
-export interface PollingResult {
+/** Outcome of polling `jobStatus` until terminal state or timeout (nft-indexer client). */
+export interface IndexerJobPollResult {
   success: boolean;
   completed?: boolean;
   timedOut?: boolean;
