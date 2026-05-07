@@ -34,12 +34,11 @@
   "signatures": [
     {
       "alg": "ed25519",
-      "kid": "did:key:z6Mkexample",
+      "kid": "did:key:z6MktzAPAZU4YGrxx8cC7K8p8XuMhWZcHsUd5CumGqbWVndr",
       "ts": "2026-01-01T00:00:00Z",
-      "payload_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "payload_hash": "sha256:425a4443523121fd114b5c03abcee7b06b4569b6caafb286d42444a909ec3b72",
       "role": "curator",
-      "sig": "abc"
+      "sig": "hElvXoOlhngg-nAXlTgfntjeSPLloYGhmDK7ZUYvp7cwzFYl5Go3whcw6-7E6E6orC4XUyHmRRwp_MB628HJAQ"
     }
-  ],
-  "signature": "ed25519:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  ]
 }

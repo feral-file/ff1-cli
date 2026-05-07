@@ -69,14 +69,14 @@ export function printPlaylistVerificationFailure(
 }
 
 /**
- * Load a playlist from a path or URL and run DP-1 verification on it.
+ * Load a playlist from a path or URL and run parse-only validation on it.
  */
-export async function verifyPlaylistSource(source: string): Promise<PlaylistVerificationResult> {
+export async function validatePlaylistSource(source: string): Promise<PlaylistVerificationResult> {
   const loaded = await loadPlaylistSource(source);
 
   const verifier = await import('../../utilities/playlist-verifier');
-  const { verifyPlaylist } = verifier;
-  const verifyResult = await verifyPlaylist(loaded.playlist);
+  const { validatePlaylist } = verifier;
+  const verifyResult = await validatePlaylist(loaded.playlist);
 
   return {
     ...verifyResult,
@@ -85,21 +85,55 @@ export async function verifyPlaylistSource(source: string): Promise<PlaylistVeri
 }
 
 /**
- * Run the shared verify/validate command flow. Both `ff1 verify` and
- * `ff1 validate` call this with the same body.
+ * Run the `validate` command flow. It checks DP-1 structure only and does
+ * not require signatures or public keys.
  */
-export async function runVerifyCommand(source: string): Promise<void> {
+export async function runValidateCommand(source: string): Promise<void> {
+  try {
+    console.log(chalk.blue('\nValidate playlist\n'));
+
+    const verifier = await import('../../utilities/playlist-verifier');
+    const { printVerificationResult } = verifier;
+
+    const result = await validatePlaylistSource(source);
+
+    printVerificationResult(result, source);
+
+    if (!result.valid) {
+      process.exit(1);
+    }
+  } catch (error) {
+    printPlaylistSourceLoadFailure(source, error as Error);
+    process.exit(1);
+  }
+}
+
+/**
+ * Run the `verify` command flow. It validates structure and then verifies
+ * cryptographic signatures. Legacy single-signature playlists require a
+ * public key; unsigned playlists fail here by design.
+ */
+export async function runVerifyCommand(source: string, publicKey?: string): Promise<void> {
   try {
     console.log(chalk.blue('\nVerify playlist\n'));
 
     const verifier = await import('../../utilities/playlist-verifier');
     const { printVerificationResult } = verifier;
 
-    const result = await verifyPlaylistSource(source);
-
-    printVerificationResult(result, source);
-
+    const result = await validatePlaylistSource(source);
     if (!result.valid) {
+      printVerificationResult(result, source);
+      process.exit(1);
+    }
+
+    const signedResult = await verifier.verifyPlaylist(result.playlist, publicKey);
+    const finalResult = signedResult.valid
+      ? { ...result, valid: true, error: undefined, details: undefined }
+      : { valid: false, error: signedResult.error, details: signedResult.details };
+
+    printVerificationResult(finalResult, source);
+
+    if (!signedResult.valid) {
       process.exit(1);
     }
   } catch (error) {

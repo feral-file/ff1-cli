@@ -1,20 +1,17 @@
 import { Command } from 'commander';
-import { runVerifyCommand } from './helpers/playlist-display';
-
-// `verify` and `validate` are intentional aliases. Two registrations are
-// kept (rather than commander's .alias()) because the long-standing CLI
-// surface has both names appear in --help, and external scripts use both.
+import { runValidateCommand, runVerifyCommand } from './helpers/playlist-display';
 
 export const verifyCommand = new Command('verify')
-  .description('Verify a DP1 playlist file against DP-1 specification')
+  .description('Validate playlist structure and verify DP-1 signatures')
   .argument('<file>', 'Path to the playlist file or hosted playlist URL')
-  .action(async (file: string) => {
-    await runVerifyCommand(file);
+  .option('--public-key <publicKey>', 'Ed25519 public key for legacy signature verification')
+  .action(async (file: string, options: { publicKey?: string }) => {
+    await runVerifyCommand(file, options.publicKey);
   });
 
 export const validateCommand = new Command('validate')
-  .description('Validate a DP1 playlist file (alias for verify)')
+  .description('Validate playlist structure only')
   .argument('<file>', 'Path to the playlist file or hosted playlist URL')
   .action(async (file: string) => {
-    await runVerifyCommand(file);
+    await runValidateCommand(file);
   });

@@ -150,3 +150,7 @@ playlist.json
 
 # Release artifacts
 /release/
+
+# Local generated example assets
+examples/
+local/

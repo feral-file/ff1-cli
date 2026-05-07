@@ -56,10 +56,6 @@ export async function verifyPlaylist(
       throw new Error('dp1-js does not expose verifyPlaylist');
     }
 
-    if (!hasSignatureFields(playlist)) {
-      return { valid: true };
-    }
-
     const ok = await verifyFn(playlist, publicKey);
     return ok ? { valid: true } : { valid: false, error: 'Playlist signature verification failed' };
   } catch (error) {
@@ -70,15 +66,36 @@ export async function verifyPlaylist(
   }
 }
 
-function hasSignatureFields(playlist: unknown): boolean {
-  if (!playlist || typeof playlist !== 'object') {
-    return false;
-  }
+/**
+ * Validate playlist structure without checking signatures.
+ *
+ * This is the parse-only path used by `validate`. It keeps the CLI
+ * semantics aligned with the repo contract: schema/shape validation is
+ * separate from cryptographic verification.
+ */
+export async function validatePlaylist(playlist: unknown): Promise<{
+  valid: boolean;
+  error?: string;
+  details?: Array<{ path: string; message: string }>;
+}> {
+  try {
+    const result = await parseDp1Playlist(playlist);
 
-  const value = playlist as { signature?: unknown; signatures?: unknown };
-  return (
-    Boolean(value.signature) || (Array.isArray(value.signatures) && value.signatures.length > 0)
-  );
+    if (result && 'error' in result && result.error) {
+      return {
+        valid: false,
+        error: result.error.message,
+        details: result.error.details || [],
+      };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Verification failed: ${(error as Error).message}`,
+    };
+  }
 }
 
 async function parseDp1Playlist(playlist: unknown): Promise<{

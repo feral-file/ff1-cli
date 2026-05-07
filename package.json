@@ -23,7 +23,7 @@
     "prepare": "husky",
     "start": "node dist/index.js",
     "dev": "tsx index.ts",
-    "smoke": "npm run build && node dist/index.js validate examples/sample-playlist.json && node dist/index.js config validate",
+    "smoke": "npm run build && node dist/index.js validate examples/sample-playlist-v11.json && node dist/index.js config validate",
     "check": "npm run format:check && npm run lint && npm run test",
     "verify": "npm run check && npm run smoke",
     "prepublishOnly": "npm run verify",

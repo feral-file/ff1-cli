@@ -192,14 +192,18 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     }
   });
 
-  test('verify accepts unsigned open playlists and sign can promote them into envelopes', () => {
+  test('validate accepts unsigned open playlists and sign can promote them into envelopes', () => {
     const dir = makeWorkspace();
     try {
       const unsigned = copyFixture(dir, 'validUnsignedOpenV11', 'unsigned.json');
 
+      const validate = runCli(dir, ['validate', unsigned]);
+      expectOk(validate, 'validate unsigned open');
+      assert.match(validate.stdout, /Playlist is valid/i);
+
       const verify = runCli(dir, ['verify', unsigned]);
-      expectOk(verify, 'verify unsigned open');
-      assert.match(verify.stdout, /Playlist is valid/i);
+      expectFail(verify, /playlist signature verification failed/i, 'verify unsigned open');
+      assert.match(verify.stdout, /Playlist validation failed/i);
 
       writeSigningConfig(dir);
       const output = join(dir, 'signed.json');
@@ -262,6 +266,28 @@ describe('ff1 verify/validate/sign CLI integration', () => {
       }
     });
   }
+
+  test('verify rejects legacy signed example without a public key', () => {
+    const dir = makeWorkspace();
+    try {
+      const playlist = copyExample(
+        dir,
+        'collective-delusion-7418.json',
+        'collective-delusion-7418.json'
+      );
+      const result = runCli(dir, ['verify', playlist]);
+
+      expectFail(
+        result,
+        /Playlist validation failed|signature verification failed|invalid/i,
+        'verify legacy signed example'
+      );
+      assert.match(result.stdout, /Playlist validation failed/i);
+      assert.match(result.stdout, /collective-delusion-7418\.json/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
 
   test('sign writes a signatures envelope and the result still verifies', () => {
     const dir = makeWorkspace();

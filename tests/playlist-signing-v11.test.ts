@@ -130,6 +130,35 @@ describe('DP-1 v1.1.0 signing', () => {
       process.env.DP1_JS = previousDp1Js;
     }
   });
+
+  test('verifyPlaylist rejects unsigned playlists', async () => {
+    const previousDp1Js = process.env.DP1_JS;
+    process.env.DP1_JS = localDp1Js;
+    try {
+      const unsignedPlaylist = {
+        dpVersion: '1.1.0',
+        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+        slug: 'test-playlist',
+        created: '2026-02-06T00:00:00.000Z',
+        title: 'Unsigned',
+        items: [
+          {
+            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+            source: 'https://example.com/art.mp4',
+            duration: 10,
+            license: 'token',
+            created: '2026-02-06T00:00:00.000Z',
+          },
+        ],
+      };
+
+      const unsignedResult = await verifyPlaylist(unsignedPlaylist);
+
+      assert.equal(unsignedResult.valid, false);
+    } finally {
+      process.env.DP1_JS = previousDp1Js;
+    }
+  });
 });
 
 function makePrivateKey(): string {
