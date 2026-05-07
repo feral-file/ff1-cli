@@ -52,7 +52,7 @@ async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
   }
 
   const config = getPlaylistConfig();
-  const role = roleOverride || config.role || 'curator';
+  const role = roleOverride || config.role || 'agent';
 
   try {
     const playlistToSign = { ...playlist };
@@ -125,7 +125,7 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath, role
     const playlist = JSON.parse(playlistContent);
     const config = getPlaylistConfig();
     const privateKey = privateKeyBase64 || config.privateKey;
-    const role = roleOverride || config.role || 'curator';
+    const role = roleOverride || config.role || 'agent';
 
     const validation = await validatePlaylistForSigning(playlist);
     if (!validation.valid) {

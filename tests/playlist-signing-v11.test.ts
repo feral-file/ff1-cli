@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, test } from 'node:test';
 import { resolve } from 'node:path';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import { signPlaylist } from '../src/utilities/playlist-signer';
 import { verifyPlaylist } from '../src/utilities/playlist-verifier';
@@ -18,15 +20,36 @@ describe('DP-1 v1.1.0 signing', () => {
       items: [{ source: 'https://example.com/art.mp4', duration: 10, license: 'token' }],
     };
 
-    const signature = await signPlaylist(playlist, privateKeyBase64);
+    const cwd = process.cwd();
+    const tempDir = mkdtempSync(`${tmpdir()}/ff1-role-default-`);
+    const previousRole = process.env.PLAYLIST_ROLE;
+    const previousXdg = process.env.XDG_CONFIG_HOME;
+    try {
+      process.chdir(tempDir);
+      delete process.env.PLAYLIST_ROLE;
+      process.env.XDG_CONFIG_HOME = tempDir;
+      const signature = await signPlaylist(playlist, privateKeyBase64);
 
-    assert.equal(typeof signature, 'object');
-    assert.ok(signature);
-    assert.equal(signature.alg, 'ed25519');
-    assert.equal(signature.role, 'curator');
-    assert.match(signature.kid, /^did:key:/);
-    assert.equal(typeof signature.payload_hash, 'string');
-    assert.equal(typeof signature.sig, 'string');
+      assert.equal(typeof signature, 'object');
+      assert.ok(signature);
+      assert.equal(signature.alg, 'ed25519');
+      assert.equal(signature.role, 'agent');
+      assert.match(signature.kid, /^did:key:/);
+      assert.equal(typeof signature.payload_hash, 'string');
+      assert.equal(typeof signature.sig, 'string');
+    } finally {
+      if (previousRole === undefined) {
+        delete process.env.PLAYLIST_ROLE;
+      } else {
+        process.env.PLAYLIST_ROLE = previousRole;
+      }
+      if (previousXdg === undefined) {
+        delete process.env.XDG_CONFIG_HOME;
+      } else {
+        process.env.XDG_CONFIG_HOME = previousXdg;
+      }
+      process.chdir(cwd);
+    }
   });
 
   test('signPlaylist uses the configured role override', async () => {

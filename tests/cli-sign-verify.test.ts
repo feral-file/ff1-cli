@@ -99,7 +99,7 @@ function writeSigningConfig(dir: string): void {
   const privateKeyBase64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
   writeFileSync(
     join(dir, 'config.json'),
-    JSON.stringify({ playlist: { privateKey: privateKeyBase64, role: 'curator' } }, null, 2),
+    JSON.stringify({ playlist: { privateKey: privateKeyBase64, role: 'agent' } }, null, 2),
     'utf-8'
   );
 }

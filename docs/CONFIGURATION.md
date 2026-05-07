@@ -60,7 +60,7 @@ Optional settings used where headless/browser‑like behavior is needed.
 Used for signing DP‑1 playlists.
 
 - `playlist.privateKey` (string, Ed25519 private key in hex or base64): Used by the `sign` command to create DP-1 v1.1.0 multi-signatures. Hex may include or omit the `0x` prefix. You can also set this via `PLAYLIST_PRIVATE_KEY` in `.env`.
-- `playlist.role` (string): DP-1 signing role that travels with the private key. Defaults to `curator` if omitted. You can also set this via `PLAYLIST_ROLE` in `.env`.
+- `playlist.role` (string): DP-1 signing role that travels with the private key. Defaults to `agent` if omitted. You can also set this via `PLAYLIST_ROLE` in `.env`.
 
 ### Generate an Ed25519 private key
 
@@ -83,7 +83,7 @@ Paste either value into `playlist.privateKey`:
   - `abc123...` (without prefix)
 - Base64 example: `uQd9m8S...==`
 
-If you need a different role, set `playlist.role` to one of the DP-1 signing roles such as `curator`, `feed`, `agent`, `institution`, or `licensor`.
+If you need a different role, set `playlist.role` to one of the DP-1 signing roles such as `agent`, `feed`, `curator`, `institution`, or `licensor`.
 
 If you already have a base64 key and want hex, convert it:
 
@@ -176,7 +176,7 @@ Minimal `config.json` example (selected fields):
   "defaultDuration": 10,
   "playlist": {
     "privateKey": "your_ed25519_private_key_hex_or_base64_here",
-    "role": "curator"
+    "role": "agent"
   },
   "feed": {
     "baseURLs": ["https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1"]

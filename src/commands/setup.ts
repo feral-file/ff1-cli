@@ -113,12 +113,12 @@ export const setupCommand = new Command('setup')
 
       if (signingKey) {
         const roleAnswer = await ask(
-          `Signing role (curator, feed, agent, institution, licensor) [${currentRole || 'curator'}]: `
+          `Signing role (agent, feed, curator, institution, licensor) [${currentRole || 'agent'}]: `
         );
         if (roleAnswer) {
           signingRole = roleAnswer;
         } else if (!signingRole) {
-          signingRole = 'curator';
+          signingRole = 'agent';
         }
 
         config.playlist = {
