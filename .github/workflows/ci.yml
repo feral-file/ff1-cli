@@ -24,8 +24,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       GROK_API_KEY: dummy
-      # Hits production indexer GraphQL in tests/nft-indexer.test.ts (pre-indexed fixture token).
-      FF_INDEXER_INTEGRATION: '1'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

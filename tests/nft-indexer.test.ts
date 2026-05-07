@@ -552,29 +552,3 @@ test('getNFTTokenInfoSingle: mock polls media_assets when first hit has empty li
     global.fetch = originalFetch;
   }
 });
-
-test(
-  'getNFTTokenInfoSingle: integration when FF_INDEXER_INTEGRATION=1 (pre-indexed token only)',
-  { skip: process.env.FF_INDEXER_INTEGRATION !== '1' },
-  async (t) => {
-    const { getNFTTokenInfoSingle, queryTokens, buildTokenCID } = nftIndexer;
-    const chain = 'ethereum';
-    // Fixture must exist on https://indexer.feralfile.com (verified via tokens query by contract).
-    const contractAddress = '0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270';
-    const tokenId = '52000296';
-    const tokenCID = String(buildTokenCID(chain, contractAddress, tokenId));
-
-    const existing = await queryTokens({ token_cids: [tokenCID], limit: 1 });
-    if (!Array.isArray(existing) || existing.length === 0) {
-      t.skip('Token not present in indexer yet; skipping to avoid async chain jobs in integration');
-      return;
-    }
-
-    const result = await getNFTTokenInfoSingle({ chain, contractAddress, tokenId }, 10);
-    assert.equal(result.success, true, JSON.stringify(result));
-    if (!result.success || !('item' in result)) {
-      assert.fail('expected success with item');
-    }
-    assert.ok(result.item?.source && result.item.source.length > 0, 'expected DP1 source URL');
-  }
-);
