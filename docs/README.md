@@ -133,7 +133,7 @@ Notes:
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `validate <file-or-url>` – Validate playlist structure only
-- `verify <file-or-url>` – Validate structure and verify signatures; legacy `signature` playlists accept `--public-key` (hex with optional `0x`, base64 SPKI DER, PEM, or 32-byte raw public key encoded as hex or base64), or omit it when `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` is set (the CLI derives the matching public key)
+- `verify <file-or-url>` – Validate structure and verify signatures. dp1-js uses `--public-key` (or a key derived from `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` when omitted) **only** for legacy flat `signature` verification; DP-1 v1.1.0 `signatures[]` envelopes are verified without relying on that argument. Supported key forms: hex with optional `0x`, base64 SPKI DER, PEM, or 32-byte raw public key as hex or base64
 - `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope
   - Options: `-k, --key <base64>`, `-r, --role <role>`, `-o, --output <file>`
 - `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device (runs `validate`-style structure checks before sending; use `verify` for signatures)

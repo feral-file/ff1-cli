@@ -272,23 +272,20 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     });
   }
 
-  test('verify rejects legacy signed example without a public key', () => {
+  test('verify rejects legacy signed playlist without a public key', () => {
     const dir = makeWorkspace();
     try {
-      const playlist = copyExample(
-        dir,
-        'collective-delusion-7418.json',
-        'collective-delusion-7418.json'
-      );
+      // Fixture ships with the repo; do not rely on optional example files under examples/.
+      const playlist = copyFixture(dir, 'validSignedV10', 'legacy-signed-v10.json');
       const result = runCli(dir, ['verify', playlist]);
 
       expectFail(
         result,
-        /Playlist validation failed|signature verification failed|invalid/i,
-        'verify legacy signed example'
+        /Playlist validation failed|signature verification failed|invalid|verification failed/i,
+        'verify legacy signed playlist without pubkey'
       );
       assert.match(result.stdout, /Playlist validation failed/i);
-      assert.match(result.stdout, /collective-delusion-7418\.json/i);
+      assert.match(result.stdout, /legacy-signed-v10\.json/i);
     } finally {
       cleanup(dir);
     }

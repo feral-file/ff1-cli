@@ -14,16 +14,19 @@ import { join } from 'path';
 /**
  * Cryptographically verify a playlist via dp1-js (after parsing succeeds).
  *
- * Unlike {@link validatePlaylist}, this invokes the library’s `verifyPlaylist`
- * implementation: unsigned playlists are rejected, while v1.1.0 `signatures[]`
- * may verify when the library accepts embedded proof material alone, or when
- * the configured signing key matches the envelope. Legacy `signature` strings
- * need a matching public key (`--public-key` or derived from `playlist.privateKey`
- * / `PLAYLIST_PRIVATE_KEY`). Use {@link validatePlaylist} for structure-only
- * checks (`validate` command).
+ * Unlike {@link validatePlaylist}, this forwards to dp1-js `verifyPlaylist`. The
+ * library verifies DP-1 v1.1.0 `signatures[]` envelopes from embedded material.
+ * dp1-js uses the optional public key argument only for legacy flat `signature`
+ * strings, not for `signatures[]`. The CLI may still derive a public key from
+ * `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` when `--public-key` is omitted;
+ * dp1-js ignores that value unless the playlist uses the legacy path. Legacy
+ * `signature` payloads need the matching public key via `--public-key` or
+ * derivation as above.
+ *
+ * Use {@link validatePlaylist} for structure-only checks (`validate` command).
  *
  * @param playlist - Playlist object
- * @param publicKey - Optional Ed25519 public key; when omitted, uses the key derived from configured private key if available
+ * @param publicKey - Optional Ed25519 key material forwarded to dp1-js; used only when the playlist uses legacy `signature` verification inside the library
  * @returns Verification result with `valid` and optional `error` / `details`
  */
 export async function verifyPlaylist(
@@ -186,7 +189,7 @@ export async function verifyPlaylistFile(playlistPath: string): Promise<{
       };
     }
 
-    // Verify using dp1-js (derive public key from configured private key when needed)
+    // Verify using dp1-js (optional key is derived for legacy signature path only inside dp1-js).
     const result = await verifyPlaylist(playlistData);
 
     if (result.valid) {

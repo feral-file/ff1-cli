@@ -8,8 +8,9 @@ import { signPlaylist } from '../src/utilities/playlist-signer';
 import { verifyPlaylist } from '../src/utilities/playlist-verifier';
 
 /**
- * Local config or PLAYLIST_PRIVATE_KEY must not alter verifyPlaylist, which derives
- * a public key from config when the caller omits one.
+ * Runs verification with an isolated config directory so PLAYLIST_PRIVATE_KEY and
+ * user config paths do not leak key material into these tests (dp1-js ignores the
+ * optional key for `signatures[]` anyway).
  */
 async function withNoPlaylistSigningEnv<T>(fn: () => Promise<T>): Promise<T> {
   const cwd = process.cwd();
