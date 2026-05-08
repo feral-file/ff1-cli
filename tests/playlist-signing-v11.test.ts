@@ -175,6 +175,46 @@ describe('DP-1 v1.1.0 signing', () => {
       assert.equal(unsignedResult.valid, false);
     });
   });
+
+  test('verifyPlaylist ignores broken signing config for v1.1.0 signatures[] envelopes', async () => {
+    const playlist = {
+      dpVersion: '1.1.0',
+      id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+      slug: 'signed-envelope',
+      created: '2026-02-06T00:00:00.000Z',
+      title: 'Envelope',
+      items: [
+        {
+          id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+          source: 'https://example.com/art.mp4',
+          duration: 10,
+          license: 'token',
+          created: '2026-02-06T00:00:00.000Z',
+        },
+      ],
+    };
+
+    await withNoPlaylistSigningEnv(async () => {
+      const signature = await signPlaylist(playlist, makePrivateKey());
+      const multiSigPlaylist = {
+        ...playlist,
+        signatures: [signature],
+      };
+
+      const previousPrivateKey = process.env.PLAYLIST_PRIVATE_KEY;
+      process.env.PLAYLIST_PRIVATE_KEY = 'not-a-valid-ed25519-key';
+      try {
+        const result = await verifyPlaylist(multiSigPlaylist);
+        assert.equal(result.valid, true);
+      } finally {
+        if (previousPrivateKey === undefined) {
+          delete process.env.PLAYLIST_PRIVATE_KEY;
+        } else {
+          process.env.PLAYLIST_PRIVATE_KEY = previousPrivateKey;
+        }
+      }
+    });
+  });
 });
 
 function makePrivateKey(): string {

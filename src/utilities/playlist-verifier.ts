@@ -17,11 +17,10 @@ import { join } from 'path';
  * Unlike {@link validatePlaylist}, this forwards to dp1-js `verifyPlaylist`. The
  * library verifies DP-1 v1.1.0 `signatures[]` envelopes from embedded material.
  * dp1-js uses the optional public key argument only for legacy flat `signature`
- * strings, not for `signatures[]`. The CLI may still derive a public key from
- * `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` when `--public-key` is omitted;
- * dp1-js ignores that value unless the playlist uses the legacy path. Legacy
- * `signature` payloads need the matching public key via `--public-key` or
- * derivation as above.
+ * strings, not for `signatures[]`. The CLI derives a public key from
+ * `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` only when the payload looks
+ * like a legacy flat-signature playlist. That keeps v1.1.0 envelope verification
+ * independent from local signing-key configuration quality.
  *
  * Use {@link validatePlaylist} for structure-only checks (`validate` command).
  *
@@ -56,7 +55,7 @@ export async function verifyPlaylist(
     }
 
     let key: string | undefined = publicKey?.trim() || undefined;
-    if (!key) {
+    if (!key && needsLegacyPublicKey(playlist)) {
       const { getPlaylistConfig } = await import('../config');
       const privateKeyMaterial = getPlaylistConfig().privateKey;
       if (privateKeyMaterial) {
@@ -140,6 +139,25 @@ async function loadDp1(): Promise<Record<string, unknown>> {
   // `DP1_JS` may point at a local checkout (`file:`) or a published package.
   const require = createRequire(__filename);
   return require(spec);
+}
+
+/**
+ * needsLegacyPublicKey returns true only for playlists that appear to use the
+ * legacy flat `signature` field. DP-1 v1.1.0 `signatures[]` envelopes verify
+ * without a caller-supplied public key, so deriving from config for those
+ * documents would incorrectly couple verification to local config state.
+ */
+function needsLegacyPublicKey(playlist: unknown): boolean {
+  if (!playlist || typeof playlist !== 'object' || Array.isArray(playlist)) {
+    return false;
+  }
+
+  const candidate = playlist as { signatures?: unknown; signature?: unknown };
+  if (Array.isArray(candidate.signatures)) {
+    return false;
+  }
+
+  return typeof candidate.signature === 'string' && candidate.signature.length > 0;
 }
 
 /**
