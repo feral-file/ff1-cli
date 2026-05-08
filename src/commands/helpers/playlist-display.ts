@@ -100,7 +100,7 @@ export async function runValidateCommand(source: string): Promise<void> {
 
     const result = await validatePlaylistSource(source);
 
-    printVerificationResult(result, source);
+    printVerificationResult(result, source, { failureKind: 'structure' });
 
     if (!result.valid) {
       process.exit(1);
@@ -129,7 +129,7 @@ export async function runVerifyCommand(source: string, publicKey?: string): Prom
 
     const result = await validatePlaylistSource(source);
     if (!result.valid) {
-      printVerificationResult(result, source);
+      printVerificationResult(result, source, { failureKind: 'structure' });
       process.exit(1);
     }
 
@@ -138,7 +138,7 @@ export async function runVerifyCommand(source: string, publicKey?: string): Prom
       ? { ...result, valid: true, error: undefined, details: undefined }
       : { valid: false, error: signedResult.error, details: signedResult.details };
 
-    printVerificationResult(finalResult, source);
+    printVerificationResult(finalResult, source, { failureKind: 'signature' });
 
     if (!signedResult.valid) {
       process.exit(1);

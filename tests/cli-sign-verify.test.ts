@@ -186,7 +186,7 @@ describe('ff1 verify/validate/sign CLI integration', () => {
 
       const verify = runCli(dir, ['verify', unsigned]);
       expectFail(verify, /playlist signature verification failed/i, 'verify unsigned open');
-      assert.match(verify.stdout, /Playlist validation failed/i);
+      assert.match(verify.stdout, /Playlist signature verification failed/i);
 
       writeSigningConfig(dir);
       const output = join(dir, 'signed.json');
@@ -259,10 +259,10 @@ describe('ff1 verify/validate/sign CLI integration', () => {
 
       expectFail(
         result,
-        /Playlist validation failed|signature verification failed|invalid|verification failed/i,
+        /Playlist signature verification failed|signature verification failed|invalid|verification failed/i,
         'verify legacy signed playlist without pubkey'
       );
-      assert.match(result.stdout, /Playlist validation failed/i);
+      assert.match(result.stdout, /Playlist signature verification failed/i);
       assert.match(result.stdout, /legacy-signed-v10\.json/i);
     } finally {
       cleanup(dir);

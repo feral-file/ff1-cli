@@ -211,11 +211,19 @@ export async function verifyPlaylistFile(playlistPath: string): Promise<{
   }
 }
 
+/** Which phase failed when printing a non-success result from `verify` / `validate`. */
+export type VerificationPrintFailureKind = 'structure' | 'signature';
+
 /**
- * Print verification results to console
+ * Prints verification results to the console.
  *
- * @param {Object} result - Verification result
- * @param {string} [filename] - Optional filename to include in output
+ * For failed results, `failureKind` distinguishes DP-1 structure parsing (the `validate`
+ * path and the first half of `verify`) from cryptographic verification (the second half
+ * of `verify` only). Defaults to `structure`.
+ *
+ * @param result - Verification result
+ * @param filename - Optional source label (path or URL)
+ * @param options - When `result.valid` is false, `failureKind` selects the failure headline
  */
 export function printVerificationResult(
   result: {
@@ -224,7 +232,8 @@ export function printVerificationResult(
     error?: string;
     details?: Array<{ path: string; message: string }>;
   },
-  filename?: string
+  filename?: string,
+  options?: { failureKind?: VerificationPrintFailureKind }
 ): void {
   if (result.valid) {
     console.log(chalk.green('\nPlaylist is valid'));
@@ -243,14 +252,20 @@ export function printVerificationResult(
     }
     console.log();
   } else {
-    console.log(chalk.red('\nPlaylist validation failed'));
+    const kind = options?.failureKind ?? 'structure';
+    const headline =
+      kind === 'signature'
+        ? '\nPlaylist signature verification failed'
+        : '\nPlaylist validation failed';
+    console.log(chalk.red(headline));
     if (filename) {
       console.log(chalk.dim(`  File: ${filename}`));
     }
     console.log(chalk.red(`  Error: ${result.error}`));
 
     if (result.details && result.details.length > 0) {
-      console.log(chalk.yellow('\n  Validation errors:'));
+      const detailsHeading = kind === 'signature' ? '\n  Details:' : '\n  Validation errors:';
+      console.log(chalk.yellow(detailsHeading));
       result.details.forEach((detail) => {
         console.log(chalk.yellow(`    • ${detail.path}: ${detail.message}`));
       });
