@@ -16,12 +16,14 @@ import { join } from 'path';
  *
  * Unlike {@link validatePlaylist}, this invokes the library’s `verifyPlaylist`
  * implementation: unsigned playlists are rejected, while v1.1.0 `signatures[]`
- * may succeed without a public key. Legacy single-signature playlists usually
- * need a `publicKey` argument. Use {@link validatePlaylist} for structure-only
+ * may verify when the library accepts embedded proof material alone, or when
+ * the configured signing key matches the envelope. Legacy `signature` strings
+ * need a matching public key (`--public-key` or derived from `playlist.privateKey`
+ * / `PLAYLIST_PRIVATE_KEY`). Use {@link validatePlaylist} for structure-only
  * checks (`validate` command).
  *
  * @param playlist - Playlist object
- * @param publicKey - Optional Ed25519 public key for legacy verification paths
+ * @param publicKey - Optional Ed25519 public key; when omitted, uses the key derived from configured private key if available
  * @returns Verification result with `valid` and optional `error` / `details`
  */
 export async function verifyPlaylist(
@@ -50,7 +52,17 @@ export async function verifyPlaylist(
       throw new Error('dp1-js does not expose verifyPlaylist');
     }
 
-    const ok = await verifyFn(playlist, publicKey);
+    let key: string | undefined = publicKey?.trim() || undefined;
+    if (!key) {
+      const { getPlaylistConfig } = await import('../config');
+      const privateKeyMaterial = getPlaylistConfig().privateKey;
+      if (privateKeyMaterial) {
+        const { deriveEd25519PublicKeyForVerify } = await import('./ed25519-key-derive');
+        key = deriveEd25519PublicKeyForVerify(privateKeyMaterial);
+      }
+    }
+
+    const ok = await verifyFn(playlist, key);
     return ok ? { valid: true } : { valid: false, error: 'Playlist signature verification failed' };
   } catch (error) {
     return {
@@ -174,7 +186,7 @@ export async function verifyPlaylistFile(playlistPath: string): Promise<{
       };
     }
 
-    // Verify using dp1-js
+    // Verify using dp1-js (derive public key from configured private key when needed)
     const result = await verifyPlaylist(playlistData);
 
     if (result.valid) {

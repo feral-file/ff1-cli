@@ -1,11 +1,41 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, test } from 'node:test';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 import { signPlaylist } from '../src/utilities/playlist-signer';
 import { verifyPlaylist } from '../src/utilities/playlist-verifier';
+
+/**
+ * Local config or PLAYLIST_PRIVATE_KEY must not alter verifyPlaylist, which derives
+ * a public key from config when the caller omits one.
+ */
+async function withNoPlaylistSigningEnv<T>(fn: () => Promise<T>): Promise<T> {
+  const cwd = process.cwd();
+  const tempDir = mkdtempSync(`${tmpdir()}/ff1-verify-isolated-`);
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  const prevPk = process.env.PLAYLIST_PRIVATE_KEY;
+  try {
+    process.chdir(tempDir);
+    process.env.XDG_CONFIG_HOME = tempDir;
+    delete process.env.PLAYLIST_PRIVATE_KEY;
+    return await fn();
+  } finally {
+    process.chdir(cwd);
+    if (prevXdg === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = prevXdg;
+    }
+    if (prevPk === undefined) {
+      delete process.env.PLAYLIST_PRIVATE_KEY;
+    } else {
+      process.env.PLAYLIST_PRIVATE_KEY = prevPk;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
 
 describe('DP-1 v1.1.0 signing', () => {
   test('signPlaylist returns a v1.1.0 multi-signature object', async () => {
@@ -81,15 +111,17 @@ describe('DP-1 v1.1.0 signing', () => {
       ],
     };
 
-    const signature = await signPlaylist(playlist, makePrivateKey());
-    const multiSigPlaylist = {
-      ...playlist,
-      signatures: [signature],
-    };
+    await withNoPlaylistSigningEnv(async () => {
+      const signature = await signPlaylist(playlist, makePrivateKey());
+      const multiSigPlaylist = {
+        ...playlist,
+        signatures: [signature],
+      };
 
-    const multiResult = await verifyPlaylist(multiSigPlaylist);
+      const multiResult = await verifyPlaylist(multiSigPlaylist);
 
-    assert.equal(multiResult.valid, true);
+      assert.equal(multiResult.valid, true);
+    });
   });
 
   test('verifyPlaylist does not accept legacy signature-only playlists without a public key', async () => {
@@ -111,9 +143,11 @@ describe('DP-1 v1.1.0 signing', () => {
       signature: 'ed25519:' + 'a'.repeat(128),
     };
 
-    const legacyResult = await verifyPlaylist(legacyPlaylist);
+    await withNoPlaylistSigningEnv(async () => {
+      const legacyResult = await verifyPlaylist(legacyPlaylist);
 
-    assert.equal(legacyResult.valid, false);
+      assert.equal(legacyResult.valid, false);
+    });
   });
 
   test('verifyPlaylist rejects unsigned playlists', async () => {
@@ -134,9 +168,11 @@ describe('DP-1 v1.1.0 signing', () => {
       ],
     };
 
-    const unsignedResult = await verifyPlaylist(unsignedPlaylist);
+    await withNoPlaylistSigningEnv(async () => {
+      const unsignedResult = await verifyPlaylist(unsignedPlaylist);
 
-    assert.equal(unsignedResult.valid, false);
+      assert.equal(unsignedResult.valid, false);
+    });
   });
 });
 

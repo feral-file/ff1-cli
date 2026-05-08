@@ -113,10 +113,11 @@ export async function runValidateCommand(source: string): Promise<void> {
 
 /**
  * Run the `verify` command flow: same DP-1 structure checks as `validate`, then
- * cryptographic verification via dp1-js. Unsigned playlists (no legacy `signature`
- * and no `signatures[]` envelopes) fail at the crypto step. v1.1.0 `signatures[]`
- * may verify without `--public-key` when the library supports it; legacy
- * `signature` strings typically require `--public-key`.
+ * cryptographic verification via dp1-js. Unsigned playlists fail at the crypto
+ * step. v1.1.0 `signatures[]` verification uses dp1-js with an optional public key;
+ * when `--public-key` is omitted, the CLI passes the key derived from
+ * `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` if set, otherwise no key. Legacy
+ * `signature` payloads need a matching key (supplied or derived as above).
  */
 export async function runVerifyCommand(source: string, publicKey?: string): Promise<void> {
   try {
