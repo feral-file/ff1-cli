@@ -204,25 +204,10 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
   throw new Error('dp1-js does not expose SignMultiEd25519');
 }
 
+/** Loads `dp1-js-test`; env overrides are not supported (see playlist-verifier). */
 async function loadDp1() {
-  const spec = process.env.DP1_JS || 'dp1-js-test';
-  if (spec.startsWith('file:')) {
-    const repoDir = fileURLToPath(spec);
-    return import(pathToFileURL(resolve(repoDir, 'dist', 'index.js')).href);
-  }
-
-  return require(resolveDp1Specifier(spec));
+  return require('dp1-js-test');
 }
-
-function resolveDp1Specifier(spec) {
-  if (spec.startsWith('file:')) {
-    return fileURLToPath(spec);
-  }
-
-  return spec;
-}
-const { fileURLToPath, pathToFileURL } = require('url');
-const { resolve } = require('path');
 
 function currentTimestamp() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');

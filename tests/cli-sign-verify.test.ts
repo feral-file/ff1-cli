@@ -1,18 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
-  copyFileSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { generateKeyPairSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const projectRoot = resolve(__dirname, '..');
@@ -42,13 +34,6 @@ function runCli(
   args: string[],
   extraEnv: Record<string, string | undefined> = {}
 ): RunResult {
-  const dp1JsOverride = extraEnv.DP1_JS;
-  const dp1Js =
-    dp1JsOverride !== undefined && dp1JsOverride !== '' ? dp1JsOverride : process.env.DP1_JS;
-  if (typeof dp1Js === 'string' && dp1Js.startsWith('file:')) {
-    ensureDp1JsReady(dp1Js);
-  }
-
   const result = spawnSync(process.execPath, [tsxCli, cliEntry, ...args], {
     cwd,
     env: {
@@ -64,40 +49,6 @@ function runCli(
     stdout: result.stdout || '',
     stderr: result.stderr || '',
   };
-}
-
-function ensureDp1JsReady(spec: string): void {
-  if (!spec.startsWith('file:')) {
-    return;
-  }
-
-  const repoDir = fileURLToPath(spec);
-  const packageJson = join(repoDir, 'package.json');
-  const builtEntry = join(repoDir, 'dist', 'index.js');
-
-  if (!existsSync(packageJson)) {
-    // Let the CLI surface resolution errors (e.g. negative tests with bogus file: paths).
-    return;
-  }
-
-  if (existsSync(builtEntry)) {
-    return;
-  }
-
-  const build = spawnSync('npm', ['run', 'build'], {
-    cwd: repoDir,
-    encoding: 'utf-8',
-  });
-
-  if (existsSync(builtEntry)) {
-    return;
-  }
-
-  assert.equal(
-    build.status,
-    0,
-    `Failed to build local dp1-js repo at ${repoDir}\n${build.stdout || ''}${build.stderr || ''}`
-  );
 }
 
 function makeWorkspace(): string {
@@ -524,18 +475,4 @@ describe('ff1 verify/validate/sign CLI integration', () => {
       }
     });
   }
-
-  test('verify fails early when DP1_JS points at an unusable dependency', () => {
-    const dir = makeWorkspace();
-    try {
-      const unsigned = copyFixture(dir, 'validUnsignedOpenV11', 'unsigned.json');
-      const result = runCli(dir, ['verify', unsigned], {
-        DP1_JS: 'file:/definitely/not/a/real/path',
-      });
-
-      expectFail(result, /cannot find|MODULE_NOT_FOUND|failed/i, 'verify unusable dp1-js');
-    } finally {
-      cleanup(dir);
-    }
-  });
 });

@@ -7,9 +7,7 @@
 import type { Playlist } from '../types';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
-import { fileURLToPath, pathToFileURL } from 'url';
 import { createRequire } from 'module';
-import { join } from 'path';
 
 /**
  * Cryptographically verify a playlist via dp1-js (after parsing succeeds).
@@ -133,17 +131,14 @@ async function parseDp1Playlist(playlist: unknown): Promise<{
   return parseFn(playlist);
 }
 
+/**
+ * Loads the published DP-1 implementation bundled with the CLI (`dp1-js-test`).
+ * Local checkout overrides via environment are intentionally unsupported so
+ * resolution stays deterministic across machines and CI.
+ */
 async function loadDp1(): Promise<Record<string, unknown>> {
-  const spec = process.env.DP1_JS || 'dp1-js-test';
-  if (spec.startsWith('file:')) {
-    const repoDir = fileURLToPath(spec);
-    const entry = join(repoDir, 'dist', 'index.js');
-    return import(pathToFileURL(entry).href);
-  }
-
-  // `DP1_JS` may point at a local checkout (`file:`) or a published package.
   const require = createRequire(__filename);
-  return require(spec);
+  return require('dp1-js-test');
 }
 
 /**
