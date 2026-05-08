@@ -151,6 +151,5 @@ playlist.json
 # Release artifacts
 /release/
 
-# Local generated example assets
-examples/
+# Local workspace scratch or generated artifacts
 local/

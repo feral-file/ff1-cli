@@ -13,12 +13,17 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const projectRoot = resolve(__dirname, '..');
 const tsxCli = resolve(projectRoot, 'node_modules/tsx/dist/cli.mjs');
 const cliEntry = resolve(projectRoot, 'index.ts');
 const fixturesDir = join(projectRoot, 'tests/fixtures/playlists');
 const examplesDir = join(projectRoot, 'examples');
+const require = createRequire(import.meta.url);
+const { SignLegacyEd25519 } = require('dp1-js-test') as {
+  SignLegacyEd25519: (raw: Buffer | string, privateKey: string) => string;
+};
 
 type RunResult = { status: number | null; stdout: string; stderr: string };
 
@@ -107,6 +112,28 @@ function writeSigningConfig(dir: string): void {
     JSON.stringify({ playlist: { privateKey: privateKeyBase64, role: 'agent' } }, null, 2),
     'utf-8'
   );
+}
+
+function makeLegacySignedPlaylist(
+  privateKeyBase64: string,
+  publicKeyPem: string,
+  playlist: Record<string, unknown>
+): {
+  playlist: Record<string, unknown>;
+  publicKeyPem: string;
+} {
+  const legacySignature = SignLegacyEd25519(
+    Buffer.from(JSON.stringify(playlist)),
+    privateKeyBase64
+  );
+
+  return {
+    playlist: {
+      ...playlist,
+      signature: legacySignature,
+    },
+    publicKeyPem,
+  };
 }
 
 function copyFixture(
@@ -286,6 +313,134 @@ describe('ff1 verify/validate/sign CLI integration', () => {
       );
       assert.match(result.stdout, /Playlist validation failed/i);
       assert.match(result.stdout, /legacy-signed-v10\.json/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('verify accepts a legacy signed playlist when --public-key is provided', () => {
+    const dir = makeWorkspace();
+    try {
+      const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+      const privateKeyBase64 = privateKey
+        .export({ format: 'der', type: 'pkcs8' })
+        .toString('base64');
+      const publicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString();
+      const payload = {
+        dpVersion: '1.0.0',
+        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+        title: 'Legacy Signed',
+        created: '2026-02-06T00:00:00.000Z',
+        items: [
+          {
+            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+            source: 'https://example.com/nft1.png',
+            duration: 10,
+            license: 'open',
+            created: '2026-02-06T00:00:00.000Z',
+          },
+        ],
+        defaults: {
+          display: {
+            scaling: 'fit',
+            background: '#111111',
+            margin: 0,
+          },
+          license: 'token',
+          duration: 10,
+        },
+        slug: 'legacy-signed',
+      };
+      const signed = makeLegacySignedPlaylist(privateKeyBase64, publicKeyPem, payload);
+      const playlist = copyFixture(dir, 'validSignedV10', 'legacy-signed-v10.json');
+      writeFileSync(playlist, JSON.stringify(signed.playlist, null, 2), 'utf-8');
+
+      const result = runCli(dir, ['verify', playlist, '--public-key', publicKeyPem]);
+
+      expectOk(result, 'verify legacy signed playlist with public key');
+      assert.match(result.stdout, /Playlist is valid/i);
+      assert.match(result.stdout, /legacy-signed-v10\.json/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('verify derives the legacy public key from playlist.privateKey when --public-key is omitted', () => {
+    const dir = makeWorkspace();
+    try {
+      const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+      const privateKeyBase64 = privateKey
+        .export({ format: 'der', type: 'pkcs8' })
+        .toString('base64');
+      const publicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString();
+      const playlist = {
+        dpVersion: '1.0.0',
+        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+        title: 'Legacy Config Signed',
+        created: '2026-02-06T00:00:00.000Z',
+        items: [
+          {
+            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+            source: 'https://example.com/nft1.png',
+            duration: 10,
+            license: 'open',
+            created: '2026-02-06T00:00:00.000Z',
+          },
+        ],
+      };
+      const signed = makeLegacySignedPlaylist(privateKeyBase64, publicKeyPem, playlist);
+      const playlistPath = join(dir, 'legacy-config-signed.json');
+      writeFileSync(playlistPath, JSON.stringify(signed.playlist, null, 2), 'utf-8');
+      writeFileSync(
+        join(dir, 'config.json'),
+        JSON.stringify({ playlist: { privateKey: privateKeyBase64 } }, null, 2),
+        'utf-8'
+      );
+
+      const result = runCli(dir, ['verify', playlistPath]);
+
+      expectOk(result, 'verify legacy playlist with derived config key');
+      assert.match(result.stdout, /Playlist is valid/i);
+      assert.match(result.stdout, /legacy-config-signed\.json/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('verify derives the legacy public key from PLAYLIST_PRIVATE_KEY when config is absent', () => {
+    const dir = makeWorkspace();
+    try {
+      const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+      const privateKeyBase64 = privateKey
+        .export({ format: 'der', type: 'pkcs8' })
+        .toString('base64');
+      const publicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString();
+      const playlist = {
+        dpVersion: '1.0.0',
+        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+        title: 'Legacy Env Signed',
+        created: '2026-02-06T00:00:00.000Z',
+        items: [
+          {
+            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+            source: 'https://example.com/nft1.png',
+            duration: 10,
+            license: 'open',
+            created: '2026-02-06T00:00:00.000Z',
+          },
+        ],
+      };
+      const signed = makeLegacySignedPlaylist(privateKeyBase64, publicKeyPem, playlist);
+      const playlistPath = join(dir, 'legacy-env-signed.json');
+      writeFileSync(playlistPath, JSON.stringify(signed.playlist, null, 2), 'utf-8');
+
+      const result = runCli(dir, ['verify', playlistPath], {
+        PLAYLIST_PRIVATE_KEY: privateKeyBase64,
+      });
+
+      expectOk(result, 'verify legacy playlist with derived env key');
+      assert.match(result.stdout, /Playlist is valid/i);
+      assert.match(result.stdout, /legacy-env-signed\.json/i);
     } finally {
       cleanup(dir);
     }
