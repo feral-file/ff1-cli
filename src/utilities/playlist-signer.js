@@ -1,6 +1,6 @@
 /**
  * Playlist Signing Utility.
- * Uses the DP-1 v1.1.0 signing contract via dp1-js-private.
+ * Uses the DP-1 v1.1.0 signing contract via the `dp1-js-test` package.
  */
 
 const { getPlaylistConfig } = require('../config');
@@ -205,7 +205,7 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
 }
 
 async function loadDp1() {
-  const spec = process.env.DP1_JS || 'dp1-js';
+  const spec = process.env.DP1_JS || 'dp1-js-test';
   if (spec.startsWith('file:')) {
     const repoDir = fileURLToPath(spec);
     return import(pathToFileURL(resolve(repoDir, 'dist', 'index.js')).href);

@@ -61,6 +61,7 @@ Used for signing DP‑1 playlists.
 
 - `playlist.privateKey` (string, Ed25519 private key in hex or base64): Used by the `sign` command to create DP-1 v1.1.0 multi-signatures. Hex may include or omit the `0x` prefix. You can also set this via `PLAYLIST_PRIVATE_KEY` in `.env`.
 - `playlist.role` (string): DP-1 signing role that travels with the private key. Defaults to `agent` if omitted. You can also set this via `PLAYLIST_ROLE` in `.env`.
+- Advanced: set `DP1_JS` in the environment to override which package or local build the CLI loads for parsing and verification (default npm specifier is `dp1-js-test`). Use a `file:` URL only when pointing at a repo that has a built `dist/index.js`.
 
 ### Generate an Ed25519 private key
 

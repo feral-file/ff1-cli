@@ -114,9 +114,9 @@ The model orchestrates; deterministic tools keep us honest and DP1‑conformant.
 1. Input: Share the essentials (contract + token IDs, or feed/URL names).
 2. Orchestration: The LLM parses your prompt and calls tools that:
    - Fetch NFT metadata via OSS libs (`viem` for Ethereum, `@taquito/taquito` for Tezos)
-   - Validate DP1 schema with `dp1-js`
+   - Validate DP1 schema with `dp1-js-test`
    - Build a DP1 playlist envelope deterministically
-   - Optionally sign with Ed25519 (canonical JSON via `dp1-js`)
+   - Optionally sign with Ed25519 (canonical JSON via `dp1-js-test`)
 3. Preview/send: Send to an FF1 on your LAN over HTTP (recommended). Point `ff1Devices.devices[].host` at a local relay if needed.
 4. Publish: Optional feed/registry publishing via the `publish` command.
 
@@ -320,7 +320,7 @@ Setup preserves existing devices when adding new ones. See selection rules and e
 ### Playlist signing (optional)
 
 - Add `playlist.privateKey` (base64 Ed25519) and, optionally, `playlist.role` to `config.json` or set `PLAYLIST_PRIVATE_KEY` and `PLAYLIST_ROLE`.
-- Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via `dp1-js`).
+- Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via `dp1-js-test`).
 
 ## Constraints
 

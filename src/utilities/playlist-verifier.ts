@@ -115,7 +115,7 @@ async function parseDp1Playlist(playlist: unknown): Promise<{
 }
 
 async function loadDp1(): Promise<Record<string, unknown>> {
-  const spec = process.env.DP1_JS || 'dp1-js';
+  const spec = process.env.DP1_JS || 'dp1-js-test';
   if (spec.startsWith('file:')) {
     const repoDir = fileURLToPath(spec);
     const entry = join(repoDir, 'dist', 'index.js');

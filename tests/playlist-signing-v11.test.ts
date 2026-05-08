@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, test } from 'node:test';
-import { resolve } from 'node:path';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 import { signPlaylist } from '../src/utilities/playlist-signer';
 import { verifyPlaylist } from '../src/utilities/playlist-verifier';
-
-const localDp1Js = `file:${resolve(__dirname, '../../dp1-js-private')}`;
 
 describe('DP-1 v1.1.0 signing', () => {
   test('signPlaylist returns a v1.1.0 multi-signature object', async () => {
@@ -67,97 +64,79 @@ describe('DP-1 v1.1.0 signing', () => {
   });
 
   test('verifyPlaylist accepts v1.1.0 multi-sig envelopes without a public key', async () => {
-    const previousDp1Js = process.env.DP1_JS;
-    process.env.DP1_JS = localDp1Js;
-    try {
-      const playlist = {
-        dpVersion: '1.1.0',
-        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
-        slug: 'test-playlist',
-        created: '2026-02-06T00:00:00.000Z',
-        title: 'Multi',
-        items: [
-          {
-            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
-            source: 'https://example.com/art.mp4',
-            duration: 10,
-            license: 'token',
-            created: '2026-02-06T00:00:00.000Z',
-          },
-        ],
-      };
+    const playlist = {
+      dpVersion: '1.1.0',
+      id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+      slug: 'test-playlist',
+      created: '2026-02-06T00:00:00.000Z',
+      title: 'Multi',
+      items: [
+        {
+          id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+          source: 'https://example.com/art.mp4',
+          duration: 10,
+          license: 'token',
+          created: '2026-02-06T00:00:00.000Z',
+        },
+      ],
+    };
 
-      const signature = await signPlaylist(playlist, makePrivateKey());
-      const multiSigPlaylist = {
-        ...playlist,
-        signatures: [signature],
-      };
+    const signature = await signPlaylist(playlist, makePrivateKey());
+    const multiSigPlaylist = {
+      ...playlist,
+      signatures: [signature],
+    };
 
-      const multiResult = await verifyPlaylist(multiSigPlaylist);
+    const multiResult = await verifyPlaylist(multiSigPlaylist);
 
-      assert.equal(multiResult.valid, true);
-    } finally {
-      process.env.DP1_JS = previousDp1Js;
-    }
+    assert.equal(multiResult.valid, true);
   });
 
   test('verifyPlaylist does not accept legacy signature-only playlists without a public key', async () => {
-    const previousDp1Js = process.env.DP1_JS;
-    process.env.DP1_JS = localDp1Js;
-    try {
-      const legacyPlaylist = {
-        dpVersion: '1.1.0',
-        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
-        slug: 'test-playlist',
-        created: '2026-02-06T00:00:00.000Z',
-        title: 'Legacy',
-        items: [
-          {
-            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
-            source: 'https://example.com/art.mp4',
-            duration: 10,
-            license: 'token',
-            created: '2026-02-06T00:00:00.000Z',
-          },
-        ],
-        signature: 'ed25519:' + 'a'.repeat(128),
-      };
+    const legacyPlaylist = {
+      dpVersion: '1.1.0',
+      id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+      slug: 'test-playlist',
+      created: '2026-02-06T00:00:00.000Z',
+      title: 'Legacy',
+      items: [
+        {
+          id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+          source: 'https://example.com/art.mp4',
+          duration: 10,
+          license: 'token',
+          created: '2026-02-06T00:00:00.000Z',
+        },
+      ],
+      signature: 'ed25519:' + 'a'.repeat(128),
+    };
 
-      const legacyResult = await verifyPlaylist(legacyPlaylist);
+    const legacyResult = await verifyPlaylist(legacyPlaylist);
 
-      assert.equal(legacyResult.valid, false);
-    } finally {
-      process.env.DP1_JS = previousDp1Js;
-    }
+    assert.equal(legacyResult.valid, false);
   });
 
   test('verifyPlaylist rejects unsigned playlists', async () => {
-    const previousDp1Js = process.env.DP1_JS;
-    process.env.DP1_JS = localDp1Js;
-    try {
-      const unsignedPlaylist = {
-        dpVersion: '1.1.0',
-        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
-        slug: 'test-playlist',
-        created: '2026-02-06T00:00:00.000Z',
-        title: 'Unsigned',
-        items: [
-          {
-            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
-            source: 'https://example.com/art.mp4',
-            duration: 10,
-            license: 'token',
-            created: '2026-02-06T00:00:00.000Z',
-          },
-        ],
-      };
+    const unsignedPlaylist = {
+      dpVersion: '1.1.0',
+      id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+      slug: 'test-playlist',
+      created: '2026-02-06T00:00:00.000Z',
+      title: 'Unsigned',
+      items: [
+        {
+          id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+          source: 'https://example.com/art.mp4',
+          duration: 10,
+          license: 'token',
+          created: '2026-02-06T00:00:00.000Z',
+        },
+      ],
+    };
 
-      const unsignedResult = await verifyPlaylist(unsignedPlaylist);
+    const unsignedResult = await verifyPlaylist(unsignedPlaylist);
 
-      assert.equal(unsignedResult.valid, false);
-    } finally {
-      process.env.DP1_JS = previousDp1Js;
-    }
+    assert.equal(unsignedResult.valid, false);
   });
 });
 
