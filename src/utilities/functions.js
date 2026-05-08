@@ -112,8 +112,9 @@ async function resolveDomains(params) {
  * Verify a playlist against DP-1 specification
  *
  * This is the actual implementation called by AI orchestrator's function calling.
- * Uses dp1-js library for standards-compliant validation. Must be called before
- * sending a playlist to a device.
+ * Uses dp1-js parse/structure validation (same as the `validate` CLI). Does not
+ * verify signatures; use the `verify` CLI for cryptographic checks. Must be
+ * called before sending a playlist to a device from the orchestrator.
  *
  * @param {Object} params - Verification parameters
  * @param {Object} params.playlist - Playlist object to verify
@@ -143,19 +144,19 @@ async function verifyPlaylist(params) {
 
   // Dynamic import to avoid circular dependency
   const playlistVerifier = await import('./playlist-verifier');
-  const verify =
-    playlistVerifier.verifyPlaylist ||
-    (playlistVerifier.default && playlistVerifier.default.verifyPlaylist) ||
+  const validate =
+    playlistVerifier.validatePlaylist ||
+    (playlistVerifier.default && playlistVerifier.default.validatePlaylist) ||
     playlistVerifier.default;
 
-  if (typeof verify !== 'function') {
+  if (typeof validate !== 'function') {
     return {
       valid: false,
       error: 'Playlist verifier is not available',
     };
   }
 
-  const result = await verify(playlist);
+  const result = await validate(playlist);
 
   if (result.valid) {
     logger.verbose(chalk.green('Playlist looks good'));

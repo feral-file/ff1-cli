@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolvePlaySource } from '../src/utilities/playlist-source';
+import { validatePlaylist } from '../src/utilities/playlist-verifier';
 
 const samplePlaylist = {
   dpVersion: '1.0.0',
@@ -90,6 +91,12 @@ describe('resolvePlaySource', () => {
         assert.equal(result.source, 'https://example.com/clip.mp4');
         assert.equal(result.playlist.items.length, 1);
         assert.equal(result.playlist.items[0].duration, 7);
+        const validated = await validatePlaylist(result.playlist);
+        assert.equal(
+          validated.valid,
+          true,
+          'synthesized media playlist must pass the same structure check `play` uses'
+        );
       }
     } finally {
       global.fetch = original;

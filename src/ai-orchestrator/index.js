@@ -320,7 +320,7 @@ const functionSchemas = [
     function: {
       name: 'verify_playlist',
       description:
-        'Verify a playlist against the DP-1 specification. Pass the playlistId returned from build_playlist.',
+        'Validate DP-1 playlist structure (parse only); does not verify signatures. Pass the playlistId returned from build_playlist.',
       parameters: {
         type: 'object',
         properties: {
@@ -567,7 +567,7 @@ KEY RULES
   • If slug provided in settings → pass settings.slug as-is
   • If slug NOT provided → pass null (NOT the string "null")
 - Shuffle: set shuffle = ${playlistSettings.preserveOrder === false ? 'true' : 'false'}.
-- Build → Verify${hasDevice ? ' → Send' : ''} (MANDATORY to verify before${hasDevice ? ' sending' : ' finishing'}).
+- Build → verify_playlist (structure/parse only)${hasDevice ? ' → Send' : ''} (MANDATORY before${hasDevice ? ' sending' : ' finishing'}).
 
 DECISION LOOP
 1) For each requirement in order:

@@ -58,8 +58,8 @@ async function getAvailableDevices(): Promise<Array<{ name: string; host: string
 /**
  * Confirm playlist file path and validate the playlist
  *
- * Reads the playlist file, validates it against DP-1 spec,
- * and returns confirmation result for user review.
+ * Reads the playlist file, runs parse/structure validation (same as `validate`),
+ * and returns confirmation result for user review. Does not verify signatures.
  *
  * @param {string} filePath - Playlist file path or URL
  * @param {string} [deviceName] - Device name (optional)
@@ -143,19 +143,19 @@ export async function confirmPlaylistForSending(
       };
     }
 
-    // Validate playlist structure
+    // Parse / structure validation only (same as `validate`; use `verify` CLI for signatures)
     console.log(chalk.cyan('Validation'));
 
     // Dynamic import to avoid circular dependency
-    const { verifyPlaylist } = await import('./playlist-verifier');
-    const verifyResult = await verifyPlaylist(playlist);
+    const { validatePlaylist } = await import('./playlist-verifier');
+    const validateResult = await validatePlaylist(playlist);
 
-    if (!verifyResult.valid) {
+    if (!validateResult.valid) {
       console.log(chalk.red('Playlist validation failed'));
       const detailLines =
-        verifyResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n') ||
-        verifyResult.error;
-      const detailPaths = verifyResult.details?.map((d) => d.path) || [];
+        validateResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n') ||
+        validateResult.error;
+      const detailPaths = validateResult.details?.map((d) => d.path) || [];
       const hints: string[] = [];
 
       if (detailPaths.some((path) => path.includes('signature'))) {
@@ -178,7 +178,7 @@ export async function confirmPlaylistForSending(
         playlistValid: false,
         playlist,
         deviceName: actualDeviceName,
-        error: `Playlist is invalid: ${verifyResult.error}`,
+        error: `Playlist is invalid: ${validateResult.error}`,
         message: `This playlist doesn't match DP-1 specification.\n\nErrors:\n${detailLines}${hintText}`,
       };
     }

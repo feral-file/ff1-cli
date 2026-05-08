@@ -46,15 +46,15 @@ export function printPlaylistSourceLoadFailure(source: string, error: Error): vo
 }
 
 /**
- * Print playlist verification failure details consistently across all
- * commands that verify before sending or publishing.
+ * Print playlist validation failure details consistently for commands that
+ * validate structure before sending (for example `play`).
  */
 export function printPlaylistVerificationFailure(
   verifyResult: PlaylistVerificationResult,
   source?: string
 ): void {
   console.error(
-    chalk.red(`\nPlaylist verification failed:${source ? ` (${source})` : ''}`),
+    chalk.red(`\nPlaylist validation failed:${source ? ` (${source})` : ''}`),
     verifyResult.error
   );
 
