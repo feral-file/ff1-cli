@@ -78,17 +78,17 @@ export function parsePlaylistPrivateKeyToKeyObject(material: string): KeyObject 
 }
 
 /**
- * deriveEd25519PublicKeyForVerify exports the public half in SPKI DER base64, which
- * dp1-js accepts for legacy signature verification alongside hex and PEM forms.
+ * deriveEd25519PublicKeyForVerify exports the public half as PEM so legacy
+ * verification can hand Node a decoder-friendly public key string directly.
  *
  * @param privateKeyMaterial - Same encoding rules as `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY`
- * @returns Base64-encoded SPKI DER public key
+ * @returns PEM-encoded SPKI public key
  */
 export function deriveEd25519PublicKeyForVerify(privateKeyMaterial: string): string {
   const privateKey = parsePlaylistPrivateKeyToKeyObject(privateKeyMaterial);
   const publicKey = createPublicKey(privateKey);
   assertEd25519(publicKey);
-  return publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+  return publicKey.export({ format: 'pem', type: 'spki' }).toString();
 }
 
 function assertEd25519(key: KeyObject): void {
