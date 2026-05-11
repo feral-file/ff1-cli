@@ -2,6 +2,8 @@
 
 A small Node.js CLI for building DP-1 playlists from NFT collections.
 
+**Runtime:** Node.js 22 or newer (matches CI and the `dp1-js-test` dependency). That engine floor is a **breaking** change if you previously used Node 18 or 20—check the **GitHub Release** for the version you move to; release authors follow `docs/RELEASING.md` so the notes stay explicit.
+
 FF1-CLI turns a simple prompt into a DP-1–conformant playlist you can preview on an FF1. The model orchestrates; deterministic tools do the real work (schema validation, indexing, JSON‑LD). If something comes back invalid, validation rejects it and we loop until it’s right.
 
 ## Install
@@ -63,7 +65,7 @@ npm run dev -- play "https://example.com/video.mp4" --skip-verify
 
 ## Verification
 
-GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main`/`master`, and reusable `workflow_call` jobs. CI uses Node.js 18, installs dependencies with `npm ci`, sets `GROK_API_KEY=dummy`, and runs the repo-wide verification entrypoint:
+GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main`/`master`, and reusable `workflow_call` jobs. CI uses Node.js 22, installs dependencies with `npm ci`, sets `GROK_API_KEY=dummy`, and runs the repo-wide verification entrypoint:
 
 ```bash
 GROK_API_KEY=dummy npm run verify

@@ -34,6 +34,24 @@ Run the appropriate script on each target platform and upload each pair to the G
 - Set `NPM_TOKEN` in GitHub Actions secrets with an npm automation token.
 - Ensure `package.json` version matches the release tag (e.g. tag `1.0.2` → `"version": "1.0.2"`). The release job fails fast when they differ.
 
+## Release notes and breaking changes
+
+GitHub Release text (and any user-facing summary you publish with the version) should state compatibility changes in plain language. **Do not rely on `package.json` `engines` alone**; npm and installers surface it inconsistently, and operators skim release notes first.
+
+### Node.js engine floor (breaking)
+
+`package.json` declares `"engines": { "node": ">=22" }`. Raising the floor from Node 18 (or 20) is a **breaking change** for:
+
+- global installs and `npx ff1-cli` on older runtimes
+- CI jobs and images pinned to Node 18 or 20
+- anyone developing from source without upgrading Node
+
+**For the release that first ships this requirement**, copy or adapt the following into the GitHub Release description (and repeat in the upgrade section of internal comms if needed):
+
+> **Breaking — Node.js:** ff1-cli now requires **Node.js 22 or newer** (`package.json` `engines`). Node 18 and Node 20 are no longer supported. Upgrade Node on your machines and in CI, or stay on an older ff1-cli version until you can migrate.
+
+Later releases only need to repeat this block if the engine floor changes again.
+
 ## Installer Redirect
 
 `https://feralfile.com/ff1-cli-install` should redirect to:
@@ -47,5 +65,5 @@ The installer script then fetches the release assets from GitHub Releases.
 ## Environment Overrides
 
 - `FF1_CLI_VERSION`: overrides the version label in logs
-- `FF1_CLI_NODE_VERSION`: Node version to bundle (default: 20.12.2)
+- `FF1_CLI_NODE_VERSION`: Reserved in script headers for future use; current CI, npm `engines`, and release wrappers assume **Node.js 22+** (required by `dp1-js-test`).
 - `FF1_CLI_OUTPUT_DIR`: output directory (default: `./release`)

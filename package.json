@@ -34,7 +34,7 @@
     "format:check": "prettier --check \"**/*.{js,ts}\""
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "publishConfig": {
     "access": "public"
