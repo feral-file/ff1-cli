@@ -63,7 +63,7 @@ npm run dev -- play "https://example.com/video.mp4" --skip-verify
 
 ## Verification
 
-GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main`/`master`, and reusable `workflow_call` jobs. CI uses Node.js 22, installs dependencies with `npm ci`, sets `GROK_API_KEY=dummy`, and runs the repo-wide verification entrypoint:
+GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main`/`master`, and reusable `workflow_call` jobs. CI uses Node.js 18, installs dependencies with `npm ci`, sets `GROK_API_KEY=dummy`, and runs the repo-wide verification entrypoint:
 
 ```bash
 GROK_API_KEY=dummy npm run verify
