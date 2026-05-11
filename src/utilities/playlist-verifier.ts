@@ -152,13 +152,13 @@ async function parseDp1Playlist(playlist: unknown): Promise<{
 }
 
 /**
- * Loads the published DP-1 implementation bundled with the CLI (`dp1-js-test`).
+ * Loads the published DP-1 implementation bundled with the CLI (`dp1-js`).
  * Local checkout overrides via environment are intentionally unsupported so
  * resolution stays deterministic across machines and CI.
  */
 async function loadDp1(): Promise<Record<string, unknown>> {
   const require = createRequire(__filename);
-  return require('dp1-js-test');
+  return require('dp1-js');
 }
 
 /**

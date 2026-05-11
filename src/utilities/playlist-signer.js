@@ -1,6 +1,6 @@
 /**
  * Playlist Signing Utility.
- * Uses the DP-1 v1.1.0 signing contract via the `dp1-js-test` package.
+ * Uses the DP-1 v1.1.0 signing contract via the `dp1-js` package.
  */
 
 const { getPlaylistConfig } = require('../config');
@@ -204,9 +204,9 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
   throw new Error('dp1-js does not expose SignMultiEd25519');
 }
 
-/** Loads `dp1-js-test`; env overrides are not supported (see playlist-verifier). */
+/** Loads `dp1-js`; env overrides are not supported (see playlist-verifier). */
 async function loadDp1() {
-  return require('dp1-js-test');
+  return require('dp1-js');
 }
 
 function currentTimestamp() {

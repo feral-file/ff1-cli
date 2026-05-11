@@ -65,5 +65,5 @@ The installer script then fetches the release assets from GitHub Releases.
 ## Environment Overrides
 
 - `FF1_CLI_VERSION`: overrides the version label in logs
-- `FF1_CLI_NODE_VERSION`: Reserved in script headers for future use; current CI, npm `engines`, and release wrappers assume **Node.js 22+** (required by `dp1-js-test`).
+- `FF1_CLI_NODE_VERSION`: Reserved in script headers for future use; current CI, npm `engines`, and release wrappers assume **Node.js 22+** (required by `dp1-js`).
 - `FF1_CLI_OUTPUT_DIR`: output directory (default: `./release`)

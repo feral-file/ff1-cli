@@ -13,7 +13,7 @@ const cliEntry = resolve(projectRoot, 'index.ts');
 const fixturesDir = join(projectRoot, 'tests/fixtures/playlists');
 const examplesDir = join(projectRoot, 'examples');
 const require = createRequire(import.meta.url);
-const { SignLegacyEd25519 } = require('dp1-js-test') as {
+const { SignLegacyEd25519 } = require('dp1-js') as {
   SignLegacyEd25519: (raw: Buffer | string, privateKey: string) => string;
 };
 const { signPlaylist } = require('../src/utilities/playlist-signer.js') as {

@@ -116,9 +116,9 @@ The model orchestrates; deterministic tools keep us honest and DP1‑conformant.
 1. Input: Share the essentials (contract + token IDs, or feed/URL names).
 2. Orchestration: The LLM parses your prompt and calls tools that:
    - Fetch NFT metadata via OSS libs (`viem` for Ethereum, `@taquito/taquito` for Tezos)
-   - Validate DP1 schema with `dp1-js-test`
+   - Validate DP1 schema with `dp1-js`
    - Build a DP1 playlist envelope deterministically
-   - Optionally sign with Ed25519 (canonical JSON via `dp1-js-test`)
+   - Optionally sign with Ed25519 (canonical JSON via `dp1-js`)
 3. Preview/send: Send to an FF1 on your LAN over HTTP (recommended). Point `ff1Devices.devices[].host` at a local relay if needed.
 4. Publish: Optional feed/registry publishing via the `publish` command.
 
@@ -136,7 +136,7 @@ Notes:
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `validate <file-or-url>` – Validate playlist structure only
 - `verify <file-or-url>` – Validate structure and verify signatures. On failure, the CLI labels structure issues separately from signature verification. dp1-js uses `--public-key` (or a key derived from `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` when omitted) **only** for legacy flat `signature` verification; DP-1 v1.1.0 `signatures[]` envelopes are verified without relying on that argument. If deriving or normalizing key material fails, the CLI prints a warning on stderr and continues without it (legacy verification still requires a usable key when the playlist uses a flat `signature`). The derived key is emitted as PEM. Supported key forms: hex with optional `0x`, PEM, or 32-byte raw public key as hex or base64
-- `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope (private key string is forwarded to **`dp1-js-test`**; same hex or base64 PKCS#8 DER forms as `playlist.privateKey` in `./CONFIGURATION.md`)
+- `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope (private key string is forwarded to **`dp1-js`**; same hex or base64 PKCS#8 DER forms as `playlist.privateKey` in `./CONFIGURATION.md`)
   - Options: `-k, --key <privateKey>`, `-r, --role <role>`, `-o, --output <file>`
 - `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device (runs `validate`-style structure checks before sending; use `verify` for signatures)
   - Options: `-d, --device <name>`, `--skip-verify` (skip structure validation; not recommended)
@@ -325,8 +325,8 @@ Setup preserves existing devices when adding new ones. See selection rules and e
 ### Playlist signing (optional)
 
 - Add `playlist.privateKey` (Ed25519 PKCS#8 DER as **hex** or **base64**, per `./CONFIGURATION.md`) and, optionally, `playlist.role` to `config.json`, or set `PLAYLIST_PRIVATE_KEY` and `PLAYLIST_ROLE`.
-- The CLI passes that string to **`dp1-js-test`** for signing; the dependency decodes hex (`0x` optional) or base64 before loading the key.
-- Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via `dp1-js-test`).
+- The CLI passes that string to **`dp1-js`** for signing; the dependency decodes hex (`0x` optional) or base64 before loading the key.
+- Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via **`dp1-js`**).
 
 ## Constraints
 

@@ -91,6 +91,6 @@ This path bypasses the intent parser/orchestrator and calls utilities directly. 
 
 ## Validation & Constraints
 
-- Verify via `dp1-js-test` for DP-1 conformance (canonical JSON + Ed25519 signing supported)
+- Verify via `dp1-js` for DP-1 conformance (canonical JSON + Ed25519 signing supported)
 - Enforce max item counts and ordering/shuffle rules during build
 - Batch domain resolution; report failures without crashing the flow
