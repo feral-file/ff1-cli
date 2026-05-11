@@ -24,7 +24,8 @@ import { createRequire } from 'module';
  * Use {@link validatePlaylist} for structure-only checks (`validate` command).
  *
  * @param playlist - Playlist object
- * @param publicKey - Optional Ed25519 key material forwarded to dp1-js; used only when the playlist uses legacy `signature` verification inside the library
+ * @param publicKey - Optional Ed25519 key material for legacy `signature` verification.
+ * PEM SPKI, 64-character hex (optional `0x`), 32-byte base64, or SPKI DER base64 are normalized to PEM before calling dp1-js.
  * @returns Verification result with `valid` and optional `error` / `details`
  */
 export async function verifyPlaylist(
@@ -64,6 +65,18 @@ export async function verifyPlaylist(
         }
       } catch {
         key = undefined;
+      }
+    }
+
+    if (key) {
+      try {
+        const { normalizeVerifyPublicKeyToPem } = await import('./ed25519-key-derive');
+        key = normalizeVerifyPublicKeyToPem(key);
+      } catch (err) {
+        return {
+          valid: false,
+          error: `Verification failed: ${(err as Error).message}`,
+        };
       }
     }
 

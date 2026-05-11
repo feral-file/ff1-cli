@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, test } from 'node:test';
@@ -22,6 +22,7 @@ type RunResult = { status: number | null; stdout: string; stderr: string };
 const playlistFixtures = {
   validSignedV10: 'valid-signed-v10.json',
   validSignedV11: 'valid-signed-v11.json',
+  validUnsignedV10: 'valid-unsigned-v10.json',
   validUnsignedOpenV11: 'valid-unsigned-open-v11.json',
   invalidMissingTitleV10: 'invalid-missing-title-v10.json',
   invalidDisplayAndSourceV10: 'invalid-display-and-source-v10.json',
@@ -105,6 +106,14 @@ function copyExample(dir: string, exampleName: string, targetName = 'playlist.js
 
 function cleanup(dir: string): void {
   rmSync(dir, { recursive: true, force: true });
+}
+
+/** Raw Ed25519 public key bytes (32) from a Node KeyObject, via JWK export. */
+function rawEd25519PublicKeyBytes(publicKey: KeyObject): Buffer {
+  const jwk = publicKey.export({ format: 'jwk' }) as { crv?: string; x?: string };
+  assert.equal(jwk.crv, 'Ed25519');
+  assert.ok(jwk.x);
+  return Buffer.from(jwk.x, 'base64url');
 }
 
 function expectOk(result: RunResult, context: string): void {
@@ -316,6 +325,61 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     }
   });
 
+  test('verify accepts legacy signed playlist when --public-key is raw hex, 0x hex, or base64', () => {
+    const dir = makeWorkspace();
+    try {
+      const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+      const privateKeyBase64 = privateKey
+        .export({ format: 'der', type: 'pkcs8' })
+        .toString('base64');
+      const publicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString();
+      const rawPub = rawEd25519PublicKeyBytes(publicKey);
+      const keyVariants: Array<{ label: string; value: string }> = [
+        { label: 'hex', value: rawPub.toString('hex') },
+        { label: '0x hex', value: `0x${rawPub.toString('hex')}` },
+        { label: 'base64', value: rawPub.toString('base64') },
+      ];
+      const payload = {
+        dpVersion: '1.0.0',
+        id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+        title: 'Legacy Signed Key Formats',
+        created: '2026-02-06T00:00:00.000Z',
+        items: [
+          {
+            id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+            source: 'https://example.com/nft1.png',
+            duration: 10,
+            license: 'open',
+            created: '2026-02-06T00:00:00.000Z',
+          },
+        ],
+        defaults: {
+          display: {
+            scaling: 'fit',
+            background: '#111111',
+            margin: 0,
+          },
+          license: 'token',
+          duration: 10,
+        },
+        slug: 'legacy-key-formats',
+      };
+
+      for (let i = 0; i < keyVariants.length; i++) {
+        const signed = makeLegacySignedPlaylist(privateKeyBase64, publicKeyPem, payload);
+        const playlistPath = join(dir, `legacy-keyfmt-${i}.json`);
+        writeFileSync(playlistPath, JSON.stringify(signed.playlist, null, 2), 'utf-8');
+
+        const result = runCli(dir, ['verify', playlistPath, '--public-key', keyVariants[i].value]);
+
+        expectOk(result, `verify legacy with ${keyVariants[i].label} public key`);
+        assert.match(result.stdout, /Playlist is valid/i);
+      }
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test('verify derives the legacy public key from playlist.privateKey when --public-key is omitted', () => {
     const dir = makeWorkspace();
     try {
@@ -418,6 +482,33 @@ describe('ff1 verify/validate/sign CLI integration', () => {
 
       const verifySigned = runCli(dir, ['verify', output]);
       expectOk(verifySigned, 'verify signed output');
+      assert.match(verifySigned.stdout, /Playlist is valid/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('sign produces verifiable v1.1.0 signatures[] from an unsigned dpVersion 1.0.0 fixture', () => {
+    const dir = makeWorkspace();
+    try {
+      writeSigningConfig(dir);
+      const input = copyFixture(dir, 'validUnsignedV10', 'unsigned-v10.json');
+      const output = join(dir, 'signed-from-v10.json');
+
+      const sign = runCli(dir, ['sign', input, '-o', output]);
+      expectOk(sign, 'sign dpVersion 1.0.0 playlist');
+
+      const signed = JSON.parse(readFileSync(output, 'utf-8')) as {
+        dpVersion?: string;
+        signatures?: unknown[];
+        signature?: unknown;
+      };
+      assert.ok(Array.isArray(signed.signatures), 'sign must write signatures[]');
+      assert.equal(signed.signature, undefined, 'sign must not emit legacy signature field');
+      assert.ok((signed.signatures ?? []).length > 0, 'signatures[] must not be empty');
+
+      const verifySigned = runCli(dir, ['verify', output]);
+      expectOk(verifySigned, 'verify playlist signed from v1.0.0 unsigned fixture');
       assert.match(verifySigned.stdout, /Playlist is valid/i);
     } finally {
       cleanup(dir);

@@ -3,6 +3,7 @@ import { createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes } f
 import { describe, test } from 'node:test';
 import {
   deriveEd25519PublicKeyForVerify,
+  normalizeVerifyPublicKeyToPem,
   parsePlaylistPrivateKeyToKeyObject,
 } from '../src/utilities/ed25519-key-derive';
 
@@ -27,6 +28,29 @@ describe('ed25519-key-derive', () => {
 
   test('parsePlaylistPrivateKeyToKeyObject rejects empty string', () => {
     assert.throws(() => parsePlaylistPrivateKeyToKeyObject(''), /empty/i);
+  });
+
+  test('normalizeVerifyPublicKeyToPem accepts PEM, hex, 0x hex, raw base64, and SPKI base64', () => {
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const expectedPem = createPublicKey(privateKey)
+      .export({ format: 'pem', type: 'spki' })
+      .toString();
+    const jwk = createPublicKey(privateKey).export({ format: 'jwk' }) as { x?: string };
+    assert.ok(jwk.x);
+    const raw32 = Buffer.from(jwk.x, 'base64url');
+    assert.equal(raw32.length, 32);
+
+    assert.equal(normalizeVerifyPublicKeyToPem(expectedPem), expectedPem);
+    assert.equal(normalizeVerifyPublicKeyToPem(raw32.toString('hex')), expectedPem);
+    assert.equal(normalizeVerifyPublicKeyToPem(`0x${raw32.toString('hex')}`), expectedPem);
+    assert.equal(normalizeVerifyPublicKeyToPem(raw32.toString('base64')), expectedPem);
+
+    const derSpki = createPublicKey(privateKey).export({ format: 'der', type: 'spki' }) as Buffer;
+    assert.equal(normalizeVerifyPublicKeyToPem(derSpki.toString('base64')), expectedPem);
+  });
+
+  test('normalizeVerifyPublicKeyToPem rejects invalid lengths', () => {
+    assert.throws(() => normalizeVerifyPublicKeyToPem('abcd'), /Unrecognized/i);
   });
 
   test('parsePlaylistPrivateKeyToKeyObject accepts PKCS#8 from setup-style base64', () => {
