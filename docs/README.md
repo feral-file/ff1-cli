@@ -63,7 +63,7 @@ ff1 config validate
   },
   "defaultDuration": 10,
   "playlist": {
-    "privateKey": "your_ed25519_private_key_base64_here"
+    "privateKey": "your_ed25519_private_key_hex_or_base64_here"
   },
   "feed": { "baseURLs": ["https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1"] },
   "ff1Devices": {
@@ -134,8 +134,8 @@ Notes:
   - Options: `-o, --output <file>`, `-v, --verbose`
 - `validate <file-or-url>` – Validate playlist structure only
 - `verify <file-or-url>` – Validate structure and verify signatures. On failure, the CLI labels structure issues separately from signature verification. dp1-js uses `--public-key` (or a key derived from `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` when omitted) **only** for legacy flat `signature` verification; DP-1 v1.1.0 `signatures[]` envelopes are verified without relying on that argument. The derived key is emitted as PEM. Supported key forms: hex with optional `0x`, PEM, or 32-byte raw public key as hex or base64
-- `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope
-  - Options: `-k, --key <base64>`, `-r, --role <role>`, `-o, --output <file>`
+- `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope (private key string is forwarded to **`dp1-js-test`**; same hex or base64 PKCS#8 DER forms as `playlist.privateKey` in `./CONFIGURATION.md`)
+  - Options: `-k, --key <privateKey>`, `-r, --role <role>`, `-o, --output <file>`
 - `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device (runs `validate`-style structure checks before sending; use `verify` for signatures)
   - Options: `-d, --device <name>`, `--skip-verify` (skip structure validation; not recommended)
 - `publish <file>` – Publish a playlist to a feed server (`validate`-style structure checks before upload; use `verify` for signatures)
@@ -322,7 +322,8 @@ Setup preserves existing devices when adding new ones. See selection rules and e
 
 ### Playlist signing (optional)
 
-- Add `playlist.privateKey` (base64 Ed25519) and, optionally, `playlist.role` to `config.json` or set `PLAYLIST_PRIVATE_KEY` and `PLAYLIST_ROLE`.
+- Add `playlist.privateKey` (Ed25519 PKCS#8 DER as **hex** or **base64**, per `./CONFIGURATION.md`) and, optionally, `playlist.role` to `config.json`, or set `PLAYLIST_PRIVATE_KEY` and `PLAYLIST_ROLE`.
+- The CLI passes that string to **`dp1-js-test`** for signing; the dependency decodes hex (`0x` optional) or base64 before loading the key.
 - Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via `dp1-js-test`).
 
 ## Constraints
