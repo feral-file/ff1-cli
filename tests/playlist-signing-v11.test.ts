@@ -94,6 +94,24 @@ describe('DP-1 v1.1.0 signing', () => {
     assert.equal(signature.role, 'feed');
   });
 
+  test('signPlaylist accepts PKCS#8 private key as hex and 0x-prefixed hex', async () => {
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const der = privateKey.export({ format: 'der', type: 'pkcs8' }) as Buffer;
+    const hex = der.toString('hex');
+
+    const playlist = {
+      dpVersion: '1.1.0',
+      title: 'Hex key',
+      items: [{ source: 'https://example.com/art.mp4', duration: 10, license: 'token' }],
+    };
+
+    for (const material of [hex, `0x${hex}`]) {
+      const signature = await signPlaylist(playlist, material);
+      assert.equal(signature.alg, 'ed25519');
+      assert.ok(signature.sig?.length > 10);
+    }
+  });
+
   test('verifyPlaylist accepts v1.1.0 multi-sig envelopes without a public key', async () => {
     const playlist = {
       dpVersion: '1.1.0',

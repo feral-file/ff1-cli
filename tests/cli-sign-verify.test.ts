@@ -16,6 +16,13 @@ const require = createRequire(import.meta.url);
 const { SignLegacyEd25519 } = require('dp1-js-test') as {
   SignLegacyEd25519: (raw: Buffer | string, privateKey: string) => string;
 };
+const { signPlaylist } = require('../src/utilities/playlist-signer.js') as {
+  signPlaylist: (
+    playlist: Record<string, unknown>,
+    privateKey?: string,
+    roleOverride?: string
+  ) => Promise<Record<string, unknown>>;
+};
 
 type RunResult = { status: number | null; stdout: string; stderr: string };
 
@@ -106,6 +113,35 @@ function copyExample(dir: string, exampleName: string, targetName = 'playlist.js
 
 function cleanup(dir: string): void {
   rmSync(dir, { recursive: true, force: true });
+}
+
+/** Parsed shape acceptable to `signPlaylist` / DP-1 v1.1.0 envelope before attaching `signatures[]`. */
+function v11UnsignedPlaylistEnvelope(): Record<string, unknown> {
+  return {
+    dpVersion: '1.1.0',
+    id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+    slug: 'cli-verify-v11',
+    created: '2026-02-06T00:00:00.000Z',
+    title: 'CLI verify v1.1 multisig',
+    items: [
+      {
+        id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+        source: 'https://example.com/nft.png',
+        duration: 10,
+        license: 'open',
+        created: '2026-02-06T00:00:00.000Z',
+      },
+    ],
+    defaults: {
+      display: {
+        scaling: 'fit',
+        background: '#111111',
+        margin: 0,
+      },
+      license: 'token',
+      duration: 10,
+    },
+  };
 }
 
 /** Raw Ed25519 public key bytes (32) from a Node KeyObject, via JWK export. */
@@ -515,6 +551,50 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     }
   });
 
+  test('verify CLI accepts valid v1.1 signatures[] without --public-key', async () => {
+    const dir = makeWorkspace();
+    try {
+      const { privateKey } = generateKeyPairSync('ed25519');
+      const pkB64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+
+      const base = v11UnsignedPlaylistEnvelope();
+      const sig = await signPlaylist(base, pkB64);
+      const signed = { ...base, signatures: [sig] };
+
+      const pathFile = join(dir, 'cli-v11-multisig.json');
+      writeFileSync(pathFile, JSON.stringify(signed, null, 2), 'utf-8');
+
+      const result = runCli(dir, ['verify', pathFile]);
+      expectOk(result, 'verify v1.1 multisig omit public key');
+      assert.match(result.stdout, /Playlist is valid/i);
+      assert.match(result.stdout, /Signatures: 1/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('verify CLI accepts valid v1.1 signatures[] with malformed --public-key (stderr warns)', async () => {
+    const dir = makeWorkspace();
+    try {
+      const { privateKey } = generateKeyPairSync('ed25519');
+      const pkB64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+
+      const base = v11UnsignedPlaylistEnvelope();
+      const sig = await signPlaylist(base, pkB64);
+      const signed = { ...base, signatures: [sig] };
+
+      const pathFile = join(dir, 'cli-v11-multisig-bad-arg.json');
+      writeFileSync(pathFile, JSON.stringify(signed, null, 2), 'utf-8');
+
+      const result = runCli(dir, ['verify', pathFile, '--public-key', 'not-a-valid-pem']);
+      expectOk(result, 'verify v1.1 multisig with bad --public-key');
+      assert.match(result.stdout, /Playlist is valid/i);
+      assert.match(result.stderr, /Could not normalize public key for dp1-js/i);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   const signFailureCases = [
     {
       name: 'missing file',
@@ -555,11 +635,9 @@ describe('ff1 verify/validate/sign CLI integration', () => {
           rmSync(join(dir, 'config.json'), { force: true });
         }
 
-        const sign = runCli(
-          dir,
-          ['sign', inputPath, '-o', join(dir, 'signed.json')],
-          testCase.env ?? {}
-        );
+        const sign = runCli(dir, ['sign', inputPath, '-o', join(dir, 'signed.json')], {
+          ...('env' in testCase ? testCase.env : {}),
+        });
         expectFail(sign, testCase.expect, `sign ${testCase.name}`);
       } finally {
         cleanup(dir);
