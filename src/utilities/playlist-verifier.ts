@@ -25,7 +25,7 @@ import { createRequire } from 'module';
  *
  * @param playlist - Playlist object
  * @param publicKey - Optional Ed25519 key material for legacy `signature` verification.
- * PEM SPKI, 64-character hex (optional `0x`), 32-byte base64, or SPKI DER base64 are normalized to PEM before calling dp1-js.
+ * PEM SPKI, 64-character hex (optional `0x`), 32-byte base64, or SPKI DER base64 are normalized to PEM before calling dp1-js. If derivation from config fails or PEM normalization fails, the CLI logs a short warning, drops the optional key material, and still calls dp1-js (so DP-1 v1.1.0 `signatures[]` verification can succeed without relying on legacy key arguments).
  * @returns Verification result with `valid` and optional `error` / `details`
  */
 export async function verifyPlaylist(
@@ -63,7 +63,12 @@ export async function verifyPlaylist(
           const { deriveEd25519PublicKeyForVerify } = await import('./ed25519-key-derive');
           key = deriveEd25519PublicKeyForVerify(privateKeyMaterial);
         }
-      } catch {
+      } catch (err) {
+        console.warn(
+          chalk.yellow(
+            `Could not derive a verify public key from playlist config (${(err as Error).message}); continuing verification without it.`
+          )
+        );
         key = undefined;
       }
     }
@@ -73,10 +78,12 @@ export async function verifyPlaylist(
         const { normalizeVerifyPublicKeyToPem } = await import('./ed25519-key-derive');
         key = normalizeVerifyPublicKeyToPem(key);
       } catch (err) {
-        return {
-          valid: false,
-          error: `Verification failed: ${(err as Error).message}`,
-        };
+        console.warn(
+          chalk.yellow(
+            `Could not normalize public key for dp1-js (${(err as Error).message}); continuing verification without it.`
+          )
+        );
+        key = undefined;
       }
     }
 

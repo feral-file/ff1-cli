@@ -125,6 +125,50 @@ describe('DP-1 v1.1.0 signing', () => {
     });
   });
 
+  test('verifyPlaylist accepts v1.1.0 multi-sig when optional public key material fails PEM normalization', async () => {
+    const playlist = {
+      dpVersion: '1.1.0',
+      id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+      slug: 'test-playlist',
+      created: '2026-02-06T00:00:00.000Z',
+      title: 'Multi',
+      items: [
+        {
+          id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+          source: 'https://example.com/art.mp4',
+          duration: 10,
+          license: 'token',
+          created: '2026-02-06T00:00:00.000Z',
+        },
+      ],
+    };
+
+    await withNoPlaylistSigningEnv(async () => {
+      const signature = await signPlaylist(playlist, makePrivateKey());
+      const multiSigPlaylist = {
+        ...playlist,
+        signatures: [signature],
+      };
+
+      const warnings: string[] = [];
+      const origWarn = console.warn;
+      console.warn = (...args: unknown[]) => {
+        warnings.push(args.map(String).join(' '));
+      };
+      try {
+        const multiResult = await verifyPlaylist(multiSigPlaylist, 'abcd');
+        assert.equal(multiResult.valid, true);
+        assert.match(
+          warnings.join('\n'),
+          /Could not normalize public key for dp1-js/,
+          'expected diagnostic when optional key PEM normalization fails'
+        );
+      } finally {
+        console.warn = origWarn;
+      }
+    });
+  });
+
   test('verifyPlaylist does not accept legacy signature-only playlists without a public key', async () => {
     const legacyPlaylist = {
       dpVersion: '1.1.0',
