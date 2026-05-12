@@ -7,19 +7,10 @@ import { upsertDevice } from '../utilities/device-upsert';
 import { ensureConfigFile, isMissingConfigValue, readConfigFile } from './helpers/config-files';
 import { discoverAndSelectDevice } from './helpers/device-discovery';
 import { createPrompt, promptYesNo } from './helpers/prompt';
-
-/**
- * DP-1 signing roles offered during guided setup (aligned with dp1-js Role* string constants).
- */
-const DP1_PLAYLIST_SIGNING_ROLES = ['agent', 'feed', 'curator', 'institution', 'licensor'] as const;
-
-function isDp1PlaylistSigningRole(role: string): boolean {
-  return (DP1_PLAYLIST_SIGNING_ROLES as readonly string[]).includes(role);
-}
-
-function formatUnsupportedPlaylistSigningRoleError(role: string): string {
-  return `Unsupported DP-1 playlist signing role "${role}". Expected one of: ${DP1_PLAYLIST_SIGNING_ROLES.join(', ')}`;
-}
+import {
+  DP1_PLAYLIST_SIGNING_ROLES,
+  resolveDp1PlaylistSigningRole,
+} from '../utilities/playlist-signing-role';
 
 export const setupCommand = new Command('setup')
   .description('Guided setup for config, signing key, and device')
@@ -128,25 +119,17 @@ export const setupCommand = new Command('setup')
         const roleHint = DP1_PLAYLIST_SIGNING_ROLES.join(', ');
         while (true) {
           const roleAnswer = await ask(`Signing role (${roleHint}) [${currentRole || 'agent'}]: `);
-          if (!roleAnswer.trim()) {
-            const fallback = signingRole.trim() || 'agent';
-            if (!isDp1PlaylistSigningRole(fallback)) {
-              console.log(chalk.red(formatUnsupportedPlaylistSigningRoleError(fallback)));
+          try {
+            signingRole = resolveDp1PlaylistSigningRole(roleAnswer, signingRole || 'agent');
+            break;
+          } catch (error) {
+            console.log(chalk.red((error as Error).message));
+            if (!roleAnswer.trim()) {
               console.log(
                 chalk.dim('Enter one of the supported roles above, or fix the stored value.')
               );
-              continue;
             }
-            signingRole = fallback;
-            break;
           }
-          const trimmed = roleAnswer.trim();
-          if (!isDp1PlaylistSigningRole(trimmed)) {
-            console.log(chalk.red(formatUnsupportedPlaylistSigningRoleError(trimmed)));
-            continue;
-          }
-          signingRole = trimmed;
-          break;
         }
 
         config.playlist = {

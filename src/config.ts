@@ -10,6 +10,10 @@ import type {
   FF1DeviceConfig,
   ValidationResult,
 } from './types';
+import {
+  DP1_PLAYLIST_SIGNING_ROLES,
+  isDp1PlaylistSigningRole,
+} from './utilities/playlist-signing-role';
 
 export function getConfigPaths(): { localPath: string; userPath: string } {
   const localPath = path.join(process.cwd(), 'config.json');
@@ -359,8 +363,12 @@ export function validateConfig(modelName?: string): ValidationResult {
       }
     }
 
-    if (config.playlist?.role !== undefined && typeof config.playlist.role !== 'string') {
-      errors.push('playlist.role must be a string');
+    if (config.playlist?.role !== undefined) {
+      if (typeof config.playlist.role !== 'string') {
+        errors.push('playlist.role must be a string');
+      } else if (!isDp1PlaylistSigningRole(config.playlist.role)) {
+        errors.push(`playlist.role must be one of: ${DP1_PLAYLIST_SIGNING_ROLES.join(', ')}`);
+      }
     }
 
     return {

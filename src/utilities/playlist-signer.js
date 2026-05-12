@@ -4,29 +4,7 @@
  */
 
 const { getPlaylistConfig } = require('../config');
-
-/**
- * Convert base64-encoded key to Uint8Array (or hex string if needed)
- *
- * @param {string} base64Key - Ed25519 private key in base64 format
- * @returns {Uint8Array} Private key as Uint8Array
- */
-function base64ToUint8Array(base64Key) {
-  const buffer = Buffer.from(base64Key, 'base64');
-  return new Uint8Array(buffer);
-}
-
-/**
- * Convert hex string to Uint8Array
- *
- * @param {string} hexKey - Ed25519 public key in hex format
- * @returns {Uint8Array} Public key as Uint8Array
- */
-function hexToUint8Array(hexKey) {
-  const cleanHex = hexKey.replace(/^0x/, '');
-  const buffer = Buffer.from(cleanHex, 'hex');
-  return new Uint8Array(buffer);
-}
+const { resolveDp1PlaylistSigningRole } = require('./playlist-signing-role');
 
 /**
  * Sign a playlist using the DP-1 signing API.
@@ -51,9 +29,6 @@ async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
     throw new Error('Private key is required for signing');
   }
 
-  const config = getPlaylistConfig();
-  const role = roleOverride || config.role || 'agent';
-
   try {
     const playlistToSign = { ...playlist };
     delete playlistToSign.signature;
@@ -61,6 +36,8 @@ async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
 
     const dp1 = await loadDp1();
     const raw = Buffer.from(JSON.stringify(playlistToSign));
+    const config = getPlaylistConfig();
+    const role = resolveDp1PlaylistSigningRole(roleOverride || config.role || 'agent');
 
     if (typeof dp1.SignMultiEd25519 === 'function') {
       return dp1.SignMultiEd25519(raw, privateKey, role, currentTimestamp());
@@ -125,7 +102,7 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath, role
     const playlist = JSON.parse(playlistContent);
     const config = getPlaylistConfig();
     const privateKey = privateKeyBase64 || config.privateKey;
-    const role = roleOverride || config.role || 'agent';
+    const role = resolveDp1PlaylistSigningRole(roleOverride || config.role || 'agent');
 
     const validation = await validatePlaylistForSigning(playlist);
     if (!validation.valid) {
@@ -160,8 +137,6 @@ module.exports = {
   signPlaylist,
   verifyPlaylist,
   signPlaylistFile,
-  base64ToUint8Array,
-  hexToUint8Array,
 };
 
 async function validatePlaylistForSigning(playlist) {

@@ -524,6 +524,50 @@ describe('ff1 verify/validate/sign CLI integration', () => {
     }
   });
 
+  test('sign CLI honors a --role override when writing signatures[]', () => {
+    const dir = makeWorkspace();
+    try {
+      writeSigningConfig(dir);
+      const input = copyFixture(dir, 'validUnsignedOpenV11', 'input-role.json');
+      const output = join(dir, 'signed-role.json');
+
+      const sign = runCli(dir, ['sign', input, '-o', output, '-r', 'feed']);
+      expectOk(sign, 'sign with explicit role override');
+
+      const signed = JSON.parse(readFileSync(output, 'utf-8')) as {
+        signatures?: Array<{ role?: string }>;
+      };
+      assert.ok(Array.isArray(signed.signatures), 'sign must write signatures[]');
+      assert.equal(signed.signatures?.at(-1)?.role, 'feed');
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('sign CLI rejects an unsupported --role override', () => {
+    const dir = makeWorkspace();
+    try {
+      writeSigningConfig(dir);
+      const input = copyFixture(dir, 'validUnsignedOpenV11', 'input-invalid-role.json');
+
+      const sign = runCli(dir, [
+        'sign',
+        input,
+        '-o',
+        join(dir, 'signed-invalid-role.json'),
+        '-r',
+        'owner',
+      ]);
+      expectFail(
+        sign,
+        /Unsupported DP-1 playlist signing role "owner"/,
+        'sign invalid role override'
+      );
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test('sign produces verifiable v1.1.0 signatures[] from an unsigned dpVersion 1.0.0 fixture', () => {
     const dir = makeWorkspace();
     try {
