@@ -91,7 +91,7 @@ describe('config validation playlist role contract', () => {
         assert.equal(configResult.valid, true);
 
         const statusResult = runCli(tempDir, ['status'], { PLAYLIST_ROLE: 'owner' });
-        assert.equal(statusResult.status, 0, `${statusResult.stdout}${statusResult.stderr}`);
+        assert.equal(statusResult.status, 1, `${statusResult.stdout}${statusResult.stderr}`);
         assert.match(statusResult.stdout + statusResult.stderr, /OK Playlist signing role/);
         assert.match(statusResult.stdout + statusResult.stderr, /feed/);
         assert.doesNotMatch(

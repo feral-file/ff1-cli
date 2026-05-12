@@ -112,8 +112,7 @@ export const statusCommand = new Command('status')
 
       const hasRequired = statuses.some(
         (status) =>
-          !status.ok &&
-          (!status.optional || Boolean((status as { invalid?: boolean }).invalid))
+          !status.ok && (!status.optional || Boolean((status as { invalid?: boolean }).invalid))
       );
       if (hasRequired) {
         console.log(chalk.dim('\nRun: ff1 setup'));

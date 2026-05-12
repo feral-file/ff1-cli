@@ -45,7 +45,7 @@ describe('publishPlaylist validation contract', () => {
 
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const address = server.address();
-    if (address == null || typeof address === 'string') {
+    if (address === null || typeof address === 'string') {
       server.close();
       rmSync(dir, { recursive: true, force: true });
       throw new Error('Failed to start test server');

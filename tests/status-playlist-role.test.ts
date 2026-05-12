@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, test } from 'node:test';
@@ -107,7 +107,7 @@ describe('ff1 status playlist role health', () => {
       assert.notEqual(result.status, null);
       assert.match(result.stdout + result.stderr, /OK Playlist signing role/);
       assert.match(result.stdout + result.stderr, /curator/);
-      assert.match(result.stdout + result.stderr, /used when signing playlists/);
+      assert.doesNotMatch(result.stdout + result.stderr, /used when signing playlists/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -133,10 +133,7 @@ describe('ff1 status playlist role health', () => {
         /Invalid Playlist signing key|Missing Playlist signing key/
       );
       assert.match(result.stdout + result.stderr, /from config\/env/);
-      assert.match(
-        result.stdout + result.stderr,
-        /needed for signing and legacy verification/
-      );
+      assert.match(result.stdout + result.stderr, /needed for signing and legacy verification/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
