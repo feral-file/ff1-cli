@@ -29,7 +29,7 @@ function runCli(
 }
 
 describe('ff1 status playlist role health', () => {
-  test('marks an unsupported playlist signing role as not healthy', () => {
+  test('marks an unsupported playlist signing role as invalid', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ff1-status-role-'));
     try {
       copyFileSync(fixtureConfig, join(dir, 'config.json'));
@@ -43,8 +43,29 @@ describe('ff1 status playlist role health', () => {
 
       assert.notEqual(result.status, null);
       assert.match(result.stdout + result.stderr, /Playlist signing role/);
-      assert.match(result.stdout + result.stderr, /Not set/);
-      assert.doesNotMatch(result.stdout + result.stderr, /OK Playlist signing role/);
+      assert.match(result.stdout + result.stderr, /Invalid Playlist signing role/);
+      assert.match(result.stdout + result.stderr, /owner/);
+      assert.doesNotMatch(result.stdout + result.stderr, /Not set Playlist signing role/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('marks an unsupported playlist signing role from config.json as invalid', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ff1-status-role-file-invalid-'));
+    try {
+      copyFileSync(fixtureConfig, join(dir, 'config.json'));
+      const original = JSON.parse(readFileSync(join(dir, 'config.json'), 'utf-8')) as {
+        playlist?: { role?: string };
+      };
+      original.playlist = { ...(original.playlist || {}), role: 'owner' };
+      writeFileSync(join(dir, 'config.json'), JSON.stringify(original, null, 2), 'utf-8');
+
+      const result = runCli(dir, ['status']);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stdout + result.stderr, /Invalid Playlist signing role/);
+      assert.match(result.stdout + result.stderr, /owner/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

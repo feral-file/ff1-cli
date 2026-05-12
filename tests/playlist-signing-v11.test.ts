@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { signPlaylist, signPlaylistFile } from '../src/utilities/playlist-signer';
-import { verifyPlaylist } from '../src/utilities/playlist-verifier';
+import { verifyPlaylist, verifyPlaylistFile } from '../src/utilities/playlist-verifier';
 
 /**
  * Runs verification with an isolated config directory so PLAYLIST_PRIVATE_KEY and
@@ -211,6 +211,39 @@ describe('DP-1 v1.1.0 signing', () => {
       const legacyResult = await verifyPlaylist(legacyPlaylist);
 
       assert.equal(legacyResult.valid, false);
+    });
+  });
+
+  test('verifyPlaylistFile rejects legacy signature-only playlists without a public key', async () => {
+    await withNoPlaylistSigningEnv(async () => {
+      const tempDir = mkdtempSync(`${tmpdir()}/ff1-legacy-verify-`);
+      try {
+        const legacyPlaylist = {
+          dpVersion: '1.1.0',
+          id: 'd2d4f9b0-7f01-4c26-9c10-1c4d7477f5de',
+          slug: 'test-playlist',
+          created: '2026-02-06T00:00:00.000Z',
+          title: 'Legacy',
+          items: [
+            {
+              id: 'ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b',
+              source: 'https://example.com/art.mp4',
+              duration: 10,
+              license: 'token',
+              created: '2026-02-06T00:00:00.000Z',
+            },
+          ],
+          signature: 'ed25519:' + 'a'.repeat(128),
+        };
+        const path = join(tempDir, 'legacy.json');
+        writeFileSync(path, JSON.stringify(legacyPlaylist, null, 2), 'utf-8');
+
+        const result = await verifyPlaylistFile(path);
+        assert.equal(result.valid, false);
+        assert.match(result.error ?? '', /signature verification failed/i);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 
