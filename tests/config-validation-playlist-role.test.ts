@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { describe, test } from 'node:test';
 
 import { validateConfig } from '../src/config';
@@ -79,7 +79,9 @@ describe('config validation playlist role contract', () => {
       const tempDir = process.cwd();
       const originalRole = process.env.PLAYLIST_ROLE;
       const { privateKey } = generateKeyPairSync('ed25519');
-      const privateKeyBase64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+      const privateKeyBase64 = privateKey
+        .export({ format: 'der', type: 'pkcs8' })
+        .toString('base64');
 
       try {
         writeValidBaseConfig(tempDir, { privateKey: privateKeyBase64, role: 'feed' });
@@ -92,9 +94,14 @@ describe('config validation playlist role contract', () => {
         assert.equal(statusResult.status, 0, `${statusResult.stdout}${statusResult.stderr}`);
         assert.match(statusResult.stdout + statusResult.stderr, /OK Playlist signing role/);
         assert.match(statusResult.stdout + statusResult.stderr, /feed/);
-        assert.doesNotMatch(statusResult.stdout + statusResult.stderr, /Invalid Playlist signing role/);
+        assert.doesNotMatch(
+          statusResult.stdout + statusResult.stderr,
+          /Invalid Playlist signing role/
+        );
 
-        const configValidateResult = runCli(tempDir, ['config', 'validate'], { PLAYLIST_ROLE: 'owner' });
+        const configValidateResult = runCli(tempDir, ['config', 'validate'], {
+          PLAYLIST_ROLE: 'owner',
+        });
         assert.equal(
           configValidateResult.status,
           0,
@@ -123,9 +130,13 @@ describe('config validation playlist role contract', () => {
           'utf-8'
         );
 
-        const signResult = runCli(tempDir, ['sign', playlistPath, '-o', join(tempDir, 'signed.json')], {
-          PLAYLIST_ROLE: 'owner',
-        });
+        const signResult = runCli(
+          tempDir,
+          ['sign', playlistPath, '-o', join(tempDir, 'signed.json')],
+          {
+            PLAYLIST_ROLE: 'owner',
+          }
+        );
         assert.equal(signResult.status, 0, `${signResult.stdout}${signResult.stderr}`);
 
         const signed = JSON.parse(readFileSync(join(tempDir, 'signed.json'), 'utf-8')) as {

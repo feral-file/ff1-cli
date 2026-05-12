@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { generateKeyPairSync } from 'node:crypto';
+import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,7 +54,9 @@ describe('publishPlaylist validation contract', () => {
     try {
       const port = address.port;
       const { privateKey } = generateKeyPairSync('ed25519');
-      const privateKeyBase64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+      const privateKeyBase64 = privateKey
+        .export({ format: 'der', type: 'pkcs8' })
+        .toString('base64');
       const basePlaylist = {
         dpVersion: '1.1.0',
         title: 'publish-me',
