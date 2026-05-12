@@ -181,10 +181,26 @@ async function validatePlaylistForSigning(playlist) {
   return { valid: true };
 }
 
+/**
+ * Produce a DP-1 v1.1.0 playlist object with a new multi-signature appended.
+ * The digest uses JSON with top-level `signature` and `signatures` removed (same
+ * as dp1-js/dp1-go §7.1); prior `signatures[]` entries are kept on the returned
+ * object so repeated `sign` runs accumulate endorsements instead of replacing them.
+ *
+ * @param {Object} playlist - Parsed playlist (may already include `signatures[]`)
+ * @param {string} privateKey - Private key material forwarded to dp1-js
+ * @param {Object} dp1 - Loaded dp1-js module
+ * @param {string} role - DP-1 signing role
+ * @returns {Promise<Object>} Playlist with legacy `signature` cleared and merged `signatures[]`
+ */
 async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
   const playlistToSign = { ...playlist };
   delete playlistToSign.signature;
   delete playlistToSign.signatures;
+
+  const existingSignatures = Array.isArray(playlist.signatures)
+    ? playlist.signatures.filter((entry) => Boolean(entry))
+    : [];
 
   if (typeof dp1.SignMultiEd25519 === 'function') {
     const signature = await dp1.SignMultiEd25519(
@@ -197,7 +213,7 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
     return {
       ...playlist,
       signature: undefined,
-      signatures: [signature],
+      signatures: [...existingSignatures, signature],
     };
   }
 

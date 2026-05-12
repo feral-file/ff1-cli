@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, test } from 'node:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { signPlaylist } from '../src/utilities/playlist-signer';
+import { signPlaylist, signPlaylistFile } from '../src/utilities/playlist-signer';
 import { verifyPlaylist } from '../src/utilities/playlist-verifier';
 
 /**
@@ -236,6 +237,75 @@ describe('DP-1 v1.1.0 signing', () => {
 
       assert.equal(unsignedResult.valid, false);
     });
+  });
+
+  test('signPlaylistFile preserves existing signatures[] when endorsing again', async () => {
+    const cwd = process.cwd();
+    const tempDir = mkdtempSync(`${tmpdir()}/ff1-sign-preserve-sigs-`);
+    const prevXdg = process.env.XDG_CONFIG_HOME;
+    const prevPk = process.env.PLAYLIST_PRIVATE_KEY;
+    const prevLog = console.log;
+    try {
+      process.chdir(tempDir);
+      process.env.XDG_CONFIG_HOME = tempDir;
+      delete process.env.PLAYLIST_PRIVATE_KEY;
+      console.log = () => {};
+
+      const pairA = generateKeyPairSync('ed25519');
+      const pairB = generateKeyPairSync('ed25519');
+      const keyAB64 = pairA.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+      const keyBB64 = pairB.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+
+      const playlist = {
+        dpVersion: '1.1.0',
+        title: 'Multi-sign regression',
+        items: [{ source: 'https://example.com/art.mp4', duration: 10, license: 'token' }],
+      };
+
+      const sigA = await signPlaylist(playlist, keyAB64);
+      const endorsedOnce = { ...playlist, signatures: [sigA] };
+
+      writeFileSync(
+        join(tempDir, 'config.json'),
+        JSON.stringify({ playlist: { privateKey: keyBB64, role: 'agent' } }, null, 2),
+        'utf-8'
+      );
+
+      const inputPath = join(tempDir, 'endorsed-once.json');
+      const outputPath = join(tempDir, 'endorsed-twice.json');
+      writeFileSync(inputPath, JSON.stringify(endorsedOnce, null, 2), 'utf-8');
+
+      const result = await signPlaylistFile(inputPath, undefined, outputPath);
+      assert.equal(result.success, true, result.error ?? '');
+
+      const out = JSON.parse(readFileSync(outputPath, 'utf-8')) as {
+        signatures?: Array<{ kid?: string; sig?: string }>;
+      };
+      assert.equal(out.signatures?.length, 2);
+      assert.ok(
+        out.signatures?.some((s) => s.kid === sigA.kid && s.sig === sigA.sig),
+        'prior endorsement entries must survive'
+      );
+
+      await withNoPlaylistSigningEnv(async () => {
+        const vr = await verifyPlaylist(out);
+        assert.equal(vr.valid, true);
+      });
+    } finally {
+      console.log = prevLog;
+      process.chdir(cwd);
+      if (prevXdg === undefined) {
+        delete process.env.XDG_CONFIG_HOME;
+      } else {
+        process.env.XDG_CONFIG_HOME = prevXdg;
+      }
+      if (prevPk === undefined) {
+        delete process.env.PLAYLIST_PRIVATE_KEY;
+      } else {
+        process.env.PLAYLIST_PRIVATE_KEY = prevPk;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 
