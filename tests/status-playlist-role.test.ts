@@ -43,10 +43,7 @@ describe('ff1 status playlist role health', () => {
 
       assert.notEqual(result.status, null);
       assert.match(result.stdout + result.stderr, /Playlist signing role/);
-      assert.match(
-        result.stdout + result.stderr,
-        /Invalid Playlist signing role/
-      );
+      assert.match(result.stdout + result.stderr, /Invalid Playlist signing role/);
       assert.match(result.stdout + result.stderr, /owner/);
       assert.doesNotMatch(result.stdout + result.stderr, /Not set Playlist signing role/);
     } finally {
@@ -110,10 +107,7 @@ describe('ff1 status playlist role health', () => {
       assert.notEqual(result.status, null);
       assert.match(result.stdout + result.stderr, /OK Playlist signing role/);
       assert.match(result.stdout + result.stderr, /curator/);
-      assert.match(
-        result.stdout + result.stderr,
-        /used when signing playlists/
-      );
+      assert.match(result.stdout + result.stderr, /used when signing playlists/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
