@@ -5,6 +5,7 @@ import {
   readConfigFile,
   resolveExistingConfigPath,
 } from './helpers/config-files';
+import { isDp1PlaylistSigningRole } from '../utilities/playlist-signing-role';
 
 export const statusCommand = new Command('status')
   .description('Show configuration status')
@@ -27,6 +28,9 @@ export const statusCommand = new Command('status')
       const defaultModelConfig = defaultModel ? config.models?.[defaultModel] : undefined;
 
       const hasApiKey = defaultModel ? !isMissingConfigValue(defaultModelConfig?.apiKey) : false;
+      const playlistRole = config.playlist?.role;
+      const hasValidPlaylistRole =
+        typeof playlistRole === 'string' && isDp1PlaylistSigningRole(playlistRole.trim());
 
       const statuses = [
         {
@@ -45,8 +49,9 @@ export const statusCommand = new Command('status')
         },
         {
           label: 'Playlist signing role',
-          ok: !isMissingConfigValue(config.playlist?.role || ''),
+          ok: hasValidPlaylistRole,
           optional: true,
+          detail: typeof playlistRole === 'string' ? playlistRole.trim() || undefined : undefined,
         },
         {
           label: `FF1 devices (${config.ff1Devices?.devices?.length || 0})`,
