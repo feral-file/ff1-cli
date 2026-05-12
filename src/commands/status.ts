@@ -34,7 +34,8 @@ export const statusCommand = new Command('status')
       const playlistKeyMaterial = playlistConfig.privateKey?.trim() || '';
       const playlistKeyError =
         playlistKeyMaterial.length > 0 ? validatePlaylistPrivateKey(playlistKeyMaterial) : null;
-      const hasPlaylistSigningKey = playlistKeyMaterial.length > 0 && playlistKeyError === null;
+      const hasPlaylistSigningKey =
+        playlistKeyMaterial.length > 0 && playlistKeyError === null;
       let hasValidPlaylistRole = false;
       let playlistRoleDetail: string | undefined;
       let playlistRoleError: string | undefined;
