@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, test } from 'node:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -291,6 +291,71 @@ describe('DP-1 v1.1.0 signing', () => {
         const vr = await verifyPlaylist(out);
         assert.equal(vr.valid, true);
       });
+    } finally {
+      console.log = prevLog;
+      process.chdir(cwd);
+      if (prevXdg === undefined) {
+        delete process.env.XDG_CONFIG_HOME;
+      } else {
+        process.env.XDG_CONFIG_HOME = prevXdg;
+      }
+      if (prevPk === undefined) {
+        delete process.env.PLAYLIST_PRIVATE_KEY;
+      } else {
+        process.env.PLAYLIST_PRIVATE_KEY = prevPk;
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('signPlaylistFile rejects tampered existing signatures[] before writing output', async () => {
+    const cwd = process.cwd();
+    const tempDir = mkdtempSync(`${tmpdir()}/ff1-sign-reject-tampered-sigs-`);
+    const prevXdg = process.env.XDG_CONFIG_HOME;
+    const prevPk = process.env.PLAYLIST_PRIVATE_KEY;
+    const prevLog = console.log;
+    try {
+      process.chdir(tempDir);
+      process.env.XDG_CONFIG_HOME = tempDir;
+      delete process.env.PLAYLIST_PRIVATE_KEY;
+      console.log = () => {};
+
+      const pairA = generateKeyPairSync('ed25519');
+      const pairB = generateKeyPairSync('ed25519');
+      const keyAB64 = pairA.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+      const keyBB64 = pairB.privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+
+      const playlist = {
+        dpVersion: '1.1.0',
+        title: 'Tampered endorsement',
+        items: [{ source: 'https://example.com/art.mp4', duration: 10, license: 'token' }],
+      };
+
+      const sigA = await signPlaylist(playlist, keyAB64);
+      const tampered = {
+        ...playlist,
+        signatures: [
+          {
+            ...sigA,
+            sig: 'AAAA',
+          },
+        ],
+      };
+
+      writeFileSync(
+        join(tempDir, 'config.json'),
+        JSON.stringify({ playlist: { privateKey: keyBB64, role: 'agent' } }, null, 2),
+        'utf-8'
+      );
+
+      const inputPath = join(tempDir, 'tampered-input.json');
+      const outputPath = join(tempDir, 'tampered-output.json');
+      writeFileSync(inputPath, JSON.stringify(tampered, null, 2), 'utf-8');
+
+      const result = await signPlaylistFile(inputPath, undefined, outputPath);
+      assert.equal(result.success, false);
+      assert.match(result.error ?? '', /verification failed|not verifiable/i);
+      assert.equal(existsSync(outputPath), false, 'must not write an unverifiable output');
     } finally {
       console.log = prevLog;
       process.chdir(cwd);

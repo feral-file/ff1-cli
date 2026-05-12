@@ -114,6 +114,10 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath, role
       throw new Error('Private key is required for signing');
     }
     const signedPlaylist = await buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role);
+    const verification = await verifySignedPlaylistEnvelope(signedPlaylist, dp1);
+    if (!verification.valid) {
+      throw new Error(`Signed playlist verification failed: ${verification.error}`);
+    }
 
     // Write to output file
     const output = outputPath || playlistPath;
@@ -193,6 +197,30 @@ async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
   }
 
   throw new Error('dp1-js does not expose SignMultiEd25519');
+}
+
+/**
+ * Verify a signed playlist envelope with dp1-js before it is persisted.
+ * The sign command must only write outputs that the same verifier path accepts;
+ * otherwise it can succeed while immediately generating a broken artifact.
+ *
+ * @param {Object} signedPlaylist - Playlist envelope with signatures attached
+ * @param {Object} dp1 - Loaded dp1-js module
+ * @returns {Promise<{ valid: boolean; error?: string }>} Verification result
+ */
+async function verifySignedPlaylistEnvelope(signedPlaylist, dp1) {
+  const verifyFn = dp1.verifyPlaylist;
+
+  if (typeof verifyFn !== 'function') {
+    throw new Error('dp1-js does not expose verifyPlaylist');
+  }
+
+  const isValid = await verifyFn(signedPlaylist);
+  if (!isValid) {
+    return { valid: false, error: 'signed playlist is not verifiable' };
+  }
+
+  return { valid: true };
 }
 
 /** Loads `dp1-js`; env overrides are not supported (see playlist-verifier). */
