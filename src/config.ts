@@ -359,7 +359,7 @@ export function validateConfig(modelName?: string): ValidationResult {
       }
     }
 
-    if (config.playlist?.role && typeof config.playlist.role !== 'string') {
+    if (config.playlist?.role !== undefined && typeof config.playlist.role !== 'string') {
       errors.push('playlist.role must be a string');
     }
 
