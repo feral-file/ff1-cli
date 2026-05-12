@@ -4,7 +4,7 @@
  */
 
 const { getPlaylistConfig } = require('../config');
-const { resolveDp1PlaylistSigningRole } = require('./playlist-signing-role');
+const { isDp1PlaylistSigningRole } = require('./playlist-signing-role');
 
 /**
  * Sign a playlist using the DP-1 signing API.
@@ -37,7 +37,7 @@ async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
     const dp1 = await loadDp1();
     const raw = Buffer.from(JSON.stringify(playlistToSign));
     const config = getPlaylistConfig();
-    const role = resolveDp1PlaylistSigningRole(roleOverride || config.role || 'agent');
+    const role = resolvePlaylistSigningRole(roleOverride || config.role);
 
     if (typeof dp1.SignMultiEd25519 === 'function') {
       return dp1.SignMultiEd25519(raw, privateKey, role, currentTimestamp());
@@ -102,7 +102,7 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath, role
     const playlist = JSON.parse(playlistContent);
     const config = getPlaylistConfig();
     const privateKey = privateKeyBase64 || config.privateKey;
-    const role = resolveDp1PlaylistSigningRole(roleOverride || config.role || 'agent');
+    const role = resolvePlaylistSigningRole(roleOverride || config.role);
 
     const validation = await validatePlaylistForSigning(playlist);
     if (!validation.valid) {
@@ -142,6 +142,19 @@ module.exports = {
   verifyPlaylist,
   signPlaylistFile,
 };
+
+function resolvePlaylistSigningRole(role) {
+  const candidate = typeof role === 'string' ? role.trim() : '';
+  const effectiveRole = candidate || 'agent';
+
+  if (!isDp1PlaylistSigningRole(effectiveRole)) {
+    throw new Error(
+      `Unsupported DP-1 playlist signing role "${effectiveRole}". Expected one of: agent, feed, curator, institution, licensor`
+    );
+  }
+
+  return effectiveRole;
+}
 
 async function validatePlaylistForSigning(playlist) {
   const dp1 = await loadDp1();

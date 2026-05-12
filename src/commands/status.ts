@@ -5,6 +5,8 @@ import {
   readConfigFile,
   resolveExistingConfigPath,
 } from './helpers/config-files';
+import { getPlaylistConfig } from '../config';
+import { parsePlaylistPrivateKeyToKeyObject } from '../utilities/ed25519-key-derive';
 import { isDp1PlaylistSigningRole } from '../utilities/playlist-signing-role';
 
 export const statusCommand = new Command('status')
@@ -26,11 +28,25 @@ export const statusCommand = new Command('status')
           : modelNames[0];
       const defaultModelLabel = defaultModel || 'unknown';
       const defaultModelConfig = defaultModel ? config.models?.[defaultModel] : undefined;
+      const playlistConfig = getPlaylistConfig();
 
       const hasApiKey = defaultModel ? !isMissingConfigValue(defaultModelConfig?.apiKey) : false;
-      const playlistRole = config.playlist?.role;
-      const hasValidPlaylistRole =
-        typeof playlistRole === 'string' && isDp1PlaylistSigningRole(playlistRole.trim());
+      const playlistKeyMaterial = playlistConfig.privateKey?.trim() || '';
+      const playlistKeyError =
+        playlistKeyMaterial.length > 0 ? validatePlaylistPrivateKey(playlistKeyMaterial) : null;
+      const hasPlaylistSigningKey =
+        playlistKeyMaterial.length > 0 && playlistKeyError === null;
+      let hasValidPlaylistRole = false;
+      let playlistRoleDetail: string | undefined;
+      let playlistRoleError: string | undefined;
+      const playlistRoleMaterial = playlistConfig.role?.trim() || '';
+      if (playlistRoleMaterial) {
+        hasValidPlaylistRole = isDp1PlaylistSigningRole(playlistRoleMaterial);
+        playlistRoleDetail = playlistRoleMaterial;
+        if (!hasValidPlaylistRole) {
+          playlistRoleError = playlistRoleMaterial;
+        }
+      }
 
       const statuses = [
         {
@@ -42,16 +58,26 @@ export const statusCommand = new Command('status')
           label: `Default model (${defaultModelLabel}) API key`,
           ok: hasApiKey,
           optional: true,
+          hint: ' (needed for chat)',
         },
         {
           label: 'Playlist signing key',
-          ok: !isMissingConfigValue(config.playlist?.privateKey || ''),
+          ok: hasPlaylistSigningKey,
+          optional: false,
+          detail: playlistKeyError
+            ? `${playlistKeyError} (from config/env)`
+            : playlistKeyMaterial
+              ? 'from config/env'
+              : undefined,
+          hint: ' (needed for signing and legacy verification)',
         },
         {
           label: 'Playlist signing role',
           ok: hasValidPlaylistRole,
           optional: true,
-          detail: typeof playlistRole === 'string' ? playlistRole.trim() || undefined : undefined,
+          detail: playlistRoleDetail,
+          invalid: Boolean(playlistRoleError),
+          hint: ' (used when signing playlists)',
         },
         {
           label: `FF1 devices (${config.ff1Devices?.devices?.length || 0})`,
@@ -70,17 +96,26 @@ export const statusCommand = new Command('status')
         let label: string;
         if (status.ok) {
           label = chalk.green('OK');
+        } else if ((status as { invalid?: boolean }).invalid) {
+          label = chalk.red('Invalid');
         } else if (status.optional) {
           label = chalk.yellow('Not set');
         } else {
           label = chalk.red('Missing');
         }
         const detail = status.detail ? chalk.dim(` (${status.detail})`) : '';
-        const hint = !status.ok && status.optional ? chalk.dim(' (only needed for chat)') : '';
+        const hint =
+          status.ok || !(status as { hint?: string }).hint
+            ? ''
+            : chalk.dim((status as { hint?: string }).hint as string);
         console.log(`${label} ${status.label}${detail}${hint}`);
       });
 
-      const hasRequired = statuses.some((status) => !status.ok && !status.optional);
+      const hasRequired = statuses.some(
+        (status) =>
+          !status.ok &&
+          (!status.optional || Boolean((status as { invalid?: boolean }).invalid))
+      );
       if (hasRequired) {
         console.log(chalk.dim('\nRun: ff1 setup'));
         process.exit(1);
@@ -90,3 +125,12 @@ export const statusCommand = new Command('status')
       process.exit(1);
     }
   });
+
+function validatePlaylistPrivateKey(material: string): string | null {
+  try {
+    parsePlaylistPrivateKeyToKeyObject(material);
+    return null;
+  } catch (error) {
+    return (error as Error).message;
+  }
+}
