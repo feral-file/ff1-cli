@@ -150,3 +150,6 @@ playlist.json
 
 # Release artifacts
 /release/
+
+# Local workspace scratch or generated artifacts
+local/

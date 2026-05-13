@@ -7,6 +7,10 @@ import { upsertDevice } from '../utilities/device-upsert';
 import { ensureConfigFile, isMissingConfigValue, readConfigFile } from './helpers/config-files';
 import { discoverAndSelectDevice } from './helpers/device-discovery';
 import { createPrompt, promptYesNo } from './helpers/prompt';
+import {
+  DP1_PLAYLIST_SIGNING_ROLES,
+  resolveDp1PlaylistSigningRole,
+} from '../utilities/playlist-signing-role';
 
 export const setupCommand = new Command('setup')
   .description('Guided setup for config, signing key, and device')
@@ -87,7 +91,9 @@ export const setupCommand = new Command('setup')
       config.models[selectedModel] = selectedModelConfig;
 
       const currentKey = config.playlist?.privateKey || '';
+      const currentRole = config.playlist?.role || '';
       let signingKey = currentKey;
+      let signingRole = currentRole;
 
       if (isMissingConfigValue(currentKey)) {
         const keyPair = crypto.generateKeyPairSync('ed25519');
@@ -110,9 +116,26 @@ export const setupCommand = new Command('setup')
       }
 
       if (signingKey) {
+        const roleHint = DP1_PLAYLIST_SIGNING_ROLES.join(', ');
+        while (true) {
+          const roleAnswer = await ask(`Signing role (${roleHint}) [${currentRole || 'agent'}]: `);
+          try {
+            signingRole = resolveDp1PlaylistSigningRole(roleAnswer, signingRole || 'agent');
+            break;
+          } catch (error) {
+            console.log(chalk.red((error as Error).message));
+            if (!roleAnswer.trim()) {
+              console.log(
+                chalk.dim('Enter one of the supported roles above, or fix the stored value.')
+              );
+            }
+          }
+        }
+
         config.playlist = {
           ...(config.playlist || {}),
           privateKey: signingKey,
+          role: signingRole,
         };
       }
 

@@ -15,7 +15,10 @@ export const playCommand = new Command('play')
   .description('Play a playlist or media URL on an FF1 device')
   .argument('<source>', 'Playlist file, playlist URL, or media URL')
   .option('-d, --device <name>', 'Device name (uses first device if not specified)')
-  .option('--skip-verify', 'Skip playlist verification before playing')
+  .option(
+    '--skip-verify',
+    'Skip DP-1 structure validation (parse/schema) before playing; use only when you accept malformed envelopes'
+  )
   .action(async (source: string, options: { device?: string; skipVerify?: boolean }) => {
     try {
       const config = getConfig();
@@ -28,26 +31,26 @@ export const playCommand = new Command('play')
       console.log(chalk.blue('\nPlay on FF1\n'));
 
       if (!options.skipVerify) {
-        // Synthesized media-URL playlists are trivially valid by construction;
-        // only print the verify lines when the user supplied a real playlist.
+        // Structure-only validation (same as `validate`, `verify`, send, and publish).
+        // Synthesized media-URL playlists are unsigned but parse as valid DP-1.
         if (isPlaylistSource) {
-          console.log(chalk.cyan(`Verify playlist (${sourceLabel})`));
+          console.log(chalk.cyan(`Validate playlist (${sourceLabel})`));
         }
 
         const verifier = await import('../utilities/playlist-verifier');
-        const { verifyPlaylist } = verifier;
-        const verifyResult = verifyPlaylist(resolved.playlist);
+        const { validatePlaylist } = verifier;
+        const validateResult = await validatePlaylist(resolved.playlist);
 
-        if (!verifyResult.valid) {
+        if (!validateResult.valid) {
           printPlaylistVerificationFailure(
-            verifyResult,
+            validateResult,
             isPlaylistSource ? `source: ${sourceLabel}` : undefined
           );
           process.exit(1);
         }
 
         if (isPlaylistSource) {
-          console.log(chalk.green('✓ Verified\n'));
+          console.log(chalk.green('✓ Validated\n'));
         }
       }
 

@@ -46,15 +46,15 @@ export function printPlaylistSourceLoadFailure(source: string, error: Error): vo
 }
 
 /**
- * Print playlist verification failure details consistently across all
- * commands that verify before sending or publishing.
+ * Print playlist validation failure details consistently for commands that
+ * validate structure before sending (for example `play`).
  */
 export function printPlaylistVerificationFailure(
   verifyResult: PlaylistVerificationResult,
   source?: string
 ): void {
   console.error(
-    chalk.red(`\nPlaylist verification failed:${source ? ` (${source})` : ''}`),
+    chalk.red(`\nPlaylist validation failed:${source ? ` (${source})` : ''}`),
     verifyResult.error
   );
 
@@ -69,14 +69,17 @@ export function printPlaylistVerificationFailure(
 }
 
 /**
- * Load a playlist from a path or URL and run DP-1 verification on it.
+ * Load a playlist from a path or URL and run parse-only validation (`validatePlaylist`).
+ *
+ * The `validate` command uses this as the full check. The `verify` command uses it
+ * for the structure pass only, then runs `verifyPlaylist` for cryptographic checks.
  */
-export async function verifyPlaylistSource(source: string): Promise<PlaylistVerificationResult> {
+export async function validatePlaylistSource(source: string): Promise<PlaylistVerificationResult> {
   const loaded = await loadPlaylistSource(source);
 
   const verifier = await import('../../utilities/playlist-verifier');
-  const { verifyPlaylist } = verifier;
-  const verifyResult = verifyPlaylist(loaded.playlist);
+  const { validatePlaylist } = verifier;
+  const verifyResult = await validatePlaylist(loaded.playlist);
 
   return {
     ...verifyResult,
@@ -85,21 +88,59 @@ export async function verifyPlaylistSource(source: string): Promise<PlaylistVeri
 }
 
 /**
- * Run the shared verify/validate command flow. Both `ff1 verify` and
- * `ff1 validate` call this with the same body.
+ * Run the `validate` command flow. It checks DP-1 structure only and does
+ * not require signatures or public keys.
  */
-export async function runVerifyCommand(source: string): Promise<void> {
+export async function runValidateCommand(source: string): Promise<void> {
+  try {
+    console.log(chalk.blue('\nValidate playlist\n'));
+
+    const verifier = await import('../../utilities/playlist-verifier');
+    const { printVerificationResult } = verifier;
+
+    const result = await validatePlaylistSource(source);
+
+    printVerificationResult(result, source, { failureKind: 'structure' });
+
+    if (!result.valid) {
+      process.exit(1);
+    }
+  } catch (error) {
+    printPlaylistSourceLoadFailure(source, error as Error);
+    process.exit(1);
+  }
+}
+
+/**
+ * Run the `verify` command flow: same DP-1 structure checks as `validate`, then
+ * cryptographic verification via dp1-js. Unsigned playlists fail at the crypto
+ * step. dp1-js `verifyPlaylist` uses the optional second argument **only** to
+ * verify legacy flat `signature` strings; `signatures[]` envelopes do not rely
+ * on it. When `--public-key` is omitted, the CLI may still pass a key derived
+ * from `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY`; dp1-js ignores it unless
+ * the playlist is on the legacy signature path.
+ */
+export async function runVerifyCommand(source: string, publicKey?: string): Promise<void> {
   try {
     console.log(chalk.blue('\nVerify playlist\n'));
 
     const verifier = await import('../../utilities/playlist-verifier');
     const { printVerificationResult } = verifier;
 
-    const result = await verifyPlaylistSource(source);
-
-    printVerificationResult(result, source);
-
+    const result = await validatePlaylistSource(source);
     if (!result.valid) {
+      printVerificationResult(result, source, { failureKind: 'structure' });
+      process.exit(1);
+    }
+
+    const signedResult = await verifier.verifyPlaylist(result.playlist, publicKey);
+    const finalResult = signedResult.valid
+      ? { ...result, valid: true, error: undefined, details: undefined }
+      : { valid: false, error: signedResult.error, details: signedResult.details };
+
+    printVerificationResult(finalResult, source, { failureKind: 'signature' });
+
+    if (!signedResult.valid) {
       process.exit(1);
     }
   } catch (error) {

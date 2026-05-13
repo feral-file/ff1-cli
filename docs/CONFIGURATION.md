@@ -59,8 +59,10 @@ Optional settings used where headless/browser‑like behavior is needed.
 
 Used for signing DP‑1 playlists.
 
-- `playlist.privateKey` (string, Ed25519 private key in hex or base64): Used by the `sign` command. Hex may include or omit the `0x` prefix. You can also set this via `PLAYLIST_PRIVATE_KEY` in `.env`.
+- `playlist.privateKey` (string, Ed25519 private key in hex or base64): Used by the `sign` command to create DP-1 v1.1.0 multi-signatures. The `verify` command may derive the matching public key from this value (or `PLAYLIST_PRIVATE_KEY`) when you omit `--public-key`; **dp1-js applies that derived key only when verifying legacy flat `signature` strings**, not when checking `signatures[]` envelopes. If that derivation fails, `verify` prints a warning on stderr and continues without derived key material. The derived public key is emitted as PEM so Node can decode it without ambiguity. Hex may include or omit the `0x` prefix. You can also set this via `PLAYLIST_PRIVATE_KEY` in `.env`.
 
+  **Signing and key encoding:** Signing paths (`sign`, deterministic `build` when configured, and `-k/--key` overrides) pass the private key string through to **`dp1-js`** (`SignMultiEd25519`) without an extra decoding step in ff1-cli. `dp1-js` recognizes **hex** (optional `0x`) or **base64** encodings of the PKCS#8 DER blob produced by the OpenSSL examples below, then loads the key for Ed25519. Use those formats; ff1-cli does not add a separate normalizer ahead of the library.
+- `playlist.role` (string): DP-1 signing role that travels with the private key. Defaults to `agent` if omitted. You can also set this via `PLAYLIST_ROLE` in `.env`. Guided `ff1 setup`, `config validate`, and `sign --role` only accept the usual DP-1 signing roles (`agent`, `feed`, `curator`, `institution`, `licensor`).
 ### Generate an Ed25519 private key
 
 You can generate a key locally. The CLI accepts either base64 (preferred) or hex
@@ -81,6 +83,8 @@ Paste either value into `playlist.privateKey`:
   - `0xabc123...` (with prefix)
   - `abc123...` (without prefix)
 - Base64 example: `uQd9m8S...==`
+
+If you need a different role, set `playlist.role` to one of the DP-1 signing roles such as `agent`, `feed`, `curator`, `institution`, or `licensor`. The CLI rejects any other string before it reaches `dp1-js`.
 
 If you already have a base64 key and want hex, convert it:
 
@@ -137,7 +141,6 @@ Compatibility checks:
 - `play` and `ssh` perform a compatibility preflight before sending commands to FF1. The CLI gets the device version by calling `POST /api/cast` with `{ "command": "getDeviceStatus", "request": {} }` and reads `message.installedVersion` from the response.
 
 - Minimum supported FF1 OS versions:
-
   - `play` (`displayPlaylist`): `1.0.0` or newer
   - `ssh` (`sshAccess`): `1.0.9` or newer
 
@@ -158,7 +161,7 @@ npm run dev -- play playlist.json
 npm run dev -- play playlist.json -d "Living Room Display"
 ```
 
- Minimal `config.json` example (selected fields):
+Minimal `config.json` example (selected fields):
 
 ```json
 {
@@ -173,7 +176,8 @@ npm run dev -- play playlist.json -d "Living Room Display"
   },
   "defaultDuration": 10,
   "playlist": {
-    "privateKey": "your_ed25519_private_key_hex_or_base64_here"
+    "privateKey": "your_ed25519_private_key_hex_or_base64_here",
+    "role": "agent"
   },
   "feed": {
     "baseURLs": ["https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1"]

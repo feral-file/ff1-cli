@@ -40,13 +40,14 @@
     }
   ],
   "defaults": {
-    "display": {
-      "scaling": "fit",
-      "background": "#111111",
-      "margin": 0
-    },
+      "display": {
+        "scaling": "fit",
+        "background": "#111111",
+        "margin": 0
+      },
     "license": "token",
     "duration": 10
   },
-  "slug": "sample-nft-collection"
+  "slug": "sample-nft-collection",
+  "signature": "ed25519:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 }

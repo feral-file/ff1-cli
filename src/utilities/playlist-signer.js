@@ -1,59 +1,23 @@
 /**
- * Playlist Signing Utility
- * Uses dp1-js library for DP-1 specification-compliant playlist signing
+ * Playlist Signing Utility.
+ * Uses the DP-1 v1.1.0 signing contract via the `dp1-js` package.
  */
 
-const { signDP1Playlist, verifyPlaylistSignature } = require('dp1-js');
 const { getPlaylistConfig } = require('../config');
+const { isDp1PlaylistSigningRole } = require('./playlist-signing-role');
 
 /**
- * Convert base64-encoded key to Uint8Array (or hex string if needed)
- *
- * @param {string} base64Key - Ed25519 private key in base64 format
- * @returns {Uint8Array} Private key as Uint8Array
- */
-function base64ToUint8Array(base64Key) {
-  const buffer = Buffer.from(base64Key, 'base64');
-  return new Uint8Array(buffer);
-}
-
-/**
- * Convert hex string to Uint8Array
- *
- * @param {string} hexKey - Ed25519 public key in hex format
- * @returns {Uint8Array} Public key as Uint8Array
- */
-function hexToUint8Array(hexKey) {
-  const cleanHex = hexKey.replace(/^0x/, '');
-  const buffer = Buffer.from(cleanHex, 'hex');
-  return new Uint8Array(buffer);
-}
-
-/**
- * Check if a string is valid hex (with or without 0x prefix)
- *
- * @param {string} str - String to test
- * @returns {boolean} True if string is valid hex
- */
-function isHexString(str) {
-  const cleanHex = str.replace(/^0x/, '');
-  return /^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0;
-}
-
-/**
- * Sign a playlist using ed25519 as per DP-1 specification
- * Uses dp1-js library for standards-compliant signing
- * Accepts private key in hex (with or without 0x prefix) or base64 format
+ * Sign a playlist using the DP-1 signing API.
+ * The signed payload excludes any pre-existing signature fields so the output
+ * is stable across re-signing and matches the library's canonical digest.
  *
  * @param {Object} playlist - Playlist object without signature
  * @param {string} [privateKeyBase64] - Ed25519 private key in hex or base64 format (optional, uses config if not provided)
- * @returns {Promise<string>} Signature in format "ed25519:0x{hex}"
+ * @param {string} [roleOverride] - DP-1 signing role override (optional, uses config if not provided)
+ * @returns {Promise<Object>} DP-1 signature envelope
  * @throws {Error} If private key is invalid or signing fails
- * @example
- * const signature = await signPlaylist(playlist, privateKeyHexOrBase64);
- * // Returns: "ed25519:0x1234abcd..."
  */
-async function signPlaylist(playlist, privateKeyBase64) {
+async function signPlaylist(playlist, privateKeyBase64, roleOverride) {
   // Get private key from config if not provided
   let privateKey = privateKeyBase64;
   if (!privateKey) {
@@ -66,59 +30,46 @@ async function signPlaylist(playlist, privateKeyBase64) {
   }
 
   try {
-    // Remove signature field if it exists (for re-signing)
     const playlistToSign = { ...playlist };
     delete playlistToSign.signature;
+    delete playlistToSign.signatures;
 
-    // Try hex first (with or without 0x prefix), then fall back to base64
-    let keyInput;
-    if (isHexString(privateKey)) {
-      // It's hex - ensure it has 0x prefix for dp1-js
-      keyInput = privateKey.startsWith('0x') ? privateKey : '0x' + privateKey;
-    } else {
-      // Fall back to base64
-      const keyBytes = base64ToUint8Array(privateKey);
-      keyInput = '0x' + Buffer.from(keyBytes).toString('hex');
+    const dp1 = await loadDp1();
+    const raw = Buffer.from(JSON.stringify(playlistToSign));
+    const config = getPlaylistConfig();
+    const role = resolvePlaylistSigningRole(roleOverride || config.role);
+
+    if (typeof dp1.SignMultiEd25519 === 'function') {
+      return dp1.SignMultiEd25519(raw, privateKey, role, currentTimestamp());
     }
 
-    // Sign using dp1-js library
-    const signature = await signDP1Playlist(playlistToSign, keyInput);
-
-    return signature;
+    throw new Error('dp1-js does not expose SignMultiEd25519');
   } catch (error) {
     throw new Error(`Failed to sign playlist: ${error.message}`);
   }
 }
 
 /**
- * Verify a playlist's ed25519 signature
+ * Verify a playlist signature with the DP-1 verification API.
  *
  * @param {Object} playlist - Playlist object with signature field
  * @param {string} publicKeyHex - Ed25519 public key in hex format (with or without 0x prefix)
  * @returns {Promise<boolean>} True if signature is valid, false otherwise
  * @throws {Error} If verification process fails
- * @example
- * const isValid = await verifyPlaylist(signedPlaylist, publicKeyHex);
- * if (isValid) {
- *   console.log('Signature is valid');
- * }
  */
 async function verifyPlaylist(playlist, publicKeyHex) {
-  if (!playlist.signature) {
-    throw new Error('Playlist does not have a signature');
-  }
-
   if (!publicKeyHex) {
     throw new Error('Public key is required for verification');
   }
 
   try {
-    // Convert hex public key to Uint8Array
-    const publicKeyBytes = hexToUint8Array(publicKeyHex);
+    const dp1 = await loadDp1();
+    const verifyFn = dp1.verifyPlaylist;
+    if (typeof verifyFn !== 'function') {
+      throw new Error('dp1-js does not expose verifyPlaylist');
+    }
 
-    // Verify using dp1-js library
-    const isValid = await verifyPlaylistSignature(playlist, publicKeyBytes);
-
+    const isValid = await verifyFn(playlist, publicKeyHex);
     return isValid;
   } catch (error) {
     throw new Error(`Failed to verify playlist signature: ${error.message}`);
@@ -136,13 +87,8 @@ async function verifyPlaylist(playlist, publicKeyHex) {
  * @returns {boolean} returns.success - Whether signing succeeded
  * @returns {Object} [returns.playlist] - Signed playlist object
  * @returns {string} [returns.error] - Error message if failed
- * @example
- * const result = await signPlaylistFile('playlist.json');
- * if (result.success) {
- *   console.log('Playlist signed:', result.playlist);
- * }
  */
-async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
+async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath, roleOverride) {
   const fs = require('fs');
   const path = require('path');
 
@@ -154,15 +100,24 @@ async function signPlaylistFile(playlistPath, privateKeyBase64, outputPath) {
 
     const playlistContent = fs.readFileSync(playlistPath, 'utf-8');
     const playlist = JSON.parse(playlistContent);
+    const config = getPlaylistConfig();
+    const privateKey = privateKeyBase64 || config.privateKey;
+    const role = resolvePlaylistSigningRole(roleOverride || config.role);
 
-    // Sign playlist
-    const signature = await signPlaylist(playlist, privateKeyBase64);
+    const validation = await validatePlaylistForSigning(playlist);
+    if (!validation.valid) {
+      throw new Error(`Playlist validation failed: ${validation.error}`);
+    }
 
-    // Add signature to playlist
-    const signedPlaylist = {
-      ...playlist,
-      signature,
-    };
+    const dp1 = await loadDp1();
+    if (!privateKey) {
+      throw new Error('Private key is required for signing');
+    }
+    const signedPlaylist = await buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role);
+    const verification = await verifySignedPlaylistEnvelope(signedPlaylist, dp1);
+    if (!verification.valid) {
+      throw new Error(`Signed playlist verification failed: ${verification.error}`);
+    }
 
     // Write to output file
     const output = outputPath || playlistPath;
@@ -186,6 +141,106 @@ module.exports = {
   signPlaylist,
   verifyPlaylist,
   signPlaylistFile,
-  base64ToUint8Array,
-  hexToUint8Array,
 };
+
+function resolvePlaylistSigningRole(role) {
+  const candidate = typeof role === 'string' ? role.trim() : '';
+  const effectiveRole = candidate || 'agent';
+
+  if (!isDp1PlaylistSigningRole(effectiveRole)) {
+    throw new Error(
+      `Unsupported DP-1 playlist signing role "${effectiveRole}". Expected one of: agent, feed, curator, institution, licensor`
+    );
+  }
+
+  return effectiveRole;
+}
+
+async function validatePlaylistForSigning(playlist) {
+  const dp1 = await loadDp1();
+  const parseFn = dp1.parseDP1Playlist;
+
+  if (typeof parseFn !== 'function') {
+    throw new Error('dp1-js does not expose parseDP1Playlist');
+  }
+
+  const result = parseFn(playlist);
+
+  if (result && result.error) {
+    return { valid: false, error: result.error.message };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Produce a DP-1 v1.1.0 playlist object with a new multi-signature appended.
+ * The digest uses JSON with top-level `signature` and `signatures` removed (same
+ * as dp1-js/dp1-go §7.1); prior `signatures[]` entries are kept on the returned
+ * object so repeated `sign` runs accumulate endorsements instead of replacing them.
+ *
+ * @param {Object} playlist - Parsed playlist (may already include `signatures[]`)
+ * @param {string} privateKey - Private key material forwarded to dp1-js
+ * @param {Object} dp1 - Loaded dp1-js module
+ * @param {string} role - DP-1 signing role
+ * @returns {Promise<Object>} Playlist with legacy `signature` cleared and merged `signatures[]`
+ */
+async function buildSignedPlaylistEnvelope(playlist, privateKey, dp1, role) {
+  const playlistToSign = { ...playlist };
+  delete playlistToSign.signature;
+  delete playlistToSign.signatures;
+
+  const existingSignatures = Array.isArray(playlist.signatures)
+    ? playlist.signatures.filter((entry) => Boolean(entry))
+    : [];
+
+  if (typeof dp1.SignMultiEd25519 === 'function') {
+    const signature = await dp1.SignMultiEd25519(
+      Buffer.from(JSON.stringify(playlistToSign)),
+      privateKey,
+      role,
+      currentTimestamp()
+    );
+
+    return {
+      ...playlist,
+      signature: undefined,
+      signatures: [...existingSignatures, signature],
+    };
+  }
+
+  throw new Error('dp1-js does not expose SignMultiEd25519');
+}
+
+/**
+ * Verify a signed playlist envelope with dp1-js before it is persisted.
+ * The sign command must only write outputs that the same verifier path accepts;
+ * otherwise it can succeed while immediately generating a broken artifact.
+ *
+ * @param {Object} signedPlaylist - Playlist envelope with signatures attached
+ * @param {Object} dp1 - Loaded dp1-js module
+ * @returns {Promise<{ valid: boolean; error?: string }>} Verification result
+ */
+async function verifySignedPlaylistEnvelope(signedPlaylist, dp1) {
+  const verifyFn = dp1.verifyPlaylist;
+
+  if (typeof verifyFn !== 'function') {
+    throw new Error('dp1-js does not expose verifyPlaylist');
+  }
+
+  const isValid = await verifyFn(signedPlaylist);
+  if (!isValid) {
+    return { valid: false, error: 'signed playlist is not verifiable' };
+  }
+
+  return { valid: true };
+}
+
+/** Loads `dp1-js`; env overrides are not supported (see playlist-verifier). */
+async function loadDp1() {
+  return require('dp1-js');
+}
+
+function currentTimestamp() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}

@@ -320,14 +320,14 @@ async function buildDP1Playlist(paramsOrItems, options = {}) {
     slug = slugify(title);
   }
 
-  // Build DP1 playlist structure (DP1 v1.0.0 + OpenAPI spec compliance)
+  // Build DP1 playlist structure using the v1.1.0 envelope.
   // Support deterministic mode for testing (freeze timestamp and ID)
   const timestamp = deterministicMode && fixedTimestamp ? fixedTimestamp : new Date().toISOString();
   const crypto = require('crypto');
   const playlistId = deterministicMode && fixedId ? fixedId : crypto.randomUUID();
 
   const playlist = {
-    dpVersion: '1.0.0',
+    dpVersion: '1.1.0',
     id: playlistId,
     title,
     created: timestamp,
@@ -346,14 +346,15 @@ async function buildDP1Playlist(paramsOrItems, options = {}) {
   // Always include slug (auto-generated when missing)
   playlist.slug = slug;
 
-  // Sign the playlist if private key is configured
+  // Sign the playlist if private key is configured.
   try {
     const playlistConfig = getPlaylistConfig();
     if (playlistConfig.privateKey) {
-      playlist.signature = await signPlaylist(playlist, playlistConfig.privateKey);
+      playlist.signatures = [await signPlaylist(playlist, playlistConfig.privateKey)];
+      delete playlist.signature;
     }
   } catch (error) {
-    // If signing fails, log warning but continue (signature is optional)
+    // If signing fails, log warning but continue (signature is optional).
     console.warn(`Warning: Failed to sign playlist: ${error.message}`);
   }
 

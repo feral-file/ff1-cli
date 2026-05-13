@@ -15,7 +15,7 @@ interface PublishResult {
  *
  * Flow:
  * 1. Read and parse playlist file
- * 2. Validate playlist against DP-1 spec using verifyPlaylist
+ * 2. Parse / structure validation via validatePlaylist (same as `validate`; not cryptographic verify)
  * 3. If valid, send the original playlist to feed server
  * 4. Return result with playlist ID or error
  *
@@ -56,9 +56,9 @@ export async function publishPlaylist(
       };
     }
 
-    // Step 2: Validate playlist
-    const { verifyPlaylist } = await import('./playlist-verifier');
-    const validationResult = verifyPlaylist(playlist);
+    // Step 2: Parse / structure validation (use `verify` CLI for signature checks)
+    const { validatePlaylist } = await import('./playlist-verifier');
+    const validationResult = await validatePlaylist(playlist);
 
     if (!validationResult.valid) {
       return {

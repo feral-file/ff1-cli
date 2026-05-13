@@ -1,0 +1,25 @@
+{
+  "dpVersion": "1.1.0",
+  "id": "d2d4f9b0-7f01-4c26-9c10-1c4d7477f5de",
+  "title": "Sample NFT Collection",
+  "created": "2026-02-06T00:00:00.000Z",
+  "items": [
+    {
+      "id": "ad5de50a-6a0d-4b61-8ef9-7b0f0d1d5e9b",
+      "source": "https://example.com/nft1.png",
+      "duration": 10,
+      "license": "open",
+      "created": "2026-02-06T00:00:00.000Z"
+    }
+  ],
+  "defaults": {
+      "display": {
+        "scaling": "fit",
+        "background": "#111111",
+        "margin": 0
+      },
+    "license": "open",
+    "duration": 10
+  },
+  "slug": "sample-nft-collection"
+}

@@ -22,6 +22,7 @@ export interface BrowserConfig {
 
 export interface PlaylistConfig {
   privateKey: string | null;
+  role: string | null;
 }
 
 export interface FeedConfig {

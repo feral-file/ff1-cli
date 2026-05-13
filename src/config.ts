@@ -10,6 +10,10 @@ import type {
   FF1DeviceConfig,
   ValidationResult,
 } from './types';
+import {
+  DP1_PLAYLIST_SIGNING_ROLES,
+  resolveDp1PlaylistSigningRole,
+} from './utilities/playlist-signing-role';
 
 export function getConfigPaths(): { localPath: string; userPath: string } {
   const localPath = path.join(process.cwd(), 'config.json');
@@ -165,10 +169,11 @@ export function getBrowserConfig(): { timeout: number; sanitizationLevel: number
 }
 
 /**
- * Get playlist configuration including private key for signing
+ * Get playlist configuration including signing private key and role.
  *
  * @returns {Object} Playlist configuration
  * @returns {string|null} returns.privateKey - Ed25519 private key in base64 or hex format (null if not configured)
+ * @returns {string|null} returns.role - DP-1 signing role (null if not configured)
  */
 export function getPlaylistConfig(): PlaylistConfig {
   const config = getConfig();
@@ -176,7 +181,29 @@ export function getPlaylistConfig(): PlaylistConfig {
 
   return {
     privateKey: playlistConfig.privateKey || process.env.PLAYLIST_PRIVATE_KEY || null,
+    role: playlistConfig.role || process.env.PLAYLIST_ROLE || null,
   };
+}
+
+/**
+ * Resolve the effective playlist signing role used by runtime paths.
+ *
+ * Validation must inspect the same value that setup and signing use so
+ * preflight checks do not accept combinations that will fail later, or reject
+ * whitespace-padded values that runtime trims before validation.
+ *
+ * @param {Config} config - Loaded configuration object.
+ * @returns {string|null} Effective role after config/env fallback and trimming.
+ */
+function resolveEffectivePlaylistRole(config: Config): string | null {
+  const playlistConfig: Partial<PlaylistConfig> = config.playlist || {};
+  const configuredRole = playlistConfig.role || process.env.PLAYLIST_ROLE || null;
+
+  if (configuredRole === null) {
+    return null;
+  }
+
+  return resolveDp1PlaylistSigningRole(configuredRole);
 }
 
 /**
@@ -353,6 +380,21 @@ export function validateConfig(modelName?: string): ValidationResult {
           errors.push(
             'playlist.privateKey must be a valid base64- or hex-encoded ed25519 private key'
           );
+        }
+      }
+    }
+
+    if (config.playlist?.role !== undefined || process.env.PLAYLIST_ROLE !== undefined) {
+      try {
+        resolveEffectivePlaylistRole(config);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.startsWith('Unsupported DP-1 playlist signing role')
+        ) {
+          errors.push(`playlist.role must be one of: ${DP1_PLAYLIST_SIGNING_ROLES.join(', ')}`);
+        } else {
+          errors.push((error as Error).message);
         }
       }
     }

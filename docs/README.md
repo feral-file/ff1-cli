@@ -10,6 +10,8 @@ For project-level planning and future agentic work, see `./PROJECT_SPEC.md`.
 npm i -g ff1-cli
 ```
 
+`npm` and `npx` require **Node.js 22 or newer** (see `package.json` `engines`). When a release raises the Node floor, that is a **breaking** change for Node 18/20 users; the GitHub Release for that version should say so explicitly (see `./RELEASING.md` for maintainer guidance).
+
 ## Install (curl)
 
 ```bash
@@ -63,7 +65,7 @@ ff1 config validate
   },
   "defaultDuration": 10,
   "playlist": {
-    "privateKey": "your_ed25519_private_key_base64_here"
+    "privateKey": "your_ed25519_private_key_hex_or_base64_here"
   },
   "feed": { "baseURLs": ["https://dp1-feed-operator-api-prod.autonomy-system.workers.dev/api/v1"] },
   "ff1Devices": {
@@ -132,12 +134,13 @@ Notes:
   - Options: `-o, --output <file>`, `-m, --model <name>`, `-d, --device <name>`, `-v, --verbose`
 - `build [params.json]` – Deterministic build from JSON or stdin
   - Options: `-o, --output <file>`, `-v, --verbose`
-- `validate <file-or-url>` / `verify <file-or-url>` – Validate a DP1 playlist file
-- `sign <file>` – Sign playlist with Ed25519
-  - Options: `-k, --key <base64>`, `-o, --output <file>`
-- `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device
-  - Options: `-d, --device <name>`, `--skip-verify`
-- `publish <file>` – Publish a playlist to a feed server
+- `validate <file-or-url>` – Validate playlist structure only
+- `verify <file-or-url>` – Validate structure and verify signatures. On failure, the CLI labels structure issues separately from signature verification. dp1-js uses `--public-key` (or a key derived from `playlist.privateKey` / `PLAYLIST_PRIVATE_KEY` when omitted) **only** for legacy flat `signature` verification; DP-1 v1.1.0 `signatures[]` envelopes are verified without relying on that argument. If deriving or normalizing key material fails, the CLI prints a warning on stderr and continues without it (legacy verification still requires a usable key when the playlist uses a flat `signature`). The derived key is emitted as PEM. Supported key forms: hex with optional `0x`, PEM, or 32-byte raw public key as hex or base64
+- `sign <file>` – Sign playlist with a DP-1 v1.1.0 multi-signature envelope (private key string is forwarded to **`dp1-js`**; same hex or base64 PKCS#8 DER forms as `playlist.privateKey` in `./CONFIGURATION.md`). The command verifies the final envelope before writing output and refuses to persist tampered or otherwise unverifiable `signatures[]`.
+  - Options: `-k, --key <privateKey>`, `-r, --role <role>`, `-o, --output <file>`
+- `play <source>` – Play a playlist file, playlist URL, or media URL on an FF1 device (runs `validate`-style structure checks before sending; use `verify` for signatures)
+  - Options: `-d, --device <name>`, `--skip-verify` (skip structure validation; not recommended)
+- `publish <file>` – Publish a playlist to a feed server (`validate`-style structure checks before upload; use `verify` for signatures)
   - Options: `-s, --server <index>` (server index if multiple configured)
 - `ssh <enable|disable>` – Manage SSH access on an FF1 device
   - Options: `-d, --device <name>`, `--pubkey <path>`, `--ttl <duration>`
@@ -206,7 +209,7 @@ Publishing keywords: "publish", "publish to my feed", "push to feed", "send to f
 
 1. Detect the keyword and call `get_feed_servers`
 2. If multiple servers → ask which one to use
-3. Build → verify → publish automatically
+3. Build → validate (structure) → publish automatically
 4. Display playlist ID and server URL on success
 
 If all configured feed servers are unreachable, the CLI now reports a feed availability error instead of "playlist not found".
@@ -226,10 +229,10 @@ cat params.json | npm run dev -- build -o playlist.json
 # Optional explicit validation (build flows already validate)
 npm run dev -- validate playlist.json
 
-# Sign (uses key from config or override via --key)
+# Sign (uses key and role from config, or overrides via --key / --role)
 npm run dev -- sign playlist.json -o signed.json
 
-# Play on configured default device (verifies by default)
+# Play on configured default device (validates DP-1 structure by default)
 npm run dev -- play playlist.json
 
 # Play on a specific named device
@@ -245,7 +248,10 @@ npm run dev -- play playlist.json -d "Living Room Display"
 npm run dev -- play "https://cdn.example.com/playlist.json"
 
 # Play a media URL directly
-npm run dev -- play "https://example.com/video.mp4" --skip-verify
+npm run dev -- play "https://example.com/video.mp4"
+
+# Skip structure validation only if you must send a non-conformant payload (not recommended)
+npm run dev -- play playlist.json --skip-verify
 ```
 
 ### SSH access
@@ -273,7 +279,7 @@ npm run dev -- publish playlist.json -s 1
 
 The `publish` command:
 
-- Validates the playlist against DP-1 spec
+- Validates playlist structure (same as `validate`; does not verify signatures)
 - Shows interactive server selection if multiple are configured
 - Sends the validated playlist to the chosen feed server
 - Returns the playlist ID on success
@@ -318,8 +324,9 @@ Setup preserves existing devices when adding new ones. See selection rules and e
 
 ### Playlist signing (optional)
 
-- Add `playlist.privateKey` (base64 Ed25519) to `config.json` or set `PLAYLIST_PRIVATE_KEY`.
-- Signed playlists include a `signature` field compliant with DP1 (via `dp1-js`).
+- Add `playlist.privateKey` (Ed25519 PKCS#8 DER as **hex** or **base64**, per `./CONFIGURATION.md`) and, optionally, `playlist.role` to `config.json`, or set `PLAYLIST_PRIVATE_KEY` and `PLAYLIST_ROLE`.
+- The CLI passes that string to **`dp1-js`** for signing; the dependency decodes hex (`0x` optional) or base64 before loading the key.
+- Signed playlists include a `signatures[]` envelope compliant with DP-1 v1.1.0 (via **`dp1-js`**).
 
 ## Constraints
 

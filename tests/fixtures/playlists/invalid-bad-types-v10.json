@@ -1,0 +1,17 @@
+{
+  "dpVersion": "bad-version",
+  "id": "not-a-uuid",
+  "slug": "bad slug",
+  "title": "",
+  "created": "not-a-date",
+  "items": [
+    {
+      "id": "also-not-a-uuid",
+      "source": "not-a-uri",
+      "duration": 0,
+      "license": "nonsense",
+      "created": "not-a-date"
+    }
+  ],
+  "signature": "ed25519:0x34dca6d76ad9a8a43d8d5221dd0850a812832bf0ef6390c645f559be7ad96ed4894f99fe1660176f13de071493812a6ec07a68085eee8ea07d04bcd1f2c41105"
+}

@@ -4,7 +4,7 @@ How FF1‑CLI uses AI function calling to build playlists deterministically. The
 
 ## Overview
 
-Natural language requests become structured parameters. An AI orchestrator then calls functions to fetch items, build a DP-1 playlist, verify it, optionally sign, and send to a device.
+Natural language requests become structured parameters. An AI orchestrator then calls functions to fetch items, build a DP-1 playlist, validate structure (`verify_playlist`), optionally sign, and send to a device.
 
 Pipeline:
 
@@ -32,7 +32,7 @@ Defined in `src/ai-orchestrator/index.js` as tool schemas for OpenAI‑compatibl
 - `search_feed_playlist(playlistName)` → fuzzy-match across configured feeds
 - `fetch_feed_playlist_items(playlistName, quantity, duration)`
 - `build_playlist(items, title?, slug?, shuffle?)` → returns DP-1 playlist
-- `verify_playlist(playlist)` → validates DP-1 compliance (must precede send)
+- `verify_playlist(playlist)` → DP-1 parse/structure validation only (must precede send; use CLI `verify` for signatures)
 - `verify_addresses(addresses[])` → validates Ethereum (0x...) and Tezos (tz.../KT1) address formats
 - `send_to_device(playlist, deviceName?)`
 - `resolve_domains(domains[], displayResults?)` → ENS/TNS resolution
@@ -41,7 +41,7 @@ Notes enforced by the orchestrator:
 
 - Always pass complete requirement objects (no truncating addresses/token IDs)
 - Resolve domains (`.eth`, `.tez`) before `query_address`
-- Build, then verify before sending to devices
+- Build, then `verify_playlist` (structure) before sending to devices
 - Shuffle is controlled by `playlistSettings.preserveOrder`
 
 ## Implementations (server‑side)
@@ -51,7 +51,7 @@ Located in `src/utilities/` and wired in `src/ai-orchestrator/index.js`:
 - `buildDP1Playlist({ items, title, slug })` → `src/utilities/playlist-builder.js`
 - `sendPlaylistToDevice({ playlist, deviceName })` → `src/utilities/ff1-device.ts`
 - `resolveDomains({ domains, displayResults })` → `src/utilities/domain-resolver.ts`
-- `verifyPlaylist({ playlist })` → `src/utilities/playlist-verifier.ts`
+- `verifyPlaylist({ playlist })` in `functions.js` → delegates to `validatePlaylist` in `playlist-verifier.ts` (structure/parse only)
 - `verifyAddresses({ addresses })` → `src/utilities/functions.js` (uses `address-validator.ts`)
 - Feed utilities: `feed-fetcher.js`
 
@@ -59,13 +59,19 @@ Located in `src/utilities/` and wired in `src/ai-orchestrator/index.js`:
 
 Two options are available:
 
-1) No-AI deterministic build (recommended for automation): Use CLI `build` command with a JSON file or stdin containing:
+1. No-AI deterministic build (recommended for automation): Use CLI `build` command with a JSON file or stdin containing:
 
 ```json
 {
   "requirements": [
     { "type": "fetch_feed", "playlistName": "Social Codes", "quantity": 3 },
-    { "type": "build_playlist", "blockchain": "ethereum", "contractAddress": "0x...", "tokenIds": ["1","2"], "quantity": 2 }
+    {
+      "type": "build_playlist",
+      "blockchain": "ethereum",
+      "contractAddress": "0x...",
+      "tokenIds": ["1", "2"],
+      "quantity": 2
+    }
   ],
   "playlistSettings": { "durationPerItem": 10, "preserveOrder": true, "title": "My Mix" }
 }
@@ -73,7 +79,7 @@ Two options are available:
 
 This path bypasses the intent parser/orchestrator and calls utilities directly. Validation and sensible defaults are applied in `src/main.ts`.
 
-2) AI‑orchestrated deterministic build (recommended for prompts): Use `chat` with `--verbose` to see tool calls. The orchestrator enforces complete requirement objects, then validates the result with `verify_playlist` before sending.
+2. AI‑orchestrated deterministic build (recommended for prompts): Use `chat` with `--verbose` to see tool calls. The orchestrator enforces complete requirement objects, then runs `verify_playlist` (structure only) before sending.
 
 ## Extending Functionality (OSS‑first)
 
@@ -88,5 +94,3 @@ This path bypasses the intent parser/orchestrator and calls utilities directly. 
 - Verify via `dp1-js` for DP-1 conformance (canonical JSON + Ed25519 signing supported)
 - Enforce max item counts and ordering/shuffle rules during build
 - Batch domain resolution; report failures without crashing the flow
-
-

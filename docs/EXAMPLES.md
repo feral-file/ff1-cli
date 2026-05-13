@@ -148,7 +148,7 @@ npm run dev -- chat "Get 5 from Unsupervised, shuffle, display on 'Living Room',
 1. Intent parser detects "publish" keywords with sources/requirements
 2. Calls `get_feed_servers` to retrieve configured servers
 3. If 1 server → uses it automatically; if 2+ servers → asks user to pick
-4. Builds playlist → verifies → publishes automatically
+4. Builds playlist → validates structure → publishes automatically
 
 **Mode 2: Publish Existing File** (e.g., "publish playlist")
 
@@ -217,7 +217,7 @@ npm run dev -- publish --help
 
 ### Flow
 
-1. **Validate** - Playlist verified against DP-1 specification
+1. **Validate** - Playlist structure checked (`validate`-style parse; use `verify` for signatures)
 2. **Select Server** - If multiple servers, choose which one (interactive or via `-s` flag)
 3. **Publish** - Send validated playlist to selected feed server
 4. **Confirm** - Returns playlist ID and server details

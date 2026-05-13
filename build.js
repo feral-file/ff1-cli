@@ -16,7 +16,7 @@ async function build() {
       entryPoints: ['index.ts'],
       bundle: true,
       platform: 'node',
-      target: 'node18',
+      target: 'node22',
       format: 'cjs',
       outfile: 'dist/ff1.js',
       banner: {
