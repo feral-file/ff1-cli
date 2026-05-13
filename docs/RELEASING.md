@@ -27,12 +27,16 @@ Run the appropriate script on each target platform and upload each pair to the G
 ## GitHub Actions
 
 - **Build** (`build.yml`): Trigger manually (Actions → Build → Run workflow) or on pull requests. Builds binaries on macOS, Linux, and Windows and uploads them as workflow artifacts for download.
-- **Release** (`release.yml`): Runs a fast version check on every pushed tag and fails if `package.json` does not match the tag exactly. When you **publish a release** (create a release from the repo Releases page, or publish an existing draft), it validates again, publishes to npm, builds binaries, then uploads them to that release.
+- **Release** (`release.yml`): On **published** GitHub Releases, validates that `package.json` matches the tag, publishes to npm, builds binaries, then uploads assets to that release. Optional **manual run** (Actions → Release → Run workflow) can publish a given version to npm without creating a release (no binary upload); use that only when you intentionally bypass the normal tag + GitHub Release flow.
 
 ## npm Publish Requirements
 
 - Set `NPM_TOKEN` in GitHub Actions secrets with an npm automation token.
 - Ensure `package.json` version matches the release tag (e.g. tag `1.0.2` → `"version": "1.0.2"`). The release job fails fast when they differ.
+- **Stable vs beta on npm** (same idea as `display-protocol/dp1-js` `publish.yml`):
+  - A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`** (`npm publish` with no `--tag`).
+  - A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag (`npm publish --tag beta`). Consumers install with `npm install ff1-cli@beta` (or pin that dist-tag in CI) until you ship a stable release.
+  - **Manual workflow**: provide `version` and choose `beta` vs `latest`; this updates the checked-out `package.json` with `npm version` before publish, like the manual path in dp1-js.
 
 ## Release notes and breaking changes
 
