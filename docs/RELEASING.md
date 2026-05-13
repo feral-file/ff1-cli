@@ -36,7 +36,7 @@ Run the appropriate script on each target platform and upload each pair to the G
 - **Stable vs beta on npm** (same idea as `display-protocol/dp1-js` `publish.yml`):
   - A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`** (`npm publish` with no `--tag`).
   - A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag (`npm publish --tag beta`). Consumers install with `npm install ff1-cli@beta` (or pin that dist-tag in CI) until you ship a stable release.
-  - **Manual workflow**: provide `version` (CI runs `npm version` when it differs from `package.json`) and choose `beta` vs `latest`; after publish, the workflow fails if `ff1-cli` on that dist-tag does not match the version that was shipped.
+  - **Manual workflow**: provide `version` (CI runs `npm version` when it differs from `package.json`) and choose `beta` vs `latest`; after publish, the workflow fails if `ff1-cli` on that dist-tag does not match the version that was shipped. Publishing to **`latest` from a manual run is allowed only when the workflow runs from the **`main`** branch (guarded in CI) so ad-hoc branches cannot overwrite the stable dist-tag by mistake.
 
 ## Release notes and breaking changes
 

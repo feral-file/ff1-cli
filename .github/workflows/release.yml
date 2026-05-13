@@ -84,7 +84,7 @@ jobs:
       - name: Manual npm publish (no tag gate)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "Skipping tag check: npm publish uses the version already in package.json on the checked-out ref."
+          echo "Skipping release tag check. Publish job may set version from the workflow version input (npm version) before npm publish."
 
   build:
     needs:
@@ -119,6 +119,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Avoid accidentally publishing a feature-branch tree to the stable dist-tag.
+      - name: Guard manual publish to latest off main
+        if: github.event_name == 'workflow_dispatch' && inputs.beta == false
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error title=Invalid ref for npm latest::Manual publish to dist-tag latest is only allowed from refs/heads/main. Current: ${GITHUB_REF}"
+            exit 1
+          fi
 
       # npm version exits 1 when the version is already set ("Version not changed").
       - name: Set package version (manual publish only)
@@ -208,7 +217,7 @@ jobs:
             if [ "$BETA" = "true" ]; then
               NPM_VERSION=$(npm view ff1-cli@beta version)
             else
-              NPM_VERSION=$(npm view ff1-cli version)
+              NPM_VERSION=$(npm view ff1-cli@latest version)
             fi
 
             if [ "$NPM_VERSION" = "$EXPECTED" ]; then
