@@ -9,11 +9,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. 1.0.18-beta.0)'
+        description: "Version to publish (e.g. 1.0.18-beta.0)"
         required: true
         type: string
       beta:
-        description: 'Publish to the beta dist-tag (false = latest)'
+        description: "Publish to the beta dist-tag (false = latest)"
         required: false
         default: true
         type: boolean
@@ -65,7 +65,7 @@ jobs:
         if: github.event_name == 'release'
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Verify package version matches tag
         if: github.event_name == 'release'
@@ -84,7 +84,7 @@ jobs:
       - name: Manual npm publish (no tag gate)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "Skipping tag check; npm version is applied from the workflow input before publish."
+          echo "Skipping tag check: npm publish uses the version already in package.json on the checked-out ref."
 
   build:
     needs:
@@ -102,6 +102,8 @@ jobs:
       - pre-publish
       - publish-meta
     runs-on: ubuntu-latest
+    outputs:
+      expected_version: ${{ steps.pkg.outputs.version }}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -112,8 +114,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: npm ci
@@ -130,6 +132,12 @@ jobs:
           else
             echo "package.json already at ${TARGET}; skipping npm version."
           fi
+
+      # After optional manual version bump, record exactly what npm publish will ship.
+      - id: pkg
+        name: Record package version for npm verification
+        run: |
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm (beta)
         if: needs.publish-meta.outputs.beta == 'true'
@@ -171,8 +179,54 @@ jobs:
           GIT_DIR: ${{ github.workspace }}/.git
           GIT_WORK_TREE: ${{ github.workspace }}
 
+  # Confirms the package is visible on the intended dist-tag for every path that runs publish-npm.
+  verify-npm:
+    needs: [publish-npm, publish-meta]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify npm package version on dist-tag
+        run: |
+          set -euo pipefail
+
+          EXPECTED="${{ needs.publish-npm.outputs.expected_version }}"
+          BETA="${{ needs.publish-meta.outputs.beta }}"
+          if [ "$BETA" = "true" ]; then
+            DIST_LABEL="beta"
+          else
+            DIST_LABEL="latest"
+          fi
+          ATTEMPTS=10
+          SLEEP_SECONDS=10
+
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if [ "$BETA" = "true" ]; then
+              NPM_VERSION=$(npm view ff1-cli@beta version)
+            else
+              NPM_VERSION=$(npm view ff1-cli version)
+            fi
+
+            if [ "$NPM_VERSION" = "$EXPECTED" ]; then
+              echo "npm version check passed: $NPM_VERSION (dist-tag ${DIST_LABEL})"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              echo "npm version is $NPM_VERSION, expected $EXPECTED; retrying in ${SLEEP_SECONDS}s (${attempt}/${ATTEMPTS})"
+              sleep "$SLEEP_SECONDS"
+            fi
+          done
+
+          echo "npm version check failed: expected $EXPECTED on dist-tag ${DIST_LABEL}"
+          exit 1
+
   verify-release:
-    needs: [publish-npm, upload-release-assets, publish-meta]
+    needs: [verify-npm, upload-release-assets]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
@@ -203,38 +257,3 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Verify npm package version
-        run: |
-          set -euo pipefail
-
-          TAG="${{ github.event.release.tag_name }}"
-          BETA="${{ needs.publish-meta.outputs.beta }}"
-          if [ "$BETA" = "true" ]; then
-            DIST_LABEL="beta"
-          else
-            DIST_LABEL="latest"
-          fi
-          ATTEMPTS=10
-          SLEEP_SECONDS=10
-
-          for attempt in $(seq 1 "$ATTEMPTS"); do
-            if [ "$BETA" = "true" ]; then
-              NPM_VERSION=$(npm view ff1-cli@beta version)
-            else
-              NPM_VERSION=$(npm view ff1-cli version)
-            fi
-
-            if [ "$NPM_VERSION" = "$TAG" ]; then
-              echo "npm version check passed: $NPM_VERSION (dist-tag ${DIST_LABEL})"
-              exit 0
-            fi
-
-            if [ "$attempt" -lt "$ATTEMPTS" ]; then
-              echo "npm version is $NPM_VERSION, expected $TAG; retrying in ${SLEEP_SECONDS}s (${attempt}/${ATTEMPTS})"
-              sleep "$SLEEP_SECONDS"
-            fi
-          done
-
-          echo "npm version check failed: expected $TAG on dist-tag ${DIST_LABEL}"
-          exit 1
