@@ -44,6 +44,8 @@ jobs:
           node-version: '22'
 
       - name: Verify package version matches tag
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
@@ -64,8 +66,6 @@ jobs:
 
             echo "Version check passed: package.json and tag are both $PACKAGE_VERSION."
           else
-            VERSION_INPUT="${{ inputs.version }}"
-
             if [[ "$VERSION_INPUT" != *beta* ]]; then
               echo "Workflow dispatch beta runs must use a version containing 'beta'."
               exit 1
@@ -114,11 +114,13 @@ jobs:
         run: npm ci
 
       - name: Publish to npm
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [[ "${{ inputs.version }}" != *beta* ]]; then
+            if [[ "$VERSION_INPUT" != *beta* ]]; then
               echo "Workflow dispatch beta runs must use a version containing 'beta'."
               exit 1
             fi
@@ -135,10 +137,12 @@ jobs:
 
       - name: Verify beta publish
         if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
-          EXPECTED_VERSION="${{ inputs.version }}"
+          EXPECTED_VERSION="$VERSION_INPUT"
           ATTEMPTS=10
           SLEEP_SECONDS=10
 
