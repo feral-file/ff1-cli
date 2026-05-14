@@ -27,12 +27,16 @@ Run the appropriate script on each target platform and upload each pair to the G
 ## GitHub Actions
 
 - **Build** (`build.yml`): Trigger manually (Actions → Build → Run workflow) or on pull requests. Builds binaries on macOS, Linux, and Windows and uploads them as workflow artifacts for download.
-- **Release** (`release.yml`): Runs a fast version check on every pushed tag and fails if `package.json` does not match the tag exactly. When you **publish a release** (create a release from the repo Releases page, or publish an existing draft), it validates again, publishes to npm, builds binaries, then uploads them to that release.
+- **Release** (`release.yml`): On **published** GitHub Releases, validates that `package.json` matches the tag, publishes to npm, then builds binaries and uploads assets. A GitHub Release marked as a pre-release publishes to the **`beta`** dist-tag; the version must also contain `beta`. A manual workflow dispatch can also publish a beta version when you need to bypass the normal release flow, but run it from `main`.
 
 ## npm Publish Requirements
 
 - Set `NPM_TOKEN` in GitHub Actions secrets with an npm automation token.
 - Ensure `package.json` version matches the release tag (e.g. tag `1.0.2` → `"version": "1.0.2"`). The release job fails fast when they differ.
+- A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`**.
+- A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag, and its version must contain `beta` so the package version stays aligned with the beta channel.
+- Manual workflow dispatch runs publish to the **`beta`** dist-tag too, and the `version` input must contain `beta`, match `package.json`, and be dispatched from `main`.
+- Example beta version: `1.0.18-beta.0`.
 
 ## Release notes and breaking changes
 

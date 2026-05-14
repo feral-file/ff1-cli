@@ -1,16 +1,37 @@
-# On release publish: run build workflow, then upload artifacts to the existing release.
 name: Release
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (for beta runs, include beta in the version)"
+        required: true
+        type: string
 
 jobs:
   ci:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.ref_name == 'main'
     uses: ./.github/workflows/ci.yml
 
+  dispatch-guard:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require workflow dispatch from main
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "Workflow dispatch beta runs must be started from main."
+            exit 1
+          fi
+
+          echo "Workflow dispatch is running from main."
+
   verify-version:
+    if: github.event_name == 'release' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,21 +44,42 @@ jobs:
           node-version: '22'
 
       - name: Verify package version matches tag
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "release" ]; then
+            PACKAGE_VERSION=$(node -p "require('./package.json').version")
             TAG_VERSION="${{ github.event.release.tag_name }}"
+
+            if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+              echo "Version mismatch: package.json is $PACKAGE_VERSION but tag is $TAG_VERSION."
+              echo "Before cutting a release, set package.json version to the exact tag (example: tag 1.0.2 -> version 1.0.2)."
+              exit 1
+            fi
+
+            if [ "${{ github.event.release.prerelease }}" = "true" ] && [[ "$PACKAGE_VERSION" != *beta* ]]; then
+              echo "Beta releases must use a version containing 'beta'."
+              exit 1
+            fi
+
+            echo "Version check passed: package.json and tag are both $PACKAGE_VERSION."
           else
-            TAG_VERSION="${{ github.ref_name }}"
-          fi
+            if [[ "$VERSION_INPUT" != *beta* ]]; then
+              echo "Workflow dispatch beta runs must use a version containing 'beta'."
+              exit 1
+            fi
 
-          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-            echo "Version mismatch: package.json is $PACKAGE_VERSION but tag is $TAG_VERSION."
-            echo "Before cutting a release, set package.json version to the exact tag (example: tag 1.0.2 -> version 1.0.2)."
-            exit 1
-          fi
+            PACKAGE_VERSION=$(node -p "require('./package.json').version")
+            if [ "$PACKAGE_VERSION" != "$VERSION_INPUT" ]; then
+              echo "Version mismatch: package.json is $PACKAGE_VERSION but workflow input is $VERSION_INPUT."
+              echo "Before running the manual beta publish, set package.json version to the exact input version."
+              exit 1
+            fi
 
-          echo "Version check passed: package.json and tag are both $PACKAGE_VERSION."
+            echo "Version check passed: package.json and workflow input are both $PACKAGE_VERSION."
+          fi
 
   build:
     needs:
@@ -53,7 +95,7 @@ jobs:
     needs:
       - ci
       - verify-version
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.ref_name == 'main'
     runs-on: ubuntu-latest
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -72,7 +114,53 @@ jobs:
         run: npm ci
 
       - name: Publish to npm
-        run: npm publish --access public
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [[ "$VERSION_INPUT" != *beta* ]]; then
+              echo "Workflow dispatch beta runs must use a version containing 'beta'."
+              exit 1
+            fi
+            npm publish --tag beta --access public
+          elif [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            if [[ "${{ github.event.release.tag_name }}" != *beta* ]]; then
+              echo "Beta releases must use a tag containing 'beta'."
+              exit 1
+            fi
+            npm publish --tag beta --access public
+          else
+            npm publish --access public
+          fi
+
+      - name: Verify beta publish
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          EXPECTED_VERSION="$VERSION_INPUT"
+          ATTEMPTS=10
+          SLEEP_SECONDS=10
+
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            NPM_VERSION=$(npm view ff-cli dist-tags.beta)
+            if [ "$NPM_VERSION" = "$EXPECTED_VERSION" ]; then
+              echo "npm beta dist-tag check passed: $NPM_VERSION"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              echo "npm beta dist-tag is $NPM_VERSION, expected $EXPECTED_VERSION; retrying in ${SLEEP_SECONDS}s (${attempt}/${ATTEMPTS})"
+              sleep "$SLEEP_SECONDS"
+            fi
+          done
+
+          echo "npm beta dist-tag check failed: expected $EXPECTED_VERSION"
+          exit 1
 
   upload-release-assets:
     needs: build
@@ -147,8 +235,14 @@ jobs:
           ATTEMPTS=10
           SLEEP_SECONDS=10
 
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            NPM_QUERY="npm view ff-cli dist-tags.beta"
+          else
+            NPM_QUERY="npm view ff-cli version"
+          fi
+
           for attempt in $(seq 1 "$ATTEMPTS"); do
-            NPM_VERSION=$(npm view ff-cli version)
+            NPM_VERSION=$($NPM_QUERY)
             if [ "$NPM_VERSION" = "$TAG" ]; then
               echo "npm version check passed: $NPM_VERSION"
               exit 0
