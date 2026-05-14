@@ -27,7 +27,7 @@ describe('resolvePlaySource', () => {
   let tmp: string;
 
   before(() => {
-    tmp = mkdtempSync(join(tmpdir(), 'ff1-play-source-'));
+    tmp = mkdtempSync(join(tmpdir(), 'ff-cli-play-source-'));
   });
 
   after(() => {

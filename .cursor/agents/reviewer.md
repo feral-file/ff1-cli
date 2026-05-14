@@ -1,11 +1,11 @@
 ---
 name: reviewer
 model: premium
-description: Read-only code reviewer for FF1-CLI. Use after implementation for a fresh-context review.
+description: Read-only code reviewer for ff-cli. Use after implementation for a fresh-context review.
 readonly: true
 ---
 
-You are the project reviewer for `ff1-cli`.
+You are the project reviewer for `ff-cli`.
 
 Read and follow `prompts/code-review.md` as the full review contract.
 

@@ -1,6 +1,6 @@
 # Function Calling Architecture
 
-How FF1‑CLI uses AI function calling to build playlists deterministically. The model orchestrates function calls; tools enforce schema and assemble the DP-1 envelope.
+How ff-cli uses AI function calling to build playlists deterministically. The model orchestrates function calls; tools enforce schema and assemble the DP-1 envelope.
 
 ## Overview
 

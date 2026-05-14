@@ -165,13 +165,13 @@ export const setupCommand = new Command('setup')
           ? existingDevices.findIndex((d) => d === existingEntry)
           : -1;
         const existingName = existingEntry?.name || '';
-        const defaultName = existingName || selection.discoveredName || 'ff1';
+        const defaultName = existingName || selection.discoveredName || 'art-computer';
         const namePrompt =
-          defaultName !== 'ff1'
+          defaultName !== 'art-computer'
             ? `Device name (kitchen, office, etc.) [${defaultName}]: `
             : 'Device name (kitchen, office, etc.): ';
         const nameAnswer = await ask(namePrompt);
-        let deviceName = nameAnswer || defaultName || 'ff1';
+        let deviceName = nameAnswer || defaultName || 'art-computer';
 
         // Same name-collision guard as `device add`: reject names that would
         // clobber a different device entry. Only fires when existingIndex !== -1
@@ -188,7 +188,7 @@ export const setupCommand = new Command('setup')
             )
           );
           const retryAnswer = await ask('Device name: ');
-          deviceName = retryAnswer || 'ff1';
+          deviceName = retryAnswer || 'art-computer';
           const retryConflict =
             existingIndex !== -1
               ? existingDevices.find((d, i) => d.name === deviceName && i !== existingIndex)
@@ -238,10 +238,10 @@ export const setupCommand = new Command('setup')
         }
       }
       if (!hasApiKey) {
-        console.log(chalk.dim(`\nTo use ff1 chat, add an API key for ${selectedModel}`));
+        console.log(chalk.dim(`\nTo use ff-cli chat, add an API key for ${selectedModel}`));
       }
 
-      console.log(chalk.dim('\nRun: ff1 play'));
+      console.log(chalk.dim('\nRun: ff-cli play'));
     } catch (error) {
       console.error(chalk.red('\nSetup failed:'), (error as Error).message);
       process.exit(1);

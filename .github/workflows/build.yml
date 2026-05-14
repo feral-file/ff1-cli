@@ -46,7 +46,7 @@ jobs:
       - name: Build asset
         run: ${{ matrix.script }}
         env:
-          FF1_CLI_VERSION: ${{ github.event_name == 'pull_request' && '0.1' || inputs.version }}
+          FF_CLI_VERSION: ${{ github.event_name == 'pull_request' && '0.1' || inputs.version }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

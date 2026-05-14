@@ -18,20 +18,20 @@ npm run dev -- config validate
 
 ## OpenClaw skill prompt
 
-If you want OpenClaw to run FF1 CLI end-to-end without confirmation, start from:
+If you want OpenClaw to run ff-cli end-to-end without confirmation, start from:
 
-`skills/ff1-control/SKILL.md`
+`skills/ff-control/SKILL.md`
 
 Recommended local install path:
 
 ```bash
 mkdir -p ~/.openclaw/skills
-ln -sfn ~/Work/ff1-cli/skills/ff1-control ~/.openclaw/skills/ff1-control
+ln -sfn ~/Work/ff-cli/skills/ff-control ~/.openclaw/skills/ff-control
 ```
 
 Compatibility copy (same prompt):
 
-`examples/openclaw-ff1-skill.md`
+`examples/openclaw-ff-skill.md`
 
 Paste that prompt into your OpenClaw skill config, then test with plain requests like:
 
@@ -134,8 +134,8 @@ npm run dev chat
 ### Combined: Display + Publish
 
 ```bash
-# Display on FF1 AND publish to feed
-npm run dev -- chat "Build playlist from contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; mix them up; send to my FF1 and publish to my feed" -o playlist.json -v
+# Display on Art Computer AND publish to feed
+npm run dev -- chat "Build playlist from contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; mix them up; send to my Art Computer and publish to my feed" -o playlist.json -v
 
 # With explicit device name
 npm run dev -- chat "Get 5 from Unsupervised, shuffle, display on 'Living Room', and publish to feed" -v

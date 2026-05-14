@@ -1,5 +1,5 @@
 /**
- * Type definitions for FF1-CLI
+ * Type definitions for ff-cli
  */
 
 export interface ModelConfig {

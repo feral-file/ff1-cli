@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="feral-file/ff1-cli"
-INSTALL_DIR_DEFAULT="$HOME/.local/ff1-cli"
+REPO="feral-file/ff-cli"
+INSTALL_DIR_DEFAULT="$HOME/.local/ff-cli"
 BIN_DIR_DEFAULT="$HOME/.local/bin"
 
-INSTALL_DIR="${FF1_CLI_INSTALL_DIR:-$INSTALL_DIR_DEFAULT}"
-BIN_DIR="${FF1_CLI_BIN_DIR:-$BIN_DIR_DEFAULT}"
-VERSION="${FF1_CLI_VERSION:-latest}"
-BASE_URL="${FF1_CLI_BASE_URL:-https://github.com/$REPO/releases}"
+INSTALL_DIR="${FF_CLI_INSTALL_DIR:-$INSTALL_DIR_DEFAULT}"
+BIN_DIR="${FF_CLI_BIN_DIR:-$BIN_DIR_DEFAULT}"
+VERSION="${FF_CLI_VERSION:-latest}"
+BASE_URL="${FF_CLI_BASE_URL:-https://github.com/$REPO/releases}"
 
 OS_RAW="$(uname -s)"
 ARCH_RAW="$(uname -m)"
@@ -21,7 +21,7 @@ case "$OS_RAW" in
     OS="linux"
     ;;
   *)
-    echo "ff1-cli installer: unsupported OS: $OS_RAW"
+    echo "ff-cli installer: unsupported OS: $OS_RAW"
     exit 1
     ;;
 esac
@@ -34,12 +34,12 @@ case "$ARCH_RAW" in
     ARCH="arm64"
     ;;
   *)
-    echo "ff1-cli installer: unsupported architecture: $ARCH_RAW"
+    echo "ff-cli installer: unsupported architecture: $ARCH_RAW"
     exit 1
     ;;
 esac
 
-ASSET="ff1-cli-$OS-$ARCH.tar.gz"
+ASSET="ff-cli-$OS-$ARCH.tar.gz"
 CHECKSUM="$ASSET.sha256"
 
 if [ "$VERSION" = "latest" ]; then
@@ -56,7 +56,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Downloading ff1-cli ($OS/$ARCH)..."
+echo "Downloading ff-cli ($OS/$ARCH)..."
 curl -fsSL "$DOWNLOAD_URL" -o "$WORKDIR/$ASSET"
 curl -fsSL "$CHECKSUM_URL" -o "$WORKDIR/$CHECKSUM"
 
@@ -65,18 +65,18 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
   (cd "$WORKDIR" && shasum -a 256 -c "$CHECKSUM")
 else
-  echo "ff1-cli installer: missing sha256sum/shasum for verification."
+  echo "ff-cli installer: missing sha256sum/shasum for verification."
   exit 1
 fi
 
 mkdir -p "$INSTALL_DIR" "$BIN_DIR"
 tar -xzf "$WORKDIR/$ASSET" -C "$INSTALL_DIR" --strip-components=1
 
-ln -sf "$INSTALL_DIR/bin/ff1" "$BIN_DIR/ff1"
+ln -sf "$INSTALL_DIR/bin/ff-cli" "$BIN_DIR/ff-cli"
 
-if ! command -v ff1 >/dev/null 2>&1; then
-  echo "Installed ff1 to $BIN_DIR, but it is not on your PATH."
+if ! command -v ff-cli >/dev/null 2>&1; then
+  echo "Installed ff-cli to $BIN_DIR, but it is not on your PATH."
   echo "Add this to your shell profile: export PATH=\"$BIN_DIR:\$PATH\""
 else
-  echo "ff1-cli installed. Run: ff1 --help"
+  echo "ff-cli installed. Run: ff-cli --help"
 fi
