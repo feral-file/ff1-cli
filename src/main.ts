@@ -262,6 +262,9 @@ export async function buildPlaylist(
     if (sendMatch) {
       const deviceName = sendMatch[1]?.trim() || defaultDeviceName;
       const { confirmPlaylistForSending } = await import('./utilities/playlist-send');
+      const { preparePlaylistForDelivery } = await import('./utilities/playlist-verifier');
+      const playlistConfig = getConfig().playlist;
+      const privateKey = playlistConfig?.privateKey || process.env.PLAYLIST_PRIVATE_KEY;
       const confirmation = await confirmPlaylistForSending(outputPath, deviceName);
       if (!confirmation.success) {
         if (confirmation.message) {
@@ -275,8 +278,27 @@ export async function buildPlaylist(
         };
       }
 
+      const deliveryResult = await preparePlaylistForDelivery(
+        confirmation.playlist,
+        true,
+        privateKey
+      );
+      if (!deliveryResult.valid) {
+        console.log();
+        console.error(chalk.red('Send failed'));
+        if (deliveryResult.error) {
+          console.error(chalk.red(`  ${deliveryResult.error}`));
+        }
+        return {
+          success: false,
+          error: deliveryResult.error || 'Failed to verify playlist before sending',
+          playlist: null,
+          action: 'send_playlist',
+        };
+      }
+
       const sendResult = await utilities.sendToDevice(
-        confirmation.playlist as Playlist,
+        deliveryResult.playlist as Playlist,
         confirmation.deviceName
       );
 
@@ -384,12 +406,34 @@ export async function buildPlaylist(
       // Handle playlist sending directly
       const sendParams = params as Record<string, unknown>;
       const utilities = getUtilities();
+      const { preparePlaylistForDelivery } = await import('./utilities/playlist-verifier');
+      const playlistConfig = getConfig().playlist;
+      const privateKey = playlistConfig?.privateKey || process.env.PLAYLIST_PRIVATE_KEY;
 
       console.log();
       console.log(chalk.cyan('Sending to device'));
 
-      const sendResult = await utilities.sendToDevice(
+      const deliveryResult = await preparePlaylistForDelivery(
         sendParams.playlist as Playlist,
+        true,
+        privateKey
+      );
+      if (!deliveryResult.valid) {
+        console.log();
+        console.error(chalk.red('Send failed'));
+        if (deliveryResult.error) {
+          console.error(chalk.red(`  ${deliveryResult.error}`));
+        }
+        return {
+          success: false,
+          error: deliveryResult.error || 'Failed to verify playlist before sending',
+          playlist: null,
+          action: 'send_playlist',
+        };
+      }
+
+      const sendResult = await utilities.sendToDevice(
+        deliveryResult.playlist as Playlist,
         resolveSendPlaylistDeviceName(
           sendParams.deviceName as string | null | undefined,
           defaultDeviceName

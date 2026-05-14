@@ -1,6 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import fs from 'fs';
+import { getPlaylistConfig } from '../config';
 import type { Playlist } from '../types';
+import { preparePlaylistForDelivery } from './playlist-verifier';
 
 interface PublishResult {
   success: boolean;
@@ -56,17 +58,22 @@ export async function publishPlaylist(
       };
     }
 
-    // Step 2: Parse / structure validation (use `verify` CLI for signature checks)
-    const { validatePlaylist } = await import('./playlist-verifier');
-    const validationResult = await validatePlaylist(playlist);
+    // Step 2: Verify signature integrity before publishing. If the playlist is
+    // structurally valid but unsigned, we sign it with the configured key and
+    // verify again before upload.
+    const playlistConfig = getPlaylistConfig();
+    const privateKey = playlistConfig.privateKey || process.env.PLAYLIST_PRIVATE_KEY;
+    const deliveryResult = await preparePlaylistForDelivery(playlist, true, privateKey);
 
-    if (!validationResult.valid) {
+    if (!deliveryResult.valid) {
       return {
         success: false,
-        error: `Playlist validation failed: ${validationResult.error}`,
-        message: validationResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n'),
+        error: `Playlist verification failed: ${deliveryResult.error}`,
+        message: deliveryResult.details?.map((d) => `  • ${d.path}: ${d.message}`).join('\n'),
       };
     }
+
+    playlist = deliveryResult.playlist as Playlist;
 
     // Step 3: Send validated playlist to feed server
     const headers: Record<string, string> = {
