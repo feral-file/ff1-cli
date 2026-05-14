@@ -129,6 +129,73 @@ export async function validatePlaylist(playlist: unknown): Promise<{
   }
 }
 
+/**
+ * Verify a playlist for delivery and optionally sign it when the playlist is
+ * structurally valid but not yet signed.
+ *
+ * This is the delivery gate used by `play`, `send`, and `publish`. The helper
+ * first runs cryptographic verification. If the playlist already verifies, the
+ * original object is returned unchanged. If verification fails and signing is
+ * allowed, the helper tries to sign the playlist with the configured private
+ * key, then verifies the signed envelope before allowing delivery.
+ *
+ * The helper intentionally does not mutate the input playlist. Callers can use
+ * the returned `playlist` value directly for send/publish paths.
+ */
+export async function preparePlaylistForDelivery(
+  playlist: unknown,
+  allowSign = true,
+  privateKey?: string
+): Promise<{
+  valid: boolean;
+  signed: boolean;
+  playlist?: unknown;
+  error?: string;
+  details?: Array<{ path: string; message: string }>;
+}> {
+  const verified = await verifyPlaylist(playlist);
+  if (verified.valid) {
+    return { valid: true, signed: false, playlist };
+  }
+
+  if (!allowSign) {
+    return {
+      valid: false,
+      signed: false,
+      error: verified.error,
+      details: verified.details,
+    };
+  }
+
+  try {
+    const { signPlaylist } = await import('./playlist-signer.js');
+    const signature = await signPlaylist(playlist as Record<string, unknown>, privateKey);
+    const signedPlaylist = {
+      ...(playlist as Record<string, unknown>),
+      signature: undefined,
+      signatures: [signature],
+    };
+    const signedResult = await verifyPlaylist(signedPlaylist);
+
+    if (signedResult.valid) {
+      return { valid: true, signed: true, playlist: signedPlaylist };
+    }
+
+    return {
+      valid: false,
+      signed: true,
+      error: signedResult.error,
+      details: signedResult.details,
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      signed: false,
+      error: `Failed to sign playlist for delivery: ${(error as Error).message}`,
+    };
+  }
+}
+
 async function parseDp1Playlist(playlist: unknown): Promise<{
   error?: { message: string; details?: Array<{ path: string; message: string }> };
 }> {
