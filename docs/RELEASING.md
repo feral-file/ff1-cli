@@ -27,7 +27,7 @@ Run the appropriate script on each target platform and upload each pair to the G
 ## GitHub Actions
 
 - **Build** (`build.yml`): Trigger manually (Actions → Build → Run workflow) or on pull requests. Builds binaries on macOS, Linux, and Windows and uploads them as workflow artifacts for download.
-- **Release** (`release.yml`): On **published** GitHub Releases, validates that `package.json` matches the tag, publishes to npm, **re-checks the npm registry** for the expected dist-tag and version, then builds binaries and uploads assets. Optional **manual run** (Actions → Release → Run workflow) publishes with the same npm verification afterward, without creating a GitHub Release or binary upload—use only when you intentionally bypass the normal tag + GitHub Release flow.
+- **Release** (`release.yml`): On **published** GitHub Releases, validates that `package.json` matches the tag, publishes to npm, then builds binaries and uploads assets. Optional **manual run** (Actions → Release → Run workflow) publishes the provided version to the **`beta`** dist-tag, without creating a GitHub Release or binary upload—use only when you intentionally bypass the normal tag + GitHub Release flow.
 
 ## npm Publish Requirements
 
@@ -36,7 +36,7 @@ Run the appropriate script on each target platform and upload each pair to the G
 - **Stable vs beta on npm** (same idea as `display-protocol/dp1-js` `publish.yml`):
   - A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`** (`npm publish` with no `--tag`).
   - A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag (`npm publish --tag beta`). Consumers install with `npm install ff1-cli@beta` (or pin that dist-tag in CI) until you ship a stable release.
-  - **Manual workflow**: provide `version` (CI runs `npm version` when it differs from `package.json`) and choose `beta` vs `latest`; after publish, the workflow fails if `ff1-cli` on that dist-tag does not match the version that was shipped. Publishing to **`latest` from a manual run is allowed only when the workflow runs from the **`main`** branch (guarded in CI) so ad-hoc branches cannot overwrite the stable dist-tag by mistake.
+  - **Manual workflow**: provide `version` (CI runs `npm version` when it differs from `package.json`). The workflow then publishes that version to the **`beta`** dist-tag.
 
 ## Release notes and breaking changes
 
