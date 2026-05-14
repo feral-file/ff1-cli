@@ -16,7 +16,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   build:
-    needs: [ci]
+    needs: [ci, publish-npm]
     if: github.event_name == 'release'
     uses: ./.github/workflows/build.yml
     with:
