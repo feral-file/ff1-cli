@@ -3,7 +3,7 @@
   "instructions": ["AGENTS.md"],
   "agent": {
     "reviewer": {
-      "description": "Read-only code reviewer for FF1-CLI. Use after implementation for a fresh-context review of the diff and verification output.",
+      "description": "Read-only code reviewer for ff-cli. Use after implementation for a fresh-context review of the diff and verification output.",
       "mode": "subagent",
       "prompt": "{file:./prompts/code-review.md}",
       "tools": {
@@ -14,7 +14,7 @@
   },
   "command": {
     "review": {
-      "description": "Run a fresh-context FF1-CLI code review using the shared review contract",
+      "description": "Run a fresh-context ff-cli code review using the shared review contract",
       "template": "Review the current changes using the contract in prompts/code-review.md.\n\nUse this evidence:\n- Diff stat: !`git diff --stat`\n- Full diff: !`git diff`\n- Verification: run or paste relevant lint, test, build, and smoke-test output.\n\nIf a handoff was provided, use it as context. Report findings in the required format and end with Verdict: accept or Verdict: revise. Do not edit files unless explicitly asked.",
       "agent": "reviewer",
       "subtask": true

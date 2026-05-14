@@ -60,7 +60,7 @@ function runCli(
 }
 
 function makeWorkspace(): string {
-  return mkdtempSync(join(tmpdir(), 'ff1-cli-integration-'));
+  return mkdtempSync(join(tmpdir(), 'ff-cli-integration-'));
 }
 
 function writeSigningConfig(dir: string): void {

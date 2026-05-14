@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-OUTPUT_DIR="${FF1_CLI_OUTPUT_DIR:-$ROOT_DIR/release}"
-VERSION="${FF1_CLI_VERSION:-$(node -p "require('$ROOT_DIR/package.json').version")}"
+OUTPUT_DIR="${FF_CLI_OUTPUT_DIR:-$ROOT_DIR/release}"
+VERSION="${FF_CLI_VERSION:-$(node -p "require('$ROOT_DIR/package.json').version")}"
 
 OS_RAW="$(uname -s)"
 ARCH_RAW="$(uname -m)"
@@ -34,7 +34,7 @@ case "$ARCH_RAW" in
     ;;
 esac
 
-ASSET_NAME="ff1-cli-$OS-$ARCH"
+ASSET_NAME="ff-cli-$OS-$ARCH"
 ARCHIVE_NAME="$ASSET_NAME.tar.gz"
 
 WORKDIR="$(mktemp -d)"
@@ -43,7 +43,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Building ff1-cli bundle..."
+echo "Building ff-cli bundle..."
 cd "$ROOT_DIR"
 npm ci
 npm run bundle
@@ -51,15 +51,15 @@ npm run bundle
 PACKAGE_DIR="$WORKDIR/$ASSET_NAME"
 mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/lib"
 
-cp "$ROOT_DIR/dist/ff1.js" "$PACKAGE_DIR/lib/ff1.js"
+cp "$ROOT_DIR/dist/ff-cli.js" "$PACKAGE_DIR/lib/ff-cli.js"
 cp "$ROOT_DIR/package.json" "$PACKAGE_DIR/package.json"
 cp "$ROOT_DIR/LICENSE" "$PACKAGE_DIR/LICENSE"
 
-cat > "$PACKAGE_DIR/bin/ff1" <<'EOF'
+cat > "$PACKAGE_DIR/bin/ff-cli" <<'EOF'
 #!/usr/bin/env bash
 set -e
 BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$BASE_DIR/lib/ff1.js"
+APP="$BASE_DIR/lib/ff-cli.js"
 if ! command -v node >/dev/null 2>&1; then
   echo "Node.js 22+ is required. Install Node.js, then run this command again."
   exit 1
@@ -67,7 +67,7 @@ fi
 exec node "$APP" "$@"
 EOF
 
-chmod +x "$PACKAGE_DIR/bin/ff1"
+chmod +x "$PACKAGE_DIR/bin/ff-cli"
 
 cat > "$PACKAGE_DIR/RUNTIME_REQUIREMENTS.txt" <<'EOF'
 Runtime requirement:
@@ -77,7 +77,7 @@ Verify:
 - node -v
 
 Run:
-- ./bin/ff1 --help
+- ./bin/ff-cli --help
 EOF
 
 mkdir -p "$OUTPUT_DIR"

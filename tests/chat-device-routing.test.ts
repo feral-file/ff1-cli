@@ -191,7 +191,7 @@ describe('buildPlaylistWithAI orchestrator --device fallback', () => {
   }
 
   // Regression: before fix, defaultDeviceName was never forwarded to buildPlaylistWithAI,
-  // so `ff1 chat --device kitchen "build X and send"` dropped the kitchen target when the
+  // so `ff-cli chat --device kitchen "build X and send"` dropped the kitchen target when the
   // model emitted deviceName: null (send intent present, no device in text).
   test('uses CLI --device when intent parser emits null deviceName (send intent, no device in text)', () => {
     assert.equal(resolveOrchestratorDevice(null, 'kitchen'), 'kitchen');

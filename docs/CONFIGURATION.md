@@ -1,6 +1,6 @@
 # Configuration Guide
 
-This guide explains how to configure FF1‑CLI, field by field. Configuration priority is:
+This guide explains how to configure ff-cli, field by field. Configuration priority is:
 
 - `config.json` (highest)
 - `.env`
@@ -61,8 +61,8 @@ Used for signing DP‑1 playlists.
 
 - `playlist.privateKey` (string, Ed25519 private key in hex or base64): Used by the `sign` command to create DP-1 v1.1.0 multi-signatures. The `verify` command may derive the matching public key from this value (or `PLAYLIST_PRIVATE_KEY`) when you omit `--public-key`; **dp1-js applies that derived key only when verifying legacy flat `signature` strings**, not when checking `signatures[]` envelopes. If that derivation fails, `verify` prints a warning on stderr and continues without derived key material. The derived public key is emitted as PEM so Node can decode it without ambiguity. Hex may include or omit the `0x` prefix. You can also set this via `PLAYLIST_PRIVATE_KEY` in `.env`.
 
-  **Signing and key encoding:** Signing paths (`sign`, deterministic `build` when configured, and `-k/--key` overrides) pass the private key string through to **`dp1-js`** (`SignMultiEd25519`) without an extra decoding step in ff1-cli. `dp1-js` recognizes **hex** (optional `0x`) or **base64** encodings of the PKCS#8 DER blob produced by the OpenSSL examples below, then loads the key for Ed25519. Use those formats; ff1-cli does not add a separate normalizer ahead of the library.
-- `playlist.role` (string): DP-1 signing role that travels with the private key. Defaults to `agent` if omitted. You can also set this via `PLAYLIST_ROLE` in `.env`. Guided `ff1 setup`, `config validate`, and `sign --role` only accept the usual DP-1 signing roles (`agent`, `feed`, `curator`, `institution`, `licensor`).
+  **Signing and key encoding:** Signing paths (`sign`, deterministic `build` when configured, and `-k/--key` overrides) pass the private key string through to **`dp1-js`** (`SignMultiEd25519`) without an extra decoding step in ff-cli. `dp1-js` recognizes **hex** (optional `0x`) or **base64** encodings of the PKCS#8 DER blob produced by the OpenSSL examples below, then loads the key for Ed25519. Use those formats; ff-cli does not add a separate normalizer ahead of the library.
+- `playlist.role` (string): DP-1 signing role that travels with the private key. Defaults to `agent` if omitted. You can also set this via `PLAYLIST_ROLE` in `.env`. Guided `ff-cli setup`, `config validate`, and `sign --role` only accept the usual DP-1 signing roles (`agent`, `feed`, `curator`, `institution`, `licensor`).
 ### Generate an Ed25519 private key
 
 You can generate a key locally. The CLI accepts either base64 (preferred) or hex
@@ -120,14 +120,14 @@ Configure devices you want to play content on.
   - `name` (string): Friendly device label. Free‑form; pick anything memorable.
   - `host` (string): Device base URL. For LAN devices, use `http://<ip>:1111`. The device typically listens on port `1111`.
 
-During `ff1 setup`, the CLI will attempt local discovery via mDNS (`_ff1._tcp`). If devices are found, you can pick one and the host will be filled in automatically. If discovery returns nothing, setup falls back to manual entry.
+During `ff-cli setup`, the CLI will attempt local discovery via mDNS (`_ff1._tcp`). If devices are found, you can pick one and the host will be filled in automatically. If discovery returns nothing, setup falls back to manual entry.
 
 You can also manage devices independently with:
 
-- `ff1 device add` – Add a device interactively (with mDNS discovery), or non-interactively with `--host` and `--name`.
-- `ff1 device list` – Show all configured devices.
-- `ff1 device remove <name>` – Remove a device by name.
-- `ff1 device default <name>` – Promote a device to the top of the list so it is used when `-d` is omitted.
+- `ff-cli device add` – Add a device interactively (with mDNS discovery), or non-interactively with `--host` and `--name`.
+- `ff-cli device list` – Show all configured devices.
+- `ff-cli device remove <name>` – Remove a device by name.
+- `ff-cli device default <name>` – Promote a device to the top of the list so it is used when `-d` is omitted.
 
 Setup and `device add` both preserve existing devices. Adding a device with the same host as an existing one updates it in place.
 

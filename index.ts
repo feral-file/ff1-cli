@@ -37,14 +37,14 @@ const { version: packageVersion } = JSON.parse(readFileSync(packageJsonPath, 'ut
 const program = new Command();
 
 program
-  .name('ff1')
+  .name('ff-cli')
   .description(
     'CLI to fetch NFT information and build DP1 playlists using AI (Grok, ChatGPT, Gemini)'
   )
   .version(packageVersion)
   .addHelpText(
     'after',
-    `\nQuick start:\n  1) ff1 setup\n  2) ff1 chat\n\nDocs: https://github.com/feralfile/ff1-cli\n`
+    `\nQuick start:\n  1) ff-cli setup\n  2) ff-cli chat\n\nDocs: https://github.com/feral-file/ff-cli\n`
   );
 
 program.addCommand(setupCommand);

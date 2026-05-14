@@ -1,5 +1,5 @@
-# Build Windows release asset: ff1-cli-windows-x64.zip and .sha256
-# Run from repo root or scripts/release. Uses env: FF1_CLI_OUTPUT_DIR, FF1_CLI_NODE_VERSION, FF1_CLI_VERSION.
+# Build Windows release asset: ff-cli-windows-x64.zip and .sha256
+# Run from repo root or scripts/release. Uses env: FF_CLI_OUTPUT_DIR, FF_CLI_NODE_VERSION, FF_CLI_VERSION.
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
@@ -69,19 +69,19 @@ function New-ZipArchiveWithProgress {
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ROOT_DIR = (Resolve-Path (Join-Path $ScriptDir "../..")).Path
-$OUTPUT_DIR = if ($env:FF1_CLI_OUTPUT_DIR) { $env:FF1_CLI_OUTPUT_DIR } else { Join-Path $ROOT_DIR "release" }
-$VERSION = if ($env:FF1_CLI_VERSION) { $env:FF1_CLI_VERSION } else {
+$OUTPUT_DIR = if ($env:FF_CLI_OUTPUT_DIR) { $env:FF_CLI_OUTPUT_DIR } else { Join-Path $ROOT_DIR "release" }
+$VERSION = if ($env:FF_CLI_VERSION) { $env:FF_CLI_VERSION } else {
     (Get-Content (Join-Path $ROOT_DIR "package.json") | ConvertFrom-Json).version
 }
 
 $OS = "windows"
 $ARCH = "x64"
-$ASSET_NAME = "ff1-cli-$OS-$ARCH"
+$ASSET_NAME = "ff-cli-$OS-$ARCH"
 $ARCHIVE_NAME = "$ASSET_NAME.zip"
 
 $WORKDIR = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_.FullName }
 try {
-    Write-Host "Building ff1-cli bundle..."
+    Write-Host "Building ff-cli bundle..."
     Set-Location $ROOT_DIR
     npm ci
     npm run bundle
@@ -90,14 +90,14 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $PACKAGE_DIR "bin") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $PACKAGE_DIR "lib") -Force | Out-Null
 
-    Copy-Item (Join-Path $ROOT_DIR "dist\ff1.js") (Join-Path $PACKAGE_DIR "lib\ff1.js")
+    Copy-Item (Join-Path $ROOT_DIR "dist\ff-cli.js") (Join-Path $PACKAGE_DIR "lib\ff-cli.js")
     Copy-Item (Join-Path $ROOT_DIR "package.json") (Join-Path $PACKAGE_DIR "package.json")
     Copy-Item (Join-Path $ROOT_DIR "LICENSE") (Join-Path $PACKAGE_DIR "LICENSE")
 
-    $ff1Cmd = @"
+    $ffCliCmd = @"
 @echo off
 set "BASE_DIR=%~dp0.."
-set "APP=%BASE_DIR%\lib\ff1.js"
+set "APP=%BASE_DIR%\lib\ff-cli.js"
 where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js 22+ is required. Install Node.js, then run this command again.
@@ -105,7 +105,7 @@ if errorlevel 1 (
 )
 node "%APP%" %*
 "@
-    [System.IO.File]::WriteAllText((Join-Path $PACKAGE_DIR "bin\ff1.cmd"), $ff1Cmd)
+    [System.IO.File]::WriteAllText((Join-Path $PACKAGE_DIR "bin\ff-cli.cmd"), $ffCliCmd)
 
     $requirements = @"
 Runtime requirement:
@@ -115,7 +115,7 @@ Verify:
 - node -v
 
 Run:
-- .\bin\ff1.cmd --help
+- .\bin\ff-cli.cmd --help
 "@
     [System.IO.File]::WriteAllText((Join-Path $PACKAGE_DIR "RUNTIME_REQUIREMENTS.txt"), $requirements)
 

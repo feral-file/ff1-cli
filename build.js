@@ -18,7 +18,7 @@ async function build() {
       platform: 'node',
       target: 'node22',
       format: 'cjs',
-      outfile: 'dist/ff1.js',
+      outfile: 'dist/ff-cli.js',
       banner: {
         js: '#!/usr/bin/env node',
       },
@@ -34,7 +34,7 @@ async function build() {
 
     // Make the output file executable
     const { readFile, writeFile } = require('fs/promises');
-    const outfile = path.join(__dirname, 'dist', 'ff1.js');
+    const outfile = path.join(__dirname, 'dist', 'ff-cli.js');
 
     // Remove any duplicate shebangs that may have been bundled from source
     const content = await readFile(outfile, 'utf8');
@@ -50,8 +50,8 @@ async function build() {
     await writeFile(outfile, filteredLines.join('\n'));
     await chmod(outfile, 0o755);
 
-    console.log('\nBuild complete. Single executable: dist/ff1.js');
-    console.log('   Run with: ./dist/ff1.js or node dist/ff1.js\n');
+    console.log('\nBuild complete. Single executable: dist/ff-cli.js');
+    console.log('   Run with: ./dist/ff-cli.js or node dist/ff-cli.js\n');
   } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);
