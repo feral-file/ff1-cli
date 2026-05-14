@@ -27,16 +27,15 @@ Run the appropriate script on each target platform and upload each pair to the G
 ## GitHub Actions
 
 - **Build** (`build.yml`): Trigger manually (Actions → Build → Run workflow) or on pull requests. Builds binaries on macOS, Linux, and Windows and uploads them as workflow artifacts for download.
-- **Release** (`release.yml`): On **published** GitHub Releases, validates that `package.json` matches the tag, publishes to npm, then builds binaries and uploads assets. Optional **manual run** (Actions → Release → Run workflow) publishes the provided version to the **`beta`** dist-tag, without creating a GitHub Release or binary upload—use only when you intentionally bypass the normal tag + GitHub Release flow.
+- **Release** (`release.yml`): On **published** GitHub Releases, validates that `package.json` matches the tag, publishes to npm, then builds binaries and uploads assets. A GitHub Release marked as a pre-release publishes to the **`beta`** dist-tag; the version must also contain `beta`. A manual workflow dispatch can also publish a beta version when you need to bypass the normal release flow, but run it from `main`.
 
 ## npm Publish Requirements
 
 - Set `NPM_TOKEN` in GitHub Actions secrets with an npm automation token.
 - Ensure `package.json` version matches the release tag (e.g. tag `1.0.2` → `"version": "1.0.2"`). The release job fails fast when they differ.
-- **Stable vs beta on npm** (same idea as `display-protocol/dp1-js` `publish.yml`):
-- A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`** (`npm publish` with no `--tag`).
-- A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag (`npm publish --tag beta`). Consumers install with `npm install ff-cli@beta` (or pin that dist-tag in CI) until you ship a stable release.
-  - **Manual workflow**: provide `version` (CI runs `npm version` when it differs from `package.json`). The workflow then publishes that version to the **`beta`** dist-tag.
+- A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`**.
+- A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag, and its version must contain `beta` so the package version stays aligned with the beta channel.
+- Manual workflow dispatch runs publish to the **`beta`** dist-tag too, and the `version` input must contain `beta`, match `package.json`, and be dispatched from `main`.
 
 ## Release notes and breaking changes
 
