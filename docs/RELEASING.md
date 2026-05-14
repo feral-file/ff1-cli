@@ -36,6 +36,7 @@ Run the appropriate script on each target platform and upload each pair to the G
 - A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`**.
 - A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag, and its version must contain `beta` so the package version stays aligned with the beta channel.
 - Manual workflow dispatch runs publish to the **`beta`** dist-tag too, and the `version` input must contain `beta`, match `package.json`, and be dispatched from `main`.
+- Example beta version: `1.0.18-beta.0`.
 
 ## Release notes and breaking changes
 
