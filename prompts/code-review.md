@@ -1,4 +1,4 @@
-# FF1-CLI Code Review Contract
+# ff-cli Code Review Contract
 
 Use this contract for fresh-context review after implementation.
 

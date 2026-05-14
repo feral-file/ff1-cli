@@ -18,9 +18,9 @@ The curl installer downloads prebuilt binaries from GitHub Releases. Build one a
 
 This produces (names vary by OS/arch):
 
-- `release/ff1-cli-darwin-arm64.tar.gz` (and `.sha256`) on macOS
-- `release/ff1-cli-linux-x64.tar.gz` (and `.sha256`) on Linux
-- `release/ff1-cli-windows-x64.zip` (and `.sha256`) on Windows
+- `release/ff-cli-darwin-arm64.tar.gz` (and `.sha256`) on macOS
+- `release/ff-cli-linux-x64.tar.gz` (and `.sha256`) on Linux
+- `release/ff-cli-windows-x64.zip` (and `.sha256`) on Windows
 
 Run the appropriate script on each target platform and upload each pair to the GitHub release.
 
@@ -42,28 +42,28 @@ GitHub Release text (and any user-facing summary you publish with the version) s
 
 `package.json` declares `"engines": { "node": ">=22" }`. Raising the floor from Node 18 (or 20) is a **breaking change** for:
 
-- global installs and `npx ff1-cli` on older runtimes
+- global installs and `npx ff-cli` on older runtimes
 - CI jobs and images pinned to Node 18 or 20
 - anyone developing from source without upgrading Node
 
 **For the release that first ships this requirement**, copy or adapt the following into the GitHub Release description (and repeat in the upgrade section of internal comms if needed):
 
-> **Breaking — Node.js:** ff1-cli now requires **Node.js 22 or newer** (`package.json` `engines`). Node 18 and Node 20 are no longer supported. Upgrade Node on your machines and in CI, or stay on an older ff1-cli version until you can migrate.
+> **Breaking — Node.js:** ff-cli now requires **Node.js 22 or newer** (`package.json` `engines`). Node 18 and Node 20 are no longer supported. Upgrade Node on your machines and in CI, or stay on an older ff-cli version until you can migrate.
 
 Later releases only need to repeat this block if the engine floor changes again.
 
 ## Installer Redirect
 
-`https://feralfile.com/ff1-cli-install` should redirect to:
+`https://feralfile.com/ff-cli-install` should redirect to:
 
 ```
-https://raw.githubusercontent.com/feral-file/ff1-cli/main/scripts/install.sh
+https://raw.githubusercontent.com/feral-file/ff-cli/main/scripts/install.sh
 ```
 
 The installer script then fetches the release assets from GitHub Releases.
 
 ## Environment Overrides
 
-- `FF1_CLI_VERSION`: overrides the version label in logs
-- `FF1_CLI_NODE_VERSION`: Reserved in script headers for future use; current CI, npm `engines`, and release wrappers assume **Node.js 22+** (required by `dp1-js`).
-- `FF1_CLI_OUTPUT_DIR`: output directory (default: `./release`)
+- `FF_CLI_VERSION`: overrides the version label in logs
+- `FF_CLI_NODE_VERSION`: Reserved in script headers for future use; current CI, npm `engines`, and release wrappers assume **Node.js 22+** (required by `dp1-js`).
+- `FF_CLI_OUTPUT_DIR`: output directory (default: `./release`)

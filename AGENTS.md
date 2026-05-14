@@ -1,12 +1,12 @@
-# AGENTS.md — FF1-CLI Repository Contract
+# AGENTS.md — ff-cli Repository Contract
 
-This file is the repository-level contract for humans and coding agents working in `ff1-cli`.
+This file is the repository-level contract for humans and coding agents working in `ff-cli`.
 
 It defines how work is done in this repo. Tool-specific details live in `.cursor/`, `opencode.json`, and shared review prompts.
 
 ## Repository overview
 
-- Project: `ff1-cli`
+- Project: `ff-cli`
 - Purpose: a Node.js CLI for FF1 computational art workflows, DP-1 envelopes, playlist validation, playlist publishing, and FF1 device operations
 - Primary runtime: Node.js + TypeScript
 - Domain terms to keep consistent: `FF1`, `DP-1 envelope`, `DP-1 conformance`, `computational art playlist`, `channel endorsement`, `FF1 device`

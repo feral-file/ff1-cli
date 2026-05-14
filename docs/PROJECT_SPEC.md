@@ -1,6 +1,6 @@
-# FF1-CLI Project Spec
+# ff-cli Project Spec
 
-This document defines the current product role, boundaries, and constraints for `ff1-cli`.
+This document defines the current product role, boundaries, and constraints for `ff-cli`.
 
 It is derived from the behavior and interfaces implemented in this repository as of March 2026. It serves as the planning entry point for substantial changes and should be updated as the CLI evolves.
 
@@ -12,12 +12,12 @@ It is derived from the behavior and interfaces implemented in this repository as
 
 ## Product summary
 
-- Project: `ff1-cli`
+- Project: `ff-cli`
 - Type: Node.js CLI
 - System role: a control and integration surface for FF1 and DP-1 workflows
 - Primary purpose: turn user intent or structured parameters into valid DP-1 playlists, then validate them and optionally sign, publish, and send them through FF1 and feed paths
 
-In the Feral File architecture bands, `ff1-cli` sits primarily in the presentation and control layer. It is not the canonical source of truth for exhibitions, ownership, device runtime, or protocol evolution. It is a practical operator and developer surface that bridges those systems.
+In the Feral File architecture bands, `ff-cli` sits primarily in the presentation and control layer. It is not the canonical source of truth for exhibitions, ownership, device runtime, or protocol evolution. It is a practical operator and developer surface that bridges those systems.
 
 ## Strategic role
 
@@ -87,7 +87,7 @@ Long-term interoperability should continue to reduce hard infrastructure couplin
 
 ## Non-goals
 
-`ff1-cli` should not become:
+`ff-cli` should not become:
 
 - the source of truth for exhibitions, channels, or artwork metadata
 - the source of truth for ownership, passkeys, rights, or trust registry state

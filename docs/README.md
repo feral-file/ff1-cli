@@ -1,4 +1,4 @@
-# FF1-CLI Documentation
+# ff-cli Documentation
 
 Build DP-1 (Display Protocol 1) playlists from NFT data with either natural language (AI‑driven) or deterministic parameters. This doc covers install, config, and day‑to‑day usage.
 
@@ -7,7 +7,7 @@ For project-level planning and future agentic work, see `./PROJECT_SPEC.md`.
 ## Install
 
 ```bash
-npm i -g ff1-cli
+npm i -g ff-cli
 ```
 
 `npm` and `npx` require **Node.js 22 or newer** (see `package.json` `engines`). When a release raises the Node floor, that is a **breaking** change for Node 18/20 users; the GitHub Release for that version should say so explicitly (see `./RELEASING.md` for maintainer guidance).
@@ -15,7 +15,7 @@ npm i -g ff1-cli
 ## Install (curl)
 
 ```bash
-curl -fsSL https://feralfile.com/ff1-cli-install | bash
+curl -fsSL https://feralfile.com/ff-cli-install | bash
 ```
 
 Installs a prebuilt binary for macOS/Linux (no Node.js required).
@@ -24,18 +24,18 @@ Installs a prebuilt binary for macOS/Linux (no Node.js required).
 
 ```bash
 # Guided setup (recommended)
-ff1 setup
+ff-cli setup
 ```
 
 See the full configuration reference here: `./CONFIGURATION.md`.
 
-During setup, you can pick FF1 devices to add. Use `ff1 device add` to add more devices later, and `ff1 device list` to see what's configured. The first device is the default for `play` commands (override with `-d`).
+During setup, you can pick FF1 devices to add. Use `ff-cli device add` to add more devices later, and `ff-cli device list` to see what's configured. The first device is the default for `play` commands (override with `-d`).
 
 Manual config path:
 
 ```bash
-ff1 config init
-ff1 config validate
+ff-cli config init
+ff-cli config validate
 ```
 
 ### config.json structure (minimal)
@@ -87,13 +87,13 @@ See `./CONFIGURATION.md` for environment variable mappings.
 
 ```bash
 # Chat
-ff1 chat
+ff-cli chat
 
 # Or natural language in one shot
-ff1 chat "Get 3 works from reas.eth" -o playlist.json
+ff-cli chat "Get 3 works from reas.eth" -o playlist.json
 
 # Deterministic (no AI)
-ff1 build examples/params-example.json -o playlist.json
+ff-cli build examples/params-example.json -o playlist.json
 ```
 
 For development in this repo:
@@ -192,8 +192,8 @@ The intent parser recognizes publishing keywords and can both display and publis
 # Build and publish
 npm run dev -- chat "Build playlist from Ethereum contract 0xb932a70A57673d89f4acfFBE830E8ed7f75Fb9e0 with tokens 52932 and 52457; publish to my feed" -o playlist.json -v
 
-# Display on FF1 AND publish to feed
-npm run dev -- chat "Get 3 from Unsupervised; shuffle; send to my FF1 and publish to feed" -o playlist.json -v
+# Display on Art Computer AND publish to feed
+npm run dev -- chat "Get 3 from Unsupervised; shuffle; send to my Art Computer and publish to feed" -o playlist.json -v
 ```
 
 For Feral File built playlists, you can reference titles listed in the repository:
@@ -258,12 +258,12 @@ npm run dev -- play playlist.json --skip-verify
 
 ```bash
 # Enable SSH access for 30 minutes
-ff1 ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
+ff-cli ssh enable --pubkey ~/.ssh/id_ed25519.pub --ttl 30m -d "Living Room Display"
 
 # Disable SSH access
-ff1 ssh disable -d "Living Room Display"
+ff-cli ssh disable -d "Living Room Display"
 
-# `ff1 ssh` also performs the same FF1 OS compatibility preflight used by `play`.
+# `ff-cli ssh` also performs the same FF1 OS compatibility preflight used by `play`.
 ```
 
 ### Publish to feed server
@@ -305,19 +305,19 @@ Configure feed servers in `config.json`:
 
 ```bash
 # List configured devices
-ff1 device list
+ff-cli device list
 
 # Add a device (interactive with mDNS discovery)
-ff1 device add
+ff-cli device add
 
 # Add a device non-interactively
-ff1 device add --host 192.168.1.100 --name kitchen
+ff-cli device add --host 192.168.1.100 --name kitchen
 
 # Remove a device by name
-ff1 device remove kitchen
+ff-cli device remove kitchen
 
 # Set the default device (used when -d is omitted)
-ff1 device default office
+ff-cli device default office
 ```
 
 Setup preserves existing devices when adding new ones. See selection rules and examples in `./CONFIGURATION.md`.

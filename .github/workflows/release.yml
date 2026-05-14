@@ -121,12 +121,12 @@ jobs:
 
           TAG="${{ github.event.release.tag_name }}"
           REQUIRED_ASSETS=(
-            "ff1-cli-darwin-arm64.tar.gz"
-            "ff1-cli-darwin-arm64.tar.gz.sha256"
-            "ff1-cli-linux-x64.tar.gz"
-            "ff1-cli-linux-x64.tar.gz.sha256"
-            "ff1-cli-windows-x64.zip"
-            "ff1-cli-windows-x64.zip.sha256"
+            "ff-cli-darwin-arm64.tar.gz"
+            "ff-cli-darwin-arm64.tar.gz.sha256"
+            "ff-cli-linux-x64.tar.gz"
+            "ff-cli-linux-x64.tar.gz.sha256"
+            "ff-cli-windows-x64.zip"
+            "ff-cli-windows-x64.zip.sha256"
           )
 
           RELEASE_ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
@@ -148,7 +148,7 @@ jobs:
           SLEEP_SECONDS=10
 
           for attempt in $(seq 1 "$ATTEMPTS"); do
-            NPM_VERSION=$(npm view ff1-cli version)
+            NPM_VERSION=$(npm view ff-cli version)
             if [ "$NPM_VERSION" = "$TAG" ]; then
               echo "npm version check passed: $NPM_VERSION"
               exit 0
