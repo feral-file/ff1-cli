@@ -7,7 +7,7 @@ For project-level planning and future agentic work, see `./PROJECT_SPEC.md`.
 ## Install
 
 ```bash
-npm i -g ff-cli
+npm i -g @feralfile/cli
 ```
 
 `npm` and `npx` require **Node.js 22 or newer** (see `package.json` `engines`). When a release raises the Node floor, that is a **breaking** change for Node 18/20 users; the GitHub Release for that version should say so explicitly (see `./RELEASING.md` for maintainer guidance).

@@ -9,7 +9,7 @@ ff-cli turns a simple prompt into a DP-1–conformant playlist you can preview o
 ## Install
 
 ```bash
-npm i -g ff-cli
+npm i -g @feralfile/cli
 ```
 
 ## Install (curl)
@@ -23,8 +23,8 @@ Installs a prebuilt binary for macOS/Linux (no Node.js required).
 ## One-off Usage (npx)
 
 ```bash
-npx ff-cli setup
-npx ff-cli chat
+npx @feralfile/cli setup
+npx @feralfile/cli chat
 ```
 
 ## Quick Start

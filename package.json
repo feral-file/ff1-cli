@@ -1,5 +1,5 @@
 {
-  "name": "ff-cli",
+  "name": "@feralfile/cli",
   "version": "1.0.17",
   "description": "CLI to fetch NFT information and build DP1 playlists using Grok API",
   "main": "dist/index.js",

@@ -147,7 +147,7 @@ jobs:
           SLEEP_SECONDS=10
 
           for attempt in $(seq 1 "$ATTEMPTS"); do
-            NPM_VERSION=$(npm view ff-cli dist-tags.beta)
+            NPM_VERSION=$(npm view @feralfile/cli dist-tags.beta)
             if [ "$NPM_VERSION" = "$EXPECTED_VERSION" ]; then
               echo "npm beta dist-tag check passed: $NPM_VERSION"
               exit 0
@@ -236,9 +236,9 @@ jobs:
           SLEEP_SECONDS=10
 
           if [ "${{ github.event.release.prerelease }}" = "true" ]; then
-            NPM_QUERY="npm view ff-cli dist-tags.beta"
+            NPM_QUERY="npm view @feralfile/cli dist-tags.beta"
           else
-            NPM_QUERY="npm view ff-cli version"
+            NPM_QUERY="npm view @feralfile/cli version"
           fi
 
           for attempt in $(seq 1 "$ATTEMPTS"); do

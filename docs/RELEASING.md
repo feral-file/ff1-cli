@@ -46,7 +46,7 @@ GitHub Release text (and any user-facing summary you publish with the version) s
 
 `package.json` declares `"engines": { "node": ">=22" }`. Raising the floor from Node 18 (or 20) is a **breaking change** for:
 
-- global installs and `npx ff-cli` on older runtimes
+- global installs and `npx @feralfile/cli` on older runtimes
 - CI jobs and images pinned to Node 18 or 20
 - anyone developing from source without upgrading Node
 
