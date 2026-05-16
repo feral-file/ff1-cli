@@ -39,7 +39,7 @@ const program = new Command();
 program
   .name('ff-cli')
   .description(
-    'CLI to fetch NFT information and build DP1 playlists using AI (Claude, Grok, ChatGPT, Gemini)'
+    'CLI for building DP-1 playlists of digital art using AI (Claude, Grok, ChatGPT, Gemini)'
   )
   .version(packageVersion)
   .addHelpText(

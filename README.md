@@ -1,6 +1,6 @@
 # ff-cli
 
-A small Node.js CLI for building DP-1 playlists from NFT collections.
+A small Node.js CLI for building DP-1 playlists of digital art.
 
 **Runtime:** Node.js 22 or newer (matches CI and the `dp1-js` dependency). That engine floor is a **breaking** change if you previously used Node 18 or 20—check the **GitHub Release** for the version you move to; release authors follow `docs/RELEASING.md` so the notes stay explicit.
 
