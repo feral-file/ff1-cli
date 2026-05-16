@@ -13,7 +13,10 @@ export const chatCommand = new Command('chat')
   .description('Start an interactive chat to build playlists using natural language')
   .argument('[content]', 'Optional: Direct chat content (non-interactive mode)')
   .option('-o, --output <filename>', 'Output filename for the playlist', 'playlist.json')
-  .option('-m, --model <name>', 'AI model to use (grok, gpt, gemini) - defaults to config setting')
+  .option(
+    '-m, --model <name>',
+    'AI model to use (claude, grok, gpt, gemini) - defaults to config setting'
+  )
   .option('-d, --device <name>', 'Target FF1 device name (defaults to first configured device)')
   .option('-v, --verbose', 'Show detailed technical output of function calls', false)
   .action(

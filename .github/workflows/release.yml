@@ -100,7 +100,7 @@ jobs:
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      GROK_API_KEY: release-ci
+      ANTHROPIC_API_KEY: release-ci
     steps:
       - uses: actions/checkout@v4
 

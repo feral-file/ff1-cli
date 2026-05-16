@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import { findExistingDeviceEntry } from '../utilities/device-lookup';
 import { upsertDevice } from '../utilities/device-upsert';
+import { getConfig, listAvailableModels } from '../config';
 import { ensureConfigFile, isMissingConfigValue, readConfigFile } from './helpers/config-files';
 import { discoverAndSelectDevice } from './helpers/device-discovery';
 import { createPrompt, promptYesNo } from './helpers/prompt';
@@ -23,7 +24,13 @@ export const setupCommand = new Command('setup')
       }
 
       const config = await readConfigFile(configPath);
-      const modelNames = Object.keys(config.models || {});
+      const mergedDefaults = getConfig();
+      // Show every known provider in the menu (in-code defaults first, then any
+      // custom providers the user has added to the file) so adding a new provider
+      // to defaults shows up for existing users without rerunning createSampleConfig.
+      const modelNames = Array.from(
+        new Set([...listAvailableModels(), ...Object.keys(config.models || {})])
+      );
 
       if (modelNames.length === 0) {
         console.error(chalk.red('No models found in config.json'));
@@ -57,22 +64,34 @@ export const setupCommand = new Command('setup')
       }
 
       config.defaultModel = selectedModel;
-      const selectedModelConfig = config.models[selectedModel] || {
-        apiKey: '',
-        baseURL: '',
-        model: '',
-        timeout: 0,
-        maxRetries: 0,
-        temperature: 0,
-        maxTokens: 0,
-        supportsFunctionCalling: true,
-      };
+      if (!config.models) {
+        config.models = {};
+      }
+      // Seed missing entries from in-code defaults so baseURL/model are populated,
+      // but blank the apiKey so the user is prompted instead of silently inheriting
+      // an env-derived value.
+      const providerDefaults = mergedDefaults.models[selectedModel];
+      const selectedModelConfig =
+        config.models[selectedModel] ||
+        (providerDefaults
+          ? { ...providerDefaults, apiKey: '' }
+          : {
+              apiKey: '',
+              baseURL: '',
+              model: '',
+              timeout: 0,
+              maxRetries: 0,
+              temperature: 0,
+              maxTokens: 0,
+              supportsFunctionCalling: true,
+            });
 
       const hasApiKeyForModel = !isMissingConfigValue(selectedModelConfig.apiKey);
       const keyHelpUrls: Record<string, string> = {
         grok: 'https://console.x.ai/',
         gpt: 'https://platform.openai.com/api-keys',
         gemini: 'https://aistudio.google.com/app/apikey',
+        claude: 'https://console.anthropic.com/settings/keys',
       };
       if (!hasApiKeyForModel) {
         const helpUrl = keyHelpUrls[selectedModel];

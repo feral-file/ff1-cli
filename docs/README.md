@@ -42,8 +42,14 @@ ff-cli config validate
 
 ```json
 {
-  "defaultModel": "grok",
+  "defaultModel": "claude",
   "models": {
+    "claude": {
+      "apiKey": "sk-ant-your-api-key-here",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "model": "claude-sonnet-4-6",
+      "supportsFunctionCalling": true
+    },
     "grok": {
       "apiKey": "xai-your-api-key-here",
       "baseURL": "https://api.x.ai/v1",
@@ -182,7 +188,7 @@ How it works (at a glance):
 - If `deviceName` is present, the CLI will send the validated playlist to that FF1 device.
 - If `feedServer` is present (via "publish to my feed"), the CLI will publish the playlist to the selected feed server.
 
-Use `--model grok|gpt|gemini` to switch models, or set `defaultModel` in `config.json`.
+Use `--model claude|grok|gpt|gemini` to switch models, or set `defaultModel` in `config.json`.
 
 ### Natural language publishing
 

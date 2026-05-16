@@ -85,7 +85,7 @@ For behavior changes:
 Required verification commands:
 
 ```bash
-GROK_API_KEY=dummy npm run verify
+ANTHROPIC_API_KEY=dummy npm run verify
 ```
 
 This is the same non-mutating entrypoint used by `.github/workflows/ci.yml` after `npm ci` on Node.js 22. Use `npm run lint:fix` only as an optional mutating cleanup step, then review and verify the resulting edits before committing.

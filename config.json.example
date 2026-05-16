@@ -1,6 +1,21 @@
 {
-  "defaultModel": "grok",
+  "defaultModel": "claude",
   "models": {
+    "claude": {
+      "apiKey": "YOUR_ANTHROPIC_API_KEY_FROM_CONSOLE_ANTHROPIC_COM",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "model": "claude-sonnet-4-6",
+      "availableModels": [
+        "claude-opus-4-7",
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001"
+      ],
+      "timeout": 30000,
+      "maxRetries": 3,
+      "temperature": 0.3,
+      "maxTokens": 4000,
+      "supportsFunctionCalling": true
+    },
     "grok": {
       "apiKey": "YOUR_GROK_API_KEY_FROM_X_AI_CONSOLE",
       "baseURL": "https://api.x.ai/v1",
@@ -16,7 +31,7 @@
       "maxTokens": 4000,
       "supportsFunctionCalling": true
     },
-    "chatgpt": {
+    "gpt": {
       "apiKey": "YOUR_OPENAI_API_KEY_FROM_PLATFORM_OPENAI_COM",
       "baseURL": "https://api.openai.com/v1",
       "model": "gpt-4.1",

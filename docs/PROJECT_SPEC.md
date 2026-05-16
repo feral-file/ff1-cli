@@ -216,8 +216,8 @@ The current repo verification path is:
 npm run lint:fix
 npm test
 npm run build
-GROK_API_KEY=dummy node dist/index.js validate examples/sample-playlist.json
-GROK_API_KEY=dummy node dist/index.js config validate
+ANTHROPIC_API_KEY=dummy node dist/index.js validate examples/sample-playlist.json
+ANTHROPIC_API_KEY=dummy node dist/index.js config validate
 ```
 
 ## Open questions
