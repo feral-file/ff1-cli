@@ -97,9 +97,12 @@ jobs:
       - verify-version
     if: github.event_name == 'release' || github.ref_name == 'main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # OIDC token used by `npm publish --provenance` to authenticate against
+      # the trusted-publisher configured for @feralfile/cli on npmjs.org.
+      id-token: write
     env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       ANTHROPIC_API_KEY: release-ci
     steps:
       - uses: actions/checkout@v4
@@ -109,6 +112,11 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      # npm 11.5.1+ is required for OIDC trusted publishing; the npm bundled
+      # with Node 22 is 10.x.
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -124,15 +132,15 @@ jobs:
               echo "Workflow dispatch beta runs must use a version containing 'beta'."
               exit 1
             fi
-            npm publish --tag beta --access public
+            npm publish --tag beta --access public --provenance
           elif [ "${{ github.event.release.prerelease }}" = "true" ]; then
             if [[ "${{ github.event.release.tag_name }}" != *beta* ]]; then
               echo "Beta releases must use a tag containing 'beta'."
               exit 1
             fi
-            npm publish --tag beta --access public
+            npm publish --tag beta --access public --provenance
           else
-            npm publish --access public
+            npm publish --access public --provenance
           fi
 
       - name: Verify beta publish

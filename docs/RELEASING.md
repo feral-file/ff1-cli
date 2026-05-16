@@ -31,7 +31,7 @@ Run the appropriate script on each target platform and upload each pair to the G
 
 ## npm Publish Requirements
 
-- Set `NPM_TOKEN` in GitHub Actions secrets with an npm automation token.
+- Publishes use **npm Trusted Publishing (OIDC)** — no `NPM_TOKEN` secret is required or used. The trust is configured at https://www.npmjs.com/package/@feralfile/cli/access (publisher: GitHub Actions, org: `feral-file`, repo: `ff-cli`, workflow: `release.yml`).
 - Ensure `package.json` version matches the release tag (e.g. tag `1.0.2` → `"version": "1.0.2"`). The release job fails fast when they differ.
 - A **regular** (non-prerelease) GitHub Release publishes with the default dist-tag **`latest`**.
 - A GitHub Release marked **Set as a pre-release** publishes to the **`beta`** dist-tag, and its version must contain `beta` so the package version stays aligned with the beta channel.
