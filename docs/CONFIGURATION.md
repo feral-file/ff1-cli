@@ -44,6 +44,7 @@ Each key under `models` defines a model configuration used by the AI orchestrato
 
 Environment variable helpers:
 
+- Anthropic (Claude): `ANTHROPIC_API_KEY`
 - Grok: `GROK_API_KEY`, `GROK_MODEL`, `GROK_API_BASE_URL`
 - OpenAI: `OPENAI_API_KEY`
 - Gemini: `GEMINI_API_KEY`
@@ -165,12 +166,12 @@ Minimal `config.json` example (selected fields):
 
 ```json
 {
-  "defaultModel": "grok",
+  "defaultModel": "claude",
   "models": {
-    "grok": {
-      "apiKey": "xai-your-api-key-here",
-      "baseURL": "https://api.x.ai/v1",
-      "model": "grok-beta",
+    "claude": {
+      "apiKey": "sk-ant-your-api-key-here",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "model": "claude-sonnet-4-6",
       "supportsFunctionCalling": true
     }
   },

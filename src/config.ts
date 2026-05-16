@@ -69,8 +69,19 @@ function loadConfig(): Config {
 
   // Default configuration supporting Grok as default
   const defaultConfig: Config = {
-    defaultModel: process.env.DEFAULT_MODEL || 'grok',
+    defaultModel: process.env.DEFAULT_MODEL || 'claude',
     models: {
+      claude: {
+        apiKey: process.env.ANTHROPIC_API_KEY || '',
+        baseURL: 'https://api.anthropic.com/v1/',
+        model: 'claude-sonnet-4-6',
+        availableModels: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+        timeout: 30000,
+        maxRetries: 3,
+        temperature: 0.3,
+        maxTokens: 4000,
+        supportsFunctionCalling: true,
+      },
       grok: {
         apiKey: process.env.GROK_API_KEY || '',
         baseURL: process.env.GROK_API_BASE_URL || 'https://api.x.ai/v1',
